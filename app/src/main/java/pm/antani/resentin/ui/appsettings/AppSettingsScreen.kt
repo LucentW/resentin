@@ -1,10 +1,13 @@
 package pm.antani.resentin.ui.appsettings
 
 import android.Manifest
+import android.app.LocaleManager
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.LocaleList
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +34,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
+import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,13 +77,47 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
         }
     }
 
+    // On API 33+ the platform's own LocaleManager is the source of truth for the
+    // per-app language (it's what drives the system Settings > Apps > Resentin >
+    // Language picker too, via android:localeConfig in the manifest) — going through
+    // AppCompatDelegate.setApplicationLocales() instead silently no-ops here: its
+    // API 33+ bridge to LocaleManager apparently needs an AppCompatActivity to actually
+    // persist the change, which MainActivity (a plain ComponentActivity, for Compose)
+    // isn't. AppCompatDelegate is kept only as the API <33 fallback, where it's the
+    // sole mechanism available (no platform LocaleManager to call directly).
+    var currentLanguageTag by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.getSystemService(LocaleManager::class.java)?.applicationLocales?.get(0)?.language
+            } else {
+                AppCompatDelegate.getApplicationLocales().get(0)?.language
+            },
+        )
+    }
+
+    fun setLanguage(languageTag: String?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.getSystemService(LocaleManager::class.java).applicationLocales =
+                if (languageTag == null) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(languageTag)
+        } else {
+            AppCompatDelegate.setApplicationLocales(
+                if (languageTag == null) {
+                    LocaleListCompat.getEmptyLocaleList()
+                } else {
+                    LocaleListCompat.forLanguageTags(languageTag)
+                },
+            )
+        }
+        currentLanguageTag = languageTag
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Impostazioni") },
+                title = { Text(stringResource(R.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
             )
@@ -87,9 +130,9 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Resta connesso in background")
+                        Text(stringResource(R.string.settings_stay_connected))
                         Text(
-                            "Mantiene la connessione attiva e mostra notifiche per i messaggi privati e le menzioni",
+                            stringResource(R.string.settings_stay_connected_desc),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -100,30 +143,30 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Nicklist colorata", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.settings_colored_nicklist), modifier = Modifier.weight(1f))
                     Switch(
                         checked = state.displayPrefs.coloredNicklist,
                         onCheckedChange = { viewModel.toggleColoredNicklist() },
                     )
                 }
                 Spacer(Modifier.height(24.dp))
-                Text("Visualizzazione chat", style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(R.string.settings_chat_display), style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     FilterChip(
                         selected = chatDisplayMode == ChatDisplayMode.BUBBLES,
                         onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.BUBBLES) },
-                        label = { Text("Bolle") },
+                        label = { Text(stringResource(R.string.settings_display_bubbles)) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
                     FilterChip(
                         selected = chatDisplayMode == ChatDisplayMode.IRC_LINE,
                         onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.IRC_LINE) },
-                        label = { Text("Monoriga IRC") },
+                        label = { Text(stringResource(R.string.settings_display_irc_line)) },
                     )
                 }
                 Text(
-                    "Monoriga IRC: [HH:mm] <nick> messaggio, come un client IRC classico",
+                    stringResource(R.string.settings_display_irc_line_desc),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(16.dp))
@@ -132,16 +175,38 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Secondi nei timestamp")
+                        Text(stringResource(R.string.settings_show_seconds))
                         Text(
-                            "Mostra [HH:mm:ss] invece di [HH:mm], in entrambe le visualizzazioni",
+                            stringResource(R.string.settings_show_seconds_desc),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     Switch(checked = showSeconds, onCheckedChange = viewModel::setShowSeconds)
                 }
                 Spacer(Modifier.height(24.dp))
-                Text("Alias", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                        selected = currentLanguageTag == null,
+                        onClick = { setLanguage(null) },
+                        label = { Text(stringResource(R.string.settings_language_system)) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    FilterChip(
+                        selected = currentLanguageTag == "it",
+                        onClick = { setLanguage("it") },
+                        label = { Text(stringResource(R.string.settings_language_italian)) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    FilterChip(
+                        selected = currentLanguageTag == "en",
+                        onClick = { setLanguage("en") },
+                        label = { Text(stringResource(R.string.settings_language_english)) },
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+                Text(stringResource(R.string.settings_aliases), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
             }
             items(state.aliases.entries.toList(), key = { it.key }) { (name, expansion) ->
@@ -154,7 +219,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                         Text(expansion, style = MaterialTheme.typography.bodySmall)
                     }
                     IconButton(onClick = { viewModel.removeAlias(name) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Rimuovi")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_remove))
                     }
                 }
             }
@@ -163,7 +228,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                 OutlinedTextField(
                     value = state.newAliasName,
                     onValueChange = viewModel::onNewAliasNameChange,
-                    label = { Text("Nome alias") },
+                    label = { Text(stringResource(R.string.settings_alias_name_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -171,13 +236,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                 OutlinedTextField(
                     value = state.newAliasExpansion,
                     onValueChange = viewModel::onNewAliasExpansionChange,
-                    label = { Text("Espansione") },
+                    label = { Text(stringResource(R.string.settings_alias_expansion_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = viewModel::addAlias, modifier = Modifier.fillMaxWidth()) {
-                    Text("Aggiungi alias")
+                    Text(stringResource(R.string.settings_add_alias))
                 }
                 state.error?.let { error ->
                     Spacer(Modifier.height(8.dp))

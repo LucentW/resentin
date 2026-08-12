@@ -1,5 +1,6 @@
 package pm.antani.resentin.ui.login
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pm.antani.resentin.R
 import pm.antani.resentin.domain.repository.AuthRepository
 
 private const val SUPPORTED_PROTOCOL_VERSION = 1
@@ -27,6 +29,7 @@ data class LoginUiState(
 
 class LoginViewModel(
     private val authRepository: AuthRepository,
+    private val context: Context,
     defaultHost: String,
 ) : ViewModel() {
 
@@ -58,15 +61,15 @@ class LoginViewModel(
         val host = state.host.trim().removePrefix("https://").removePrefix("http://").removeSuffix("/")
 
         if (host.isBlank()) {
-            _uiState.update { it.copy(error = "Inserisci l'indirizzo del server") }
+            _uiState.update { it.copy(error = context.getString(R.string.login_error_host_blank)) }
             return
         }
         if (state.mode == LoginMode.TOKEN && state.token.isBlank()) {
-            _uiState.update { it.copy(error = "Inserisci il token") }
+            _uiState.update { it.copy(error = context.getString(R.string.login_error_token_blank)) }
             return
         }
         if (state.mode == LoginMode.PASSWORD && (state.username.isBlank() || state.password.isBlank())) {
-            _uiState.update { it.copy(error = "Inserisci username e password") }
+            _uiState.update { it.copy(error = context.getString(R.string.login_error_credentials_blank)) }
             return
         }
 
@@ -79,7 +82,10 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = "Server non raggiungibile: ${configResult.exceptionOrNull()?.message}",
+                        error = context.getString(
+                            R.string.login_error_server_unreachable,
+                            configResult.exceptionOrNull()?.message,
+                        ),
                     )
                 }
                 return@launch
@@ -88,7 +94,7 @@ class LoginViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = "Il server richiede un protocollo più recente (min ${config.minProtocolVersion}): aggiorna l'app",
+                        error = context.getString(R.string.login_error_protocol_too_old, config.minProtocolVersion),
                     )
                 }
                 return@launch
@@ -109,7 +115,7 @@ class LoginViewModel(
             val verifyResult = authRepository.verifyToken(host, token)
             val username = verifyResult.getOrNull()
             if (username == null) {
-                _uiState.update { it.copy(isLoading = false, error = "Token non valido o accesso negato") }
+                _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.login_error_invalid_token)) }
                 return@launch
             }
 
@@ -119,11 +125,11 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(authRepository: AuthRepository, defaultHost: String): ViewModelProvider.Factory =
+        fun factory(authRepository: AuthRepository, context: Context, defaultHost: String): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return LoginViewModel(authRepository, defaultHost) as T
+                    return LoginViewModel(authRepository, context.applicationContext, defaultHost) as T
                 }
             }
     }

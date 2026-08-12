@@ -56,9 +56,10 @@ class ConnectionForegroundService : Service() {
     private fun buildNotification(): Notification {
         ensureChannel()
         val host = (application as AppApplication).container.tokenStore.session.value?.host
+        val contentText = if (host != null) getString(R.string.fgs_connected_to, host) else getString(R.string.fgs_connected)
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Resentin")
-            .setContentText(if (host != null) "Connesso a $host" else "Connesso")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -66,7 +67,11 @@ class ConnectionForegroundService : Service() {
     }
 
     private fun ensureChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "Stato connessione", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.notif_channel_connection_status),
+            NotificationManager.IMPORTANCE_LOW,
+        )
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
     }
 

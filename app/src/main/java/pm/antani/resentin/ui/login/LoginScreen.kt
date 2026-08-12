@@ -21,8 +21,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 
 @Composable
 fun LoginScreen(viewModel: LoginViewModel) {
@@ -36,12 +38,12 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text("Connetti a grappa", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(
                 value = state.host,
                 onValueChange = viewModel::onHostChange,
-                label = { Text("Server") },
+                label = { Text(stringResource(R.string.login_server_label)) },
                 singleLine = true,
                 enabled = !state.isLoading,
                 modifier = Modifier.fillMaxWidth(),
@@ -51,7 +53,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 FilterChip(
                     selected = state.mode == LoginMode.TOKEN,
                     onClick = { viewModel.onModeChange(LoginMode.TOKEN) },
-                    label = { Text("Token") },
+                    label = { Text(stringResource(R.string.login_mode_token)) },
                     enabled = !state.isLoading,
                     modifier = Modifier.weight(1f),
                 )
@@ -59,7 +61,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 FilterChip(
                     selected = state.mode == LoginMode.PASSWORD,
                     onClick = { viewModel.onModeChange(LoginMode.PASSWORD) },
-                    label = { Text("Username e password") },
+                    label = { Text(stringResource(R.string.login_mode_password)) },
                     enabled = !state.isLoading,
                     modifier = Modifier.weight(1f),
                 )
@@ -69,7 +71,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 OutlinedTextField(
                     value = state.token,
                     onValueChange = viewModel::onTokenChange,
-                    label = { Text("Token") },
+                    label = { Text(stringResource(R.string.login_token_label)) },
                     singleLine = true,
                     enabled = !state.isLoading,
                     visualTransformation = PasswordVisualTransformation(),
@@ -79,7 +81,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 OutlinedTextField(
                     value = state.username,
                     onValueChange = viewModel::onUsernameChange,
-                    label = { Text("Username") },
+                    label = { Text(stringResource(R.string.login_username_label)) },
                     singleLine = true,
                     enabled = !state.isLoading,
                     modifier = Modifier.fillMaxWidth(),
@@ -88,7 +90,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 OutlinedTextField(
                     value = state.password,
                     onValueChange = viewModel::onPasswordChange,
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.login_password_label)) },
                     singleLine = true,
                     enabled = !state.isLoading,
                     visualTransformation = PasswordVisualTransformation(),
@@ -108,7 +110,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 if (state.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Accedi")
+                    Text(stringResource(R.string.login_signin_button))
                 }
             }
         }

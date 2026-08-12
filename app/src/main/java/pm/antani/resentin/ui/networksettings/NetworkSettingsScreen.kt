@@ -26,7 +26,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,7 +41,7 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                 title = { Text(state.slug) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
             )
@@ -56,14 +58,14 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Connesso", modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.network_settings_connected), modifier = Modifier.weight(1f))
                 Switch(checked = state.connected, onCheckedChange = { viewModel.toggleConnection() })
             }
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = state.nick,
                 onValueChange = viewModel::onNickChange,
-                label = { Text("Nick") },
+                label = { Text(stringResource(R.string.network_settings_nick_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -71,7 +73,7 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
             OutlinedTextField(
                 value = state.ident,
                 onValueChange = viewModel::onIdentChange,
-                label = { Text("Ident") },
+                label = { Text(stringResource(R.string.network_settings_ident_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -79,17 +81,17 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
             OutlinedTextField(
                 value = state.realname,
                 onValueChange = viewModel::onRealnameChange,
-                label = { Text("Nome reale") },
+                label = { Text(stringResource(R.string.network_settings_realname_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(16.dp))
-            Text("Perform list (comandi eseguiti alla connessione)", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.network_settings_perform_label), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(4.dp))
             OutlinedTextField(
                 value = state.performList,
                 onValueChange = viewModel::onPerformChange,
-                placeholder = { Text("Un comando IRC per riga") },
+                placeholder = { Text(stringResource(R.string.network_settings_perform_placeholder)) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 4,
             )
@@ -99,11 +101,11 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                 Spacer(Modifier.height(8.dp))
             }
             if (state.saved) {
-                Text("Salvato", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.network_settings_saved), color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(8.dp))
             }
             Button(onClick = viewModel::save, enabled = !state.isSaving, modifier = Modifier.fillMaxWidth()) {
-                Text("Salva")
+                Text(stringResource(R.string.network_settings_save))
             }
         }
     }

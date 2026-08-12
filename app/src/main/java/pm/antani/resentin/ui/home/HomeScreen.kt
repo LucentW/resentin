@@ -33,8 +33,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
 import pm.antani.resentin.data.db.NetworkEntity
 
@@ -62,13 +64,13 @@ fun HomeScreen(
                 title = { Text(host) },
                 actions = {
                     IconButton(onClick = viewModel::refresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Aggiorna")
+                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_refresh))
                     }
                     IconButton(onClick = onAppSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Impostazioni")
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_app_settings))
                     }
                     IconButton(onClick = onSignOut) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Esci")
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = stringResource(R.string.cd_sign_out))
                     }
                 },
             )
@@ -80,7 +82,7 @@ fun HomeScreen(
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 }
                 networks.isEmpty() -> {
-                    Text("Nessuna rete", modifier = Modifier.align(Alignment.Center))
+                    Text(stringResource(R.string.home_no_networks), modifier = Modifier.align(Alignment.Center))
                 }
                 else -> {
                     LazyColumn(Modifier.fillMaxSize()) {
@@ -131,7 +133,7 @@ private fun NetworkHeader(network: NetworkEntity, onClick: () -> Unit, onSetting
             modifier = Modifier.padding(start = 8.dp).weight(1f),
         )
         IconButton(onClick = onSettingsClick) {
-            Icon(Icons.Default.Settings, contentDescription = "Impostazioni rete")
+            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_network_settings))
         }
     }
 }
@@ -150,7 +152,7 @@ private fun ChannelRow(channel: ChannelEntity, onClick: () -> Unit) {
         if (channel.source == "query") {
             Icon(
                 Icons.Default.Person,
-                contentDescription = "Messaggio privato",
+                contentDescription = stringResource(R.string.cd_direct_message),
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )

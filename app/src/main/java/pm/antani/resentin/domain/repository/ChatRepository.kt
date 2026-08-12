@@ -1,5 +1,6 @@
 package pm.antani.resentin.domain.repository
 
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -7,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.domain.events.WsEvent
@@ -26,6 +28,7 @@ private const val PAGE_LIMIT = 50
 class ChatRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
+    private val context: Context,
 ) {
     /** Subscribes once, app-wide, to WS message events and writes them to Room — the
      * single writer for scrollback, independent of which chat screen (if any) is open. */
@@ -124,8 +127,8 @@ class ChatRepository(
         val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
         val part = MultipartBody.Part.createFormData("file", fileName, body)
         val response = uploadsApi.upload(part)
-        check(response.isSuccessful) { "Upload fallito: HTTP ${response.code()}" }
-        val url = checkNotNull(response.body()) { "Risposta di upload non valida" }.url
+        check(response.isSuccessful) { context.getString(R.string.upload_error_http, response.code()) }
+        val url = checkNotNull(response.body()) { context.getString(R.string.upload_error_invalid_response) }.url
         sendMessage(networkSlug, channelName, url).getOrThrow()
     }
 }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.ChatDisplayMode
@@ -182,7 +183,8 @@ class ChatViewModel(
         viewModelScope.launch {
             _isUploading.value = true
             runCatching {
-                val pending = readUploadFile(appContext, uri) ?: error("Impossibile leggere il file")
+                val pending = readUploadFile(appContext, uri)
+                    ?: error(appContext.getString(R.string.chat_upload_failed))
                 chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType)
                     .getOrThrow()
             }.onFailure { _error.value = it.message }

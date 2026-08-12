@@ -13,32 +13,32 @@ class SystemEventFormatterTest {
     @Test
     fun `join renders a compact system line`() {
         val result = SystemEventFormatter.format("join", "vjt", null, noMeta)
-        assertEquals(FormattedEvent.System("vjt è entrato nel canale"), result)
+        assertEquals(FormattedEvent.System.Join("vjt"), result)
     }
 
     @Test
     fun `part without reason`() {
         val result = SystemEventFormatter.format("part", "vjt", null, noMeta)
-        assertEquals(FormattedEvent.System("vjt ha lasciato il canale"), result)
+        assertEquals(FormattedEvent.System.Part("vjt", null), result)
     }
 
     @Test
     fun `part with reason includes it in parentheses`() {
         val result = SystemEventFormatter.format("part", "vjt", "brb", noMeta)
-        assertEquals(FormattedEvent.System("vjt ha lasciato il canale (brb)"), result)
+        assertEquals(FormattedEvent.System.Part("vjt", "brb"), result)
     }
 
     @Test
     fun `quit with reason`() {
         val result = SystemEventFormatter.format("quit", "Guest1", "Ping timeout", noMeta)
-        assertEquals(FormattedEvent.System("Guest1 ha abbandonato IRC (Ping timeout)"), result)
+        assertEquals(FormattedEvent.System.Quit("Guest1", "Ping timeout"), result)
     }
 
     @Test
     fun `kick includes target and reason`() {
         val meta = JsonObject(mapOf("target" to JsonPrimitive("Fox")))
         val result = SystemEventFormatter.format("kick", "saBOTage", "no file sharing", meta)
-        assertEquals(FormattedEvent.System("saBOTage ha espulso Fox (no file sharing)"), result)
+        assertEquals(FormattedEvent.System.Kick("saBOTage", "Fox", "no file sharing"), result)
     }
 
     @Test
@@ -50,27 +50,27 @@ class SystemEventFormatterTest {
             ),
         )
         val result = SystemEventFormatter.format("mode", "ChanServ", null, meta)
-        assertEquals(FormattedEvent.System("ChanServ ha impostato modalità +v DreamsProgrammer"), result)
+        assertEquals(FormattedEvent.System.Mode("ChanServ", "+v", "DreamsProgrammer"), result)
     }
 
     @Test
     fun `mode without args`() {
         val meta = JsonObject(mapOf("modes" to JsonPrimitive("+n")))
         val result = SystemEventFormatter.format("mode", "vjt", null, meta)
-        assertEquals(FormattedEvent.System("vjt ha impostato modalità +n"), result)
+        assertEquals(FormattedEvent.System.Mode("vjt", "+n", null), result)
     }
 
     @Test
     fun `nick_change reports the new nick`() {
         val meta = JsonObject(mapOf("new_nick" to JsonPrimitive("Guest29636")))
         val result = SystemEventFormatter.format("nick_change", "DreamsProgrammer", null, meta)
-        assertEquals(FormattedEvent.System("DreamsProgrammer è ora conosciuto come Guest29636"), result)
+        assertEquals(FormattedEvent.System.NickChange("DreamsProgrammer", "Guest29636"), result)
     }
 
     @Test
     fun `topic change`() {
         val result = SystemEventFormatter.format("topic", "vjt", "new topic text", noMeta)
-        assertEquals(FormattedEvent.System("vjt ha cambiato il topic"), result)
+        assertEquals(FormattedEvent.System.TopicChanged("vjt"), result)
     }
 
     @Test

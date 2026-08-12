@@ -100,7 +100,7 @@ class NotificationRouter(
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("${message.sender} in $bucket")
+            .setContentTitle(context.getString(R.string.notif_content_title, message.sender, bucket))
             .setContentText(message.body)
             .setSmallIcon(R.drawable.ic_notification)
             .setAutoCancel(true)
@@ -132,8 +132,9 @@ class NotificationRouter(
     /** Inline quick reply — the `PendingIntent` MUST be mutable, or the system has
      * nowhere to attach the [RemoteInput] result before firing it. */
     private fun replyAction(message: ScrollbackMessageDto, bucket: String): NotificationCompat.Action {
+        val replyLabel = context.getString(R.string.notif_action_reply)
         val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
-            .setLabel("Rispondi")
+            .setLabel(replyLabel)
             .build()
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -141,7 +142,7 @@ class NotificationRouter(
             actionIntent(NotificationActionReceiver.ACTION_REPLY, message, bucket),
             PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Action.Builder(R.drawable.ic_notification, "Rispondi", pendingIntent)
+        return NotificationCompat.Action.Builder(R.drawable.ic_notification, replyLabel, pendingIntent)
             .addRemoteInput(remoteInput)
             .setAllowGeneratedReplies(true)
             .build()
@@ -154,11 +155,16 @@ class NotificationRouter(
             actionIntent(NotificationActionReceiver.ACTION_MARK_READ, message, bucket),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Action.Builder(R.drawable.ic_notification, "Segna come letto", pendingIntent).build()
+        val label = context.getString(R.string.notif_action_mark_read)
+        return NotificationCompat.Action.Builder(R.drawable.ic_notification, label, pendingIntent).build()
     }
 
     private fun ensureChannel() {
-        val channel = NotificationChannel(CHANNEL_ID, "Messaggi", NotificationManager.IMPORTANCE_DEFAULT)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.notif_channel_messages),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        )
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(channel)
     }

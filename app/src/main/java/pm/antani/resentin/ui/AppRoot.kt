@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -15,6 +16,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import pm.antani.resentin.AppContainer
 import pm.antani.resentin.BuildConfig
+import pm.antani.resentin.R
 import pm.antani.resentin.irc.isQueryTarget
 import pm.antani.resentin.ui.appsettings.AppSettingsScreen
 import pm.antani.resentin.ui.appsettings.AppSettingsViewModel
@@ -54,10 +56,11 @@ fun AppRoot(
     onSharePickConsumed: () -> Unit = {},
 ) {
     val session by container.tokenStore.session.collectAsState()
+    val appContext = LocalContext.current.applicationContext
 
     if (session == null) {
         val viewModel: LoginViewModel = viewModel(
-            factory = LoginViewModel.factory(container.authRepository, BuildConfig.DEFAULT_SERVER_HOST),
+            factory = LoginViewModel.factory(container.authRepository, appContext, BuildConfig.DEFAULT_SERVER_HOST),
         )
         LoginScreen(viewModel = viewModel)
         return
@@ -65,7 +68,6 @@ fun AppRoot(
 
     val currentSession = session!!
     val navController = rememberNavController()
-    val appContext = LocalContext.current.applicationContext
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
@@ -91,7 +93,7 @@ fun AppRoot(
     NavHost(navController = navController, startDestination = ROUTE_HOME) {
         composable(ROUTE_HOME) {
             val viewModel: HomeViewModel = viewModel(
-                factory = HomeViewModel.factory(container.networksRepository),
+                factory = HomeViewModel.factory(container.networksRepository, appContext),
             )
             HomeScreen(
                 viewModel = viewModel,
@@ -115,7 +117,7 @@ fun AppRoot(
         composable(ROUTE_SHARE_TARGET) {
             val viewModel: HomeViewModel = viewModel(
                 key = ROUTE_SHARE_TARGET,
-                factory = HomeViewModel.factory(container.networksRepository),
+                factory = HomeViewModel.factory(container.networksRepository, appContext),
             )
             ShareTargetScreen(
                 viewModel = viewModel,
@@ -154,7 +156,7 @@ fun AppRoot(
             )
             ChatScreen(
                 viewModel = viewModel,
-                title = if (channelName == "\$server") "Server" else channelName,
+                title = if (channelName == "\$server") stringResource(R.string.server_pseudo_channel_title) else channelName,
                 networkSlug = networkSlug,
                 viewerUsername = currentSession.username,
                 isQuery = isQueryTarget(channelName),

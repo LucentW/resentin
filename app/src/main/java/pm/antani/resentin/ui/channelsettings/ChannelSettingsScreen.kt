@@ -23,7 +23,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,14 +47,14 @@ fun ChannelSettingsScreen(
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
             )
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text("Topic", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.channel_settings_topic_label), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(4.dp))
             OutlinedTextField(
                 value = state.topic,
@@ -66,11 +68,11 @@ fun ChannelSettingsScreen(
                 Spacer(Modifier.height(8.dp))
             }
             if (state.saved) {
-                Text("Topic aggiornato", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.channel_settings_topic_updated), color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(8.dp))
             }
             Button(onClick = viewModel::saveTopic, enabled = !state.isSaving, modifier = Modifier.fillMaxWidth()) {
-                Text("Aggiorna topic")
+                Text(stringResource(R.string.channel_settings_update_topic))
             }
             Spacer(Modifier.height(24.dp))
             OutlinedButton(
@@ -78,7 +80,7 @@ fun ChannelSettingsScreen(
                 enabled = !state.isSaving,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Abbandona il canale")
+                Text(stringResource(R.string.channel_settings_part))
             }
         }
     }

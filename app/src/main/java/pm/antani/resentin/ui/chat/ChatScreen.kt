@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +66,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.MemberEntity
 import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.prefs.ChatDisplayMode
@@ -186,16 +188,16 @@ fun ChatScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     if (!isQuery) {
                         IconButton(onClick = onMembersClick) {
-                            Icon(Icons.Default.Person, contentDescription = "Membri")
+                            Icon(Icons.Default.Person, contentDescription = stringResource(R.string.cd_members))
                         }
                         IconButton(onClick = onSettingsClick) {
-                            Icon(Icons.Default.Settings, contentDescription = "Impostazioni canale")
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_channel_settings))
                         }
                     }
                 },
@@ -217,17 +219,17 @@ fun ChatScreen(
                     if (isUploading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.AttachFile, contentDescription = "Allega file")
+                        Icon(Icons.Default.AttachFile, contentDescription = stringResource(R.string.cd_attach_file))
                     }
                 }
                 OutlinedTextField(
                     value = draft,
                     onValueChange = viewModel::onDraftChange,
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Messaggio") },
+                    placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                 )
                 IconButton(onClick = viewModel::send) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Invia")
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.cd_send))
                 }
             }
         },
@@ -278,11 +280,11 @@ fun ChatScreen(
     if (showTopicDialog && topic != null) {
         AlertDialog(
             onDismissRequest = { showTopicDialog = false },
-            title = { Text("Topic") },
+            title = { Text(stringResource(R.string.chat_topic_dialog_title)) },
             text = { MircText(text = topic!!, style = MaterialTheme.typography.bodyMedium) },
             confirmButton = {
                 TextButton(onClick = { showTopicDialog = false }) {
-                    Text("Chiudi")
+                    Text(stringResource(R.string.chat_dialog_close))
                 }
             },
         )
@@ -297,7 +299,7 @@ private fun UnreadDivider() {
     ) {
         HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
         Text(
-            text = "Hai letto fino a qui",
+            text = stringResource(R.string.chat_unread_divider),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 8.dp),
@@ -311,6 +313,25 @@ private fun UnreadDivider() {
 private fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
     val member = members.find { it.nick.equals(nick, ignoreCase = true) } ?: return ""
     return highestSigil(sigilsOf(member))?.toString().orEmpty()
+}
+
+@Composable
+private fun reasonSuffix(reason: String?): String =
+    if (reason == null) "" else stringResource(R.string.paren_suffix, reason)
+
+/** Renders a structured [FormattedEvent.System] into its localized display line — the
+ * templates themselves live in strings.xml so this varies by locale. */
+@Composable
+private fun systemEventText(event: FormattedEvent.System): String = when (event) {
+    is FormattedEvent.System.Join -> stringResource(R.string.event_join, event.sender)
+    is FormattedEvent.System.Part -> stringResource(R.string.event_part, event.sender, reasonSuffix(event.reason))
+    is FormattedEvent.System.Quit -> stringResource(R.string.event_quit, event.sender, reasonSuffix(event.reason))
+    is FormattedEvent.System.Kick ->
+        stringResource(R.string.event_kick, event.sender, event.target, reasonSuffix(event.reason))
+    is FormattedEvent.System.Mode ->
+        stringResource(R.string.event_mode, event.sender, event.modes, event.args?.let { " $it" }.orEmpty())
+    is FormattedEvent.System.NickChange -> stringResource(R.string.event_nick_change, event.sender, event.newNick)
+    is FormattedEvent.System.TopicChanged -> stringResource(R.string.event_topic_changed, event.sender)
 }
 
 @Composable
@@ -335,7 +356,7 @@ private fun MessageRow(
     when (formatted) {
         is FormattedEvent.System -> {
             MircText(
-                text = "${formatted.text} · $time",
+                text = "${systemEventText(formatted)} · $time",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -439,7 +460,7 @@ private fun SwipeToReply(onReply: () -> Unit, onLongPress: () -> Unit, content: 
     ) {
         Icon(
             Icons.AutoMirrored.Filled.ArrowForward,
-            contentDescription = "Rispondi",
+            contentDescription = stringResource(R.string.cd_reply),
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .align(Alignment.CenterStart)

@@ -1,4 +1,126 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Resentin</string>
+
+    <!-- Common -->
+    <string name="cd_back">Indietro</string>
+    <string name="cd_remove">Rimuovi</string>
+    <string name="cd_cancel">Annulla</string>
+
+    <!-- Login -->
+    <string name="login_title">Connetti a grappa</string>
+    <string name="login_server_label">Server</string>
+    <string name="login_mode_token">Token</string>
+    <string name="login_mode_password">Username e password</string>
+    <string name="login_token_label">Token</string>
+    <string name="login_username_label">Username</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_signin_button">Accedi</string>
+    <string name="login_error_host_blank">Inserisci l\'indirizzo del server</string>
+    <string name="login_error_token_blank">Inserisci il token</string>
+    <string name="login_error_credentials_blank">Inserisci username e password</string>
+    <string name="login_error_server_unreachable">Server non raggiungibile: %1$s</string>
+    <string name="login_error_protocol_too_old">Il server richiede un protocollo più recente (min %1$d): aggiorna l\'app</string>
+    <string name="login_error_invalid_token">Token non valido o accesso negato</string>
+
+    <!-- Home -->
+    <string name="cd_refresh">Aggiorna</string>
+    <string name="cd_app_settings">Impostazioni</string>
+    <string name="cd_sign_out">Esci</string>
+    <string name="home_no_networks">Nessuna rete</string>
+    <string name="cd_network_settings">Impostazioni rete</string>
+    <string name="cd_direct_message">Messaggio privato</string>
+    <string name="home_unknown_error">Errore sconosciuto</string>
+
+    <!-- Chat -->
+    <string name="cd_members">Membri</string>
+    <string name="cd_channel_settings">Impostazioni canale</string>
+    <string name="cd_attach_file">Allega file</string>
+    <string name="chat_message_placeholder">Messaggio</string>
+    <string name="cd_send">Invia</string>
+    <string name="chat_topic_dialog_title">Topic</string>
+    <string name="chat_dialog_close">Chiudi</string>
+    <string name="chat_unread_divider">Hai letto fino a qui</string>
+    <string name="cd_reply">Rispondi</string>
+    <string name="chat_upload_failed">Impossibile leggere il file</string>
+    <string name="server_pseudo_channel_title">Server</string>
+
+    <!-- Channel system events (join/part/quit/kick/mode/nick/topic lines) -->
+    <string name="event_join">%1$s è entrato nel canale</string>
+    <string name="event_part">%1$s ha lasciato il canale%2$s</string>
+    <string name="event_quit">%1$s ha abbandonato IRC%2$s</string>
+    <string name="event_kick">%1$s ha espulso %2$s%3$s</string>
+    <string name="event_mode">%1$s ha impostato modalità %2$s%3$s</string>
+    <string name="event_nick_change">%1$s è ora conosciuto come %2$s</string>
+    <string name="event_topic_changed">%1$s ha cambiato il topic</string>
+    <string name="paren_suffix">\ (%1$s)</string>
+
+    <!-- App settings -->
+    <string name="settings_title">Impostazioni</string>
+    <string name="settings_stay_connected">Resta connesso in background</string>
+    <string name="settings_stay_connected_desc">Mantiene la connessione attiva e mostra notifiche per i messaggi privati e le menzioni</string>
+    <string name="settings_colored_nicklist">Nicklist colorata</string>
+    <string name="settings_chat_display">Visualizzazione chat</string>
+    <string name="settings_display_bubbles">Bolle</string>
+    <string name="settings_display_irc_line">Monoriga IRC</string>
+    <string name="settings_display_irc_line_desc">Monoriga IRC: [HH:mm] &lt;nick&gt; messaggio, come un client IRC classico</string>
+    <string name="settings_show_seconds">Secondi nei timestamp</string>
+    <string name="settings_show_seconds_desc">Mostra [HH:mm:ss] invece di [HH:mm], in entrambe le visualizzazioni</string>
+    <string name="settings_language">Lingua</string>
+    <string name="settings_language_system">Sistema</string>
+    <string name="settings_language_italian">Italiano</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_aliases">Alias</string>
+    <string name="settings_alias_name_label">Nome alias</string>
+    <string name="settings_alias_expansion_label">Espansione</string>
+    <string name="settings_add_alias">Aggiungi alias</string>
+
+    <!-- Channel settings -->
+    <string name="channel_settings_topic_label">Topic</string>
+    <string name="channel_settings_topic_updated">Topic aggiornato</string>
+    <string name="channel_settings_update_topic">Aggiorna topic</string>
+    <string name="channel_settings_part">Abbandona il canale</string>
+
+    <!-- Network settings -->
+    <string name="network_settings_connected">Connesso</string>
+    <string name="network_settings_nick_label">Nick</string>
+    <string name="network_settings_ident_label">Ident</string>
+    <string name="network_settings_realname_label">Nome reale</string>
+    <string name="network_settings_perform_label">Perform list (comandi eseguiti alla connessione)</string>
+    <string name="network_settings_perform_placeholder">Un comando IRC per riga</string>
+    <string name="network_settings_saved">Salvato</string>
+    <string name="network_settings_save">Salva</string>
+
+    <!-- Share target -->
+    <string name="share_target_title">Condividi in...</string>
+
+    <!-- User card (whois) -->
+    <string name="whois_server_line">Server: %1$s</string>
+    <string name="whois_account_line">Account: %1$s</string>
+    <string name="whois_away_line">Assente: %1$s</string>
+    <string name="whois_registered_nick">Nick registrato</string>
+    <string name="whois_secure_connection">Connessione sicura (SSL/TLS)</string>
+    <string name="whois_message_privately">Contatta in privato</string>
+    <string name="whois_channel_privileges">Privilegi sul canale</string>
+    <string name="whois_remove_privilege">Rimuovi %1$s</string>
+
+    <!-- Notifications -->
+    <string name="notif_content_title">%1$s in %2$s</string>
+    <string name="notif_action_reply">Rispondi</string>
+    <string name="notif_action_mark_read">Segna come letto</string>
+    <string name="notif_channel_messages">Messaggi</string>
+    <string name="notif_channel_connection_status">Stato connessione</string>
+    <string name="fgs_connected_to">Connesso a %1$s</string>
+    <string name="fgs_connected">Connesso</string>
+
+    <!-- Auth errors -->
+    <string name="auth_error_invalid_response">Risposta non valida</string>
+    <string name="auth_error_2fa_required">Questo account richiede l\'autenticazione a due fattori: usa un client token invece</string>
+    <string name="auth_error_invalid_credentials">Username o password non validi</string>
+    <string name="auth_error_too_many_attempts">Troppi tentativi falliti, riprova più tardi</string>
+    <string name="auth_error_not_authenticated">Non autenticato</string>
+
+    <!-- Upload errors -->
+    <string name="upload_error_http">Upload fallito: HTTP %1$d</string>
+    <string name="upload_error_invalid_response">Risposta di upload non valida</string>
 </resources>

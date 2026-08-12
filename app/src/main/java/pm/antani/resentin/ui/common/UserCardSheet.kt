@@ -16,7 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.WhoisBundleDto
 
 /**
@@ -49,9 +51,13 @@ fun UserCardSheet(
             Text(whois.target, style = MaterialTheme.typography.headlineSmall)
             whois.user?.let { user -> Text("$user@${whois.host ?: "?"}") }
             whois.realname?.let { Text(it) }
-            whois.server?.let { server -> Text("Server: $server${whois.serverInfo?.let { " ($it)" }.orEmpty()}") }
-            whois.account?.let { Text("Account: $it") }
-            whois.awayMessage?.let { Text("Assente: $it") }
+            whois.server?.let { server ->
+                Text(
+                    stringResource(R.string.whois_server_line, "$server${whois.serverInfo?.let { " ($it)" }.orEmpty()}"),
+                )
+            }
+            whois.account?.let { Text(stringResource(R.string.whois_account_line, it)) }
+            whois.awayMessage?.let { Text(stringResource(R.string.whois_away_line, it)) }
             if (whois.isOperator) {
                 Text(
                     text = "⚡ IRC Operator" + (whois.operText?.let { " — $it" } ?: ""),
@@ -61,14 +67,14 @@ fun UserCardSheet(
             if (whois.isServicesAdmin) Text("Services Administrator", color = MaterialTheme.colorScheme.error)
             if (whois.isAdmin) Text("Server Administrator", color = MaterialTheme.colorScheme.error)
             if (whois.isHelper) Text("Network Helper")
-            if (whois.isRegistered) Text("Nick registrato")
-            if (whois.secure || whois.usingSsl) Text("Connessione sicura (SSL/TLS)")
+            if (whois.isRegistered) Text(stringResource(R.string.whois_registered_nick))
+            if (whois.secure || whois.usingSsl) Text(stringResource(R.string.whois_secure_connection))
 
             val target = whois.target
             val showContact = !target.equals(viewerUsername, ignoreCase = true)
             if (showContact) {
                 OutlinedButton(onClick = { onContactPrivately(target) }, modifier = Modifier.padding(top = 16.dp)) {
-                    Text("Contatta in privato")
+                    Text(stringResource(R.string.whois_message_privately))
                 }
             }
 
@@ -86,7 +92,7 @@ fun UserCardSheet(
                     PRIVILEGE_MODES.filter { (letter, _) -> availableModes.containsKey(letter.toString()) }
                 if (isPrivileged(ownSigils) && privilegedModes.isNotEmpty()) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                    Text("Privilegi sul canale", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.whois_channel_privileges), style = MaterialTheme.typography.labelLarge)
                     FlowRow(modifier = Modifier.padding(top = 8.dp)) {
                         privilegedModes.forEach { (letter, label) ->
                             val sigil = sigilOfMode(letter)
@@ -95,7 +101,7 @@ fun UserCardSheet(
                                 onClick = { onSetMode(target, letter, !hasIt) },
                                 modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                             ) {
-                                Text(if (hasIt) "Rimuovi $label" else label)
+                                Text(if (hasIt) stringResource(R.string.whois_remove_privilege, label) else label)
                             }
                         }
                     }

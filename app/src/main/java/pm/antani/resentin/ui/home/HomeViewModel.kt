@@ -1,5 +1,6 @@
 package pm.antani.resentin.ui.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -10,10 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.domain.repository.NetworksRepository
 
-class HomeViewModel(private val networksRepository: NetworksRepository) : ViewModel() {
+class HomeViewModel(private val networksRepository: NetworksRepository, private val context: Context) : ViewModel() {
 
     val networks: StateFlow<List<NetworkWithChannels>> = networksRepository.networksWithChannels
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -33,17 +35,17 @@ class HomeViewModel(private val networksRepository: NetworksRepository) : ViewMo
             _isRefreshing.value = true
             networksRepository.refresh()
                 .onSuccess { _error.value = null }
-                .onFailure { _error.value = it.message ?: "Errore sconosciuto" }
+                .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
             _isRefreshing.value = false
         }
     }
 
     companion object {
-        fun factory(networksRepository: NetworksRepository): ViewModelProvider.Factory =
+        fun factory(networksRepository: NetworksRepository, context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return HomeViewModel(networksRepository) as T
+                    return HomeViewModel(networksRepository, context.applicationContext) as T
                 }
             }
     }

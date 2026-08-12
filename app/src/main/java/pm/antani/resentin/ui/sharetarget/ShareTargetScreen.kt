@@ -22,7 +22,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import pm.antani.resentin.R
 import pm.antani.resentin.ui.home.HomeViewModel
 
 /** "Condividi in..." — the landing screen when another app shares a file/photo into
@@ -41,10 +43,10 @@ fun ShareTargetScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Condividi in...") },
+                title = { Text(stringResource(R.string.share_target_title)) },
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Annulla")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_cancel))
                     }
                 },
             )

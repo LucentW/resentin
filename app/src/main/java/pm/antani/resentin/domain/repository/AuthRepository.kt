@@ -1,7 +1,9 @@
 package pm.antani.resentin.domain.repository
 
+import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.net.HttpClients
@@ -16,6 +18,7 @@ class AuthRepository(
     private val tokenStore: TokenStore,
     private val db: AppDatabase,
     private val appPreferences: AppPreferences,
+    private val context: Context,
 ) {
 
     val session: StateFlow<TokenStore.Session?> = tokenStore.session
@@ -34,10 +37,10 @@ class AuthRepository(
         val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient())
         val response = retrofit.create(AuthApi::class.java).login(AuthLoginRequestDto(identifier, password))
         when (response.code()) {
-            200 -> checkNotNull(response.body()?.token) { "Risposta non valida" }
-            202 -> error("Questo account richiede l'autenticazione a due fattori: usa un client token invece")
-            401 -> error("Username o password non validi")
-            429 -> error("Troppi tentativi falliti, riprova più tardi")
+            200 -> checkNotNull(response.body()?.token) { context.getString(R.string.auth_error_invalid_response) }
+            202 -> error(context.getString(R.string.auth_error_2fa_required))
+            401 -> error(context.getString(R.string.auth_error_invalid_credentials))
+            429 -> error(context.getString(R.string.auth_error_too_many_attempts))
             else -> error("HTTP ${response.code()}")
         }
     }
@@ -46,7 +49,7 @@ class AuthRepository(
         val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient { token })
         val response = retrofit.create(MeApi::class.java).getMe()
         check(response.isSuccessful) { "HTTP ${response.code()}" }
-        checkNotNull(response.body()?.displayName) { "Risposta non valida" }
+        checkNotNull(response.body()?.displayName) { context.getString(R.string.auth_error_invalid_response) }
     }
 
     /** Every cached table (networks/channels/messages/members/...) is keyed by network
@@ -69,7 +72,7 @@ class AuthRepository(
     }
 
     fun <T> api(serviceClass: Class<T>): T {
-        val currentSession = checkNotNull(tokenStore.session.value) { "Non autenticato" }
+        val currentSession = checkNotNull(tokenStore.session.value) { context.getString(R.string.auth_error_not_authenticated) }
         val retrofit = HttpClients.retrofit(currentSession.host, HttpClients.okHttpClient { currentSession.token })
         return retrofit.create(serviceClass)
     }

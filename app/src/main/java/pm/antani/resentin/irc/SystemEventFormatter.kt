@@ -9,10 +9,21 @@ private val CTCP_MARKER = Char(1)
 
 /** A rendering-ready description of one scrollback row: either a normal chat
  * bubble (privmsg/notice/action) or a compact one-line system event
- * (join/part/quit/mode/kick/nick_change/topic). */
+ * (join/part/quit/mode/kick/nick_change/topic). System events carry structured
+ * data rather than a pre-formatted string — the actual template text lives in
+ * `strings.xml` via `stringResource()` in the UI layer, so this stays localizable. */
 sealed interface FormattedEvent {
     data class Chat(val text: String, val isAction: Boolean, val isNotice: Boolean) : FormattedEvent
-    data class System(val text: String) : FormattedEvent
+
+    sealed interface System : FormattedEvent {
+        data class Join(val sender: String) : System
+        data class Part(val sender: String, val reason: String?) : System
+        data class Quit(val sender: String, val reason: String?) : System
+        data class Kick(val sender: String, val target: String, val reason: String?) : System
+        data class Mode(val sender: String, val modes: String, val args: String?) : System
+        data class NickChange(val sender: String, val newNick: String) : System
+        data class TopicChanged(val sender: String) : System
+    }
 }
 
 /**
@@ -24,36 +35,31 @@ sealed interface FormattedEvent {
 object SystemEventFormatter {
 
     fun format(kind: String, sender: String, body: String?, meta: JsonObject): FormattedEvent = when (kind) {
-        "join" -> FormattedEvent.System("$sender è entrato nel canale")
-        "part" -> FormattedEvent.System("$sender ha lasciato il canale${reasonSuffix(body)}")
-        "quit" -> FormattedEvent.System("$sender ha abbandonato IRC${reasonSuffix(body)}")
-        "kick" -> {
-            val target = meta.stringOrNull("target") ?: "?"
-            FormattedEvent.System("$sender ha espulso $target${reasonSuffix(body)}")
-        }
+        "join" -> FormattedEvent.System.Join(sender)
+        "part" -> FormattedEvent.System.Part(sender, body?.takeIf { it.isNotBlank() })
+        "quit" -> FormattedEvent.System.Quit(sender, body?.takeIf { it.isNotBlank() })
+        "kick" -> FormattedEvent.System.Kick(
+            sender,
+            meta.stringOrNull("target") ?: "?",
+            body?.takeIf { it.isNotBlank() },
+        )
         "mode" -> {
             val modes = meta.stringOrNull("modes").orEmpty()
             val args = meta["args"]?.jsonArray
                 ?.joinToString(" ") { it.jsonPrimitive.contentOrNull.orEmpty() }
                 .orEmpty()
-            val suffix = if (args.isNotBlank()) " $args" else ""
-            FormattedEvent.System("$sender ha impostato modalità $modes$suffix".trimEnd())
+            FormattedEvent.System.Mode(sender, modes, args.takeIf { it.isNotBlank() })
         }
-        "nick_change" -> {
-            val newNick = meta.stringOrNull("new_nick") ?: "?"
-            FormattedEvent.System("$sender è ora conosciuto come $newNick")
-        }
-        "topic" -> FormattedEvent.System("$sender ha cambiato il topic")
+        "nick_change" -> FormattedEvent.System.NickChange(sender, meta.stringOrNull("new_nick") ?: "?")
+        "topic" -> FormattedEvent.System.TopicChanged(sender)
         "action" -> FormattedEvent.Chat(stripAction(body), isAction = true, isNotice = false)
         "notice" -> FormattedEvent.Chat(body.orEmpty(), isAction = false, isNotice = true)
         else -> FormattedEvent.Chat(body.orEmpty(), isAction = false, isNotice = false)
     }
 
-    private fun reasonSuffix(body: String?): String = if (body.isNullOrBlank()) "" else " ($body)"
-
     private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
-    /** Strips the CTCP ACTION envelope: `ACTION text` -> `text`. */
+    /** Strips the CTCP ACTION envelope: `ACTION text` -> `text`. */
     private fun stripAction(body: String?): String {
         if (body == null) return ""
         var text = body
