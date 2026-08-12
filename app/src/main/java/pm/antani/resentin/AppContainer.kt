@@ -28,14 +28,14 @@ import pm.antani.resentin.service.NotificationRouter
 
 class AppContainer(private val context: Context) {
     val tokenStore = TokenStore(context.applicationContext)
-    val authRepository = AuthRepository(tokenStore)
     val database = AppDatabase.build(context)
+    val appPreferences = AppPreferences(context.applicationContext)
+    val authRepository = AuthRepository(tokenStore, database, appPreferences)
     val networksRepository = NetworksRepository(authRepository, database)
     val chatRepository = ChatRepository(authRepository, database)
     val connectionManager = ConnectionManager(tokenStore)
     val membersRepository = MembersRepository(connectionManager, database)
     val userSettingsRepository = UserSettingsRepository(authRepository)
-    val appPreferences = AppPreferences(context.applicationContext)
     val openChatTracker = OpenChatTracker()
     val pendingShareHolder = PendingShareHolder()
     private val notificationRouter = NotificationRouter(context.applicationContext, connectionManager, database, openChatTracker)

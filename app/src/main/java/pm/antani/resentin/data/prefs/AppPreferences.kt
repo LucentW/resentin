@@ -22,6 +22,7 @@ class AppPreferences(private val context: Context) {
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
+    private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
 
     val stayConnected: Flow<Boolean> = context.dataStore.data.map { it[keyStayConnected] ?: false }
 
@@ -42,5 +43,18 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setShowSeconds(value: Boolean) {
         context.dataStore.edit { it[keyShowSeconds] = value }
+    }
+
+    /** The host every locally-cached table (networks/channels/messages/...) was last
+     * populated from — every table is keyed by network *slug* alone, with no host
+     * column, so switching to a different grappa server whose network happens to share
+     * a slug (e.g. two servers both naming a network "azzurra") would otherwise silently
+     * merge their data. Outlives sign-out (unlike [pm.antani.resentin.net.auth.TokenStore],
+     * which the login screen needs cleared) so a host change is still detectable across
+     * a sign-out/sign-in cycle. See [pm.antani.resentin.domain.repository.AuthRepository.signIn]. */
+    val lastSyncedHost: Flow<String?> = context.dataStore.data.map { it[keyLastSyncedHost] }
+
+    suspend fun setLastSyncedHost(host: String) {
+        context.dataStore.edit { it[keyLastSyncedHost] = host }
     }
 }

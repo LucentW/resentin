@@ -1,6 +1,9 @@
 package pm.antani.resentin.domain.repository
 
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import pm.antani.resentin.data.db.AppDatabase
+import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.net.HttpClients
 import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.dto.AuthLoginRequestDto
@@ -9,7 +12,11 @@ import pm.antani.resentin.net.rest.AuthApi
 import pm.antani.resentin.net.rest.ConfigApi
 import pm.antani.resentin.net.rest.MeApi
 
-class AuthRepository(private val tokenStore: TokenStore) {
+class AuthRepository(
+    private val tokenStore: TokenStore,
+    private val db: AppDatabase,
+    private val appPreferences: AppPreferences,
+) {
 
     val session: StateFlow<TokenStore.Session?> = tokenStore.session
 
@@ -42,7 +49,18 @@ class AuthRepository(private val tokenStore: TokenStore) {
         checkNotNull(response.body()?.displayName) { "Risposta non valida" }
     }
 
-    fun signIn(host: String, token: String, username: String) {
+    /** Every cached table (networks/channels/messages/members/...) is keyed by network
+     * *slug* alone with no host column, so switching to a different grappa server whose
+     * network happens to share a slug (e.g. two servers both naming a network "azzurra")
+     * would otherwise silently merge their data — wrong read-cursor state, cross-server
+     * message bleed, the works. Wiping the cache on a detected host change keeps the
+     * single-server-at-a-time schema assumption actually true. */
+    suspend fun signIn(host: String, token: String, username: String) {
+        val lastHost = appPreferences.lastSyncedHost.first()
+        if (lastHost != null && lastHost != host) {
+            db.clearAllTables()
+        }
+        appPreferences.setLastSyncedHost(host)
         tokenStore.saveSession(host, token, username)
     }
 
