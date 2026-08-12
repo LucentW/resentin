@@ -22,10 +22,28 @@ android {
         buildConfigField("String", "DEFAULT_SERVER_HOST", "\"grappa.antani.pm\"")
     }
 
+    signingConfigs {
+        // Populated by CI (see .github/workflows/build.yml) via KEYSTORE_PATH env var
+        // pointing at the keystore decoded from the KEYSTORE_BASE64 secret. Absent
+        // locally, so local release builds stay unsigned rather than failing.
+        create("release") {
+            val keystorePath = System.getenv("KEYSTORE_PATH")
+            if (keystorePath != null) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (System.getenv("KEYSTORE_PATH") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
