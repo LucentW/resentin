@@ -27,6 +27,9 @@ interface ChannelDao {
     @Query("UPDATE channels SET topic = :topic WHERE networkSlug = :networkSlug AND name = :name")
     suspend fun updateTopic(networkSlug: String, name: String, topic: String?)
 
+    @Query("UPDATE channels SET modes = :modes WHERE networkSlug = :networkSlug AND name = :name")
+    suspend fun updateModes(networkSlug: String, name: String, modes: String?)
+
     // Mirrors the server's monotonic advance-only clamp on ReadCursor.set/4 — never
     // regress the locally-cached cursor on a stale/out-of-order update.
     @Query(

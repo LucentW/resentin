@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -105,6 +106,8 @@ class NotificationRouter(
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setGroup(bucket)
+            .addAction(replyAction(message, bucket))
+            .addAction(markReadAction(message, bucket))
             .build()
 
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -115,6 +118,43 @@ class NotificationRouter(
         }
         Log.d(TAG, "posting notification for #${message.id}")
         NotificationManagerCompat.from(context).notify(message.id.toInt(), notification)
+    }
+
+    private fun actionIntent(action: String, message: ScrollbackMessageDto, bucket: String): Intent =
+        Intent(context, NotificationActionReceiver::class.java).apply {
+            setAction(action)
+            putExtra(NotificationActionReceiver.EXTRA_NETWORK_SLUG, message.network)
+            putExtra(NotificationActionReceiver.EXTRA_CHANNEL_NAME, bucket)
+            putExtra(NotificationActionReceiver.EXTRA_MESSAGE_ID, message.id)
+            putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, message.id.toInt())
+        }
+
+    /** Inline quick reply — the `PendingIntent` MUST be mutable, or the system has
+     * nowhere to attach the [RemoteInput] result before firing it. */
+    private fun replyAction(message: ScrollbackMessageDto, bucket: String): NotificationCompat.Action {
+        val remoteInput = RemoteInput.Builder(NotificationActionReceiver.KEY_REPLY_TEXT)
+            .setLabel("Rispondi")
+            .build()
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            message.id.toInt() * 10 + 1,
+            actionIntent(NotificationActionReceiver.ACTION_REPLY, message, bucket),
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_notification, "Rispondi", pendingIntent)
+            .addRemoteInput(remoteInput)
+            .setAllowGeneratedReplies(true)
+            .build()
+    }
+
+    private fun markReadAction(message: ScrollbackMessageDto, bucket: String): NotificationCompat.Action {
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            message.id.toInt() * 10 + 2,
+            actionIntent(NotificationActionReceiver.ACTION_MARK_READ, message, bucket),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return NotificationCompat.Action.Builder(R.drawable.ic_notification, "Segna come letto", pendingIntent).build()
     }
 
     private fun ensureChannel() {

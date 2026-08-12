@@ -9,6 +9,9 @@ data class ChannelEntity(
     val source: String,
     val joined: Boolean,
     val topic: String? = null,
+    /** Pre-formatted `+modeletters [params]` (e.g. `"+rnt"`, `"+lnt 50"`), ready to
+     * render as `(+rnt)` — see [pm.antani.resentin.irc.formatChannelModes]. */
+    val modes: String? = null,
     /** The server's monotonic read-cursor: the last message id this client has told
      * the server it read. Also drives where a freshly-opened chat scrolls to. */
     val lastReadMessageId: Long? = null,

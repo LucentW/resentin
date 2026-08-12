@@ -40,6 +40,12 @@
             android:name=".service.ConnectionForegroundService"
             android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
+
+        <!-- "Rispondi" / "Segna come letto" notification quick actions — only this
+             app's own PendingIntents can trigger it. -->
+        <receiver
+            android:name=".service.NotificationActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -1,6 +1,7 @@
 package pm.antani.resentin.domain.events
 
 import kotlinx.serialization.json.JsonObject
+import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
@@ -15,6 +16,10 @@ sealed interface WsEvent {
     data class MembersSeeded(val seeded: MembersSeededDto) : WsEvent
     data class WhoisBundle(val whois: WhoisBundleDto) : WsEvent
     data class TopicChanged(val topic: TopicChangedDto) : WsEvent
+
+    /** Pushed by the server right after a channel join (mirrors `topic_changed`'s
+     * push-if-cached timing) and again live on every `MODE` line for the channel. */
+    data class ChannelModesChanged(val payload: ChannelModesChangedDto) : WsEvent
     data class WebSessionSevered(val severed: WebSessionSeveredDto) : WsEvent
     data class QueryWindowsListReceived(val windows: QueryWindowsListDto) : WsEvent
 

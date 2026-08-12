@@ -18,6 +18,7 @@ import pm.antani.resentin.data.db.NetworkEntity
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
+import pm.antani.resentin.irc.formatChannelModes
 import pm.antani.resentin.net.dto.ChannelDto
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
@@ -56,6 +57,16 @@ class NetworksRepository(
             .filterIsInstance<WsEvent.TopicChanged>()
             .map { it.topic }
             .onEach { db.channelDao().updateTopic(it.network, it.channel, it.topic.text) }
+            .launchIn(scope)
+
+        // Pushed right after a channel join (if cached) and again live on every MODE line.
+        connectionManager.events
+            .filterIsInstance<WsEvent.ChannelModesChanged>()
+            .map { it.payload }
+            .onEach { payload ->
+                val display = formatChannelModes(payload.modes.modes, payload.modes.params)
+                db.channelDao().updateModes(payload.network, payload.channel, display)
+            }
             .launchIn(scope)
 
         // query_windows_list has no REST equivalent (GET .../channels never returns

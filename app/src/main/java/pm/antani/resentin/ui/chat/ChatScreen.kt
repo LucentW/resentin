@@ -99,6 +99,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val topic by viewModel.topic.collectAsState()
+    val channelModes by viewModel.channelModes.collectAsState()
     val draft by viewModel.draft.collectAsState()
     val error by viewModel.error.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
@@ -165,9 +166,16 @@ fun ChatScreen(
                         modifier = Modifier.clickable(enabled = topic != null) { showTopicDialog = true },
                     ) {
                         Text(title)
-                        if (topic != null) {
+                        // "(+rnt) topic text" — modes prefix the topic line the way a
+                        // classic IRC client's status bar does, shown even without a
+                        // topic set so the channel's mode flags stay visible either way.
+                        val subtitle = buildString {
+                            if (channelModes != null) append("($channelModes) ")
+                            if (topic != null) append(topic)
+                        }.takeIf { it.isNotBlank() }
+                        if (subtitle != null) {
                             MircText(
-                                text = topic!!,
+                                text = subtitle,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

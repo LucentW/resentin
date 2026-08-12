@@ -45,6 +45,10 @@ class ChatViewModel(
         .map { it?.topic?.takeIf { topic -> topic.isNotBlank() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val channelModes: StateFlow<String?> = networksRepository.observeChannel(networkSlug, channelName)
+        .map { it?.modes }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val chatDisplayMode: StateFlow<ChatDisplayMode> = appPreferences.chatDisplayMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatDisplayMode.BUBBLES)
 

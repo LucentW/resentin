@@ -5,6 +5,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.MessageEventPayloadDto
@@ -49,6 +50,9 @@ object WsEventDecoder {
                 )
                 "topic_changed" -> WsEvent.TopicChanged(
                     AppJson.decodeFromJsonElement(TopicChangedDto.serializer(), raw),
+                )
+                "channel_modes_changed" -> WsEvent.ChannelModesChanged(
+                    AppJson.decodeFromJsonElement(ChannelModesChangedDto.serializer(), raw),
                 )
                 "web_session_severed" -> WsEvent.WebSessionSevered(
                     AppJson.decodeFromJsonElement(WebSessionSeveredDto.serializer(), raw),
