@@ -1,0 +1,27 @@
+*.iml
+.gradle/
+.kotlin/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# Android Studio / IntelliJ
+*.hprof
+.navigation/
+
+# Gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Keystores — never commit signing material
+*.jks
+*.keystore
+keystore.properties
+
+# Log files pulled during debugging
+*.log
