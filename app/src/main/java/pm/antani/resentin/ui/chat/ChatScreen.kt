@@ -326,7 +326,7 @@ private fun MessageRow(
 
     when (formatted) {
         is FormattedEvent.System -> {
-            Text(
+            MircText(
                 text = "${formatted.text} · $time",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
