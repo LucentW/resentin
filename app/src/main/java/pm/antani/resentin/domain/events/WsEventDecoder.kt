@@ -5,6 +5,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
@@ -47,6 +48,9 @@ object WsEventDecoder {
                 )
                 "whois_bundle" -> WsEvent.WhoisBundle(
                     AppJson.decodeFromJsonElement(WhoisBundleDto.serializer(), raw),
+                )
+                "banlist_bundle" -> WsEvent.BanlistBundle(
+                    AppJson.decodeFromJsonElement(BanlistBundleDto.serializer(), raw),
                 )
                 "topic_changed" -> WsEvent.TopicChanged(
                     AppJson.decodeFromJsonElement(TopicChangedDto.serializer(), raw),

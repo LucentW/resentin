@@ -1,6 +1,7 @@
 package pm.antani.resentin.domain.events
 
 import kotlinx.serialization.json.JsonObject
+import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
@@ -15,6 +16,9 @@ sealed interface WsEvent {
     data class IsupportChanged(val isupport: IsupportChangedDto) : WsEvent
     data class MembersSeeded(val seeded: MembersSeededDto) : WsEvent
     data class WhoisBundle(val whois: WhoisBundleDto) : WsEvent
+
+    /** Reply to a `banlist` verb query for one type-A list mode of a channel. */
+    data class BanlistBundle(val bundle: BanlistBundleDto) : WsEvent
     data class TopicChanged(val topic: TopicChangedDto) : WsEvent
 
     /** Pushed by the server right after a channel join (mirrors `topic_changed`'s

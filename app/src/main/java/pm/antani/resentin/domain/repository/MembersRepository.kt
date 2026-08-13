@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonPrimitive
@@ -19,6 +20,7 @@ import pm.antani.resentin.data.db.MemberEntity
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.WhoisBundleDto
@@ -39,7 +41,9 @@ class MembersRepository(
 
     private suspend fun recordIsupport(dto: IsupportChangedDto) {
         val slug = db.networkDao().slugForId(dto.networkId) ?: return
-        db.isupportDao().upsert(IsupportEntity(slug, AppJson.encodeToString(dto.prefix)))
+        db.isupportDao().upsert(
+            IsupportEntity(slug, AppJson.encodeToString(dto.prefix), AppJson.encodeToString(dto.listModesQueryable)),
+        )
     }
 
     private suspend fun recordMembers(dto: MembersSeededDto) {
@@ -63,6 +67,18 @@ class MembersRepository(
             } ?: emptyMap()
         }
 
+    /** Type-A (list) mode letters this network's ircd answers a `banlist` query for
+     * (e.g. `["b","e","I"]`) — published on `isupport_changed`, so it's only known
+     * once the network has connected at least once since this client last saw it. */
+    fun observeListModesQueryable(networkSlug: String): Flow<List<String>> =
+        db.isupportDao().observeIsupport(networkSlug).map { entity ->
+            entity?.let {
+                runCatching {
+                    AppJson.decodeFromString(ListSerializer(String.serializer()), it.listModesQueryableJson)
+                }.getOrDefault(emptyList())
+            } ?: emptyList()
+        }
+
     suspend fun requestWhois(username: String, networkId: Int, nick: String) {
         connectionManager.sendVerb(
             "grappa:user:$username",
@@ -77,6 +93,26 @@ class MembersRepository(
     val whoisEvents: Flow<WhoisBundleDto> = connectionManager.events
         .filterIsInstance<WsEvent.WhoisBundle>()
         .map { it.whois }
+
+    /** Queries one of the channel's type-A list modes (`b` bans, `e` exempts, `I`
+     * invex, `q`/`z` quiet/restrict) — the reply streams back as a [banlistEvents]
+     * bundle, not a push ack. A letter this network doesn't support just never gets
+     * a reply (see `NetworksApi` sibling doc); there is no distinct error to surface. */
+    suspend fun requestBanlist(username: String, networkId: Int, channel: String, mode: String) {
+        connectionManager.sendVerb(
+            "grappa:user:$username",
+            "banlist",
+            buildJsonObject {
+                put("network_id", networkId)
+                put("channel", channel)
+                put("mode", mode)
+            },
+        )
+    }
+
+    val banlistEvents: Flow<BanlistBundleDto> = connectionManager.events
+        .filterIsInstance<WsEvent.BanlistBundle>()
+        .map { it.bundle }
 
     suspend fun kick(username: String, networkId: Int, channel: String, nick: String) {
         connectionManager.sendVerb(

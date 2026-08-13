@@ -12,6 +12,10 @@ data class ChannelEntity(
     /** Pre-formatted `+modeletters [params]` (e.g. `"+rnt"`, `"+lnt 50"`), ready to
      * render as `(+rnt)` — see [pm.antani.resentin.irc.formatChannelModes]. */
     val modes: String? = null,
+    /** JSON-encoded raw [pm.antani.resentin.net.dto.ChannelModesEntryDto] behind
+     * [modes] — kept separately because the formatted string can't be parsed back;
+     * ChannelSettings needs the raw letters/params to render per-mode toggles. */
+    val modesRawJson: String? = null,
     /** The server's monotonic read-cursor: the last message id this client has told
      * the server it read. Also drives where a freshly-opened chat scrolls to. */
     val lastReadMessageId: Long? = null,

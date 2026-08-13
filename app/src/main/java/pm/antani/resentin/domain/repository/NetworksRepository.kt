@@ -19,7 +19,9 @@ import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.irc.formatChannelModes
+import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.ChannelDto
+import pm.antani.resentin.net.dto.ChannelModesEntryDto
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
 import pm.antani.resentin.net.dto.DirectoryPageDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
@@ -45,6 +47,16 @@ class NetworksRepository(
     fun observeChannel(slug: String, channel: String): Flow<ChannelEntity?> =
         db.channelDao().observeChannel(slug, channel)
 
+    /** The channel's current raw simple-mode letters + params (e.g. `+l 50`), decoded
+     * from [ChannelEntity.modesRawJson] — the formatted [ChannelEntity.modes] string
+     * can't be parsed back for editing. */
+    fun observeChannelModes(slug: String, channel: String): Flow<ChannelModesEntryDto> =
+        db.channelDao().observeChannel(slug, channel).map { entity ->
+            entity?.modesRawJson?.let {
+                runCatching { AppJson.decodeFromString(ChannelModesEntryDto.serializer(), it) }.getOrNull()
+            } ?: ChannelModesEntryDto()
+        }
+
     suspend fun networkIdForSlug(slug: String): Int? = db.networkDao().idForSlug(slug)
 
     /** One-shot snapshot, not a live Flow — callers use this to capture "where was the
@@ -67,7 +79,8 @@ class NetworksRepository(
             .map { it.payload }
             .onEach { payload ->
                 val display = formatChannelModes(payload.modes.modes, payload.modes.params)
-                db.channelDao().updateModes(payload.network, payload.channel, display)
+                val rawJson = AppJson.encodeToString(ChannelModesEntryDto.serializer(), payload.modes)
+                db.channelDao().updateModes(payload.network, payload.channel, display, rawJson)
             }
             .launchIn(scope)
 

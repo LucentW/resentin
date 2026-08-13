@@ -115,6 +115,14 @@
     <string name="channel_settings_topic_updated">Topic aggiornato</string>
     <string name="channel_settings_update_topic">Aggiorna topic</string>
     <string name="channel_settings_part">Abbandona il canale</string>
+    <string name="channel_settings_modes_title">Modes</string>
+    <string name="channel_settings_raw_mode_hint">es. +l 50</string>
+    <string name="channel_settings_apply_mode">Applica</string>
+    <string name="channel_settings_lists_title">Ban / invite / exception list</string>
+    <string name="channel_settings_list_empty">Lista vuota</string>
+    <string name="channel_settings_list_set_by">impostato da %1$s</string>
+    <string name="channel_settings_new_mask_hint">nick o maschera</string>
+    <string name="channel_settings_add_mask">Aggiungi</string>
 
     <!-- Network settings -->
     <string name="network_settings_connected">Connesso</string>

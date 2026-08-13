@@ -261,7 +261,13 @@ fun AppRoot(
             val channelName = decode(backStackEntry.arguments?.getString("channelName").orEmpty())
             val viewModel: ChannelSettingsViewModel = viewModel(
                 key = "channelsettings/$networkSlug/$channelName",
-                factory = ChannelSettingsViewModel.factory(container.networksRepository, networkSlug, channelName),
+                factory = ChannelSettingsViewModel.factory(
+                    container.networksRepository,
+                    container.membersRepository,
+                    networkSlug,
+                    channelName,
+                    currentSession.username,
+                ),
             )
             ChannelSettingsScreen(
                 viewModel = viewModel,
