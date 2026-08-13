@@ -10,12 +10,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.ChatDisplayMode
+import pm.antani.resentin.data.prefs.ReplyStyle
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
@@ -38,6 +40,8 @@ data class AppSettingsUiState(
     val vhostSelection: List<String> = emptyList(),
     val vhostError: String? = null,
     val isAdmin: Boolean = false,
+    val replyCustomTemplate: String = "",
+    val replyCustomTemplateSaved: Boolean = false,
 )
 
 class AppSettingsViewModel(
@@ -68,6 +72,23 @@ class AppSettingsViewModel(
         viewModelScope.launch { appPreferences.setShowSeconds(enabled) }
     }
 
+    val replyStyle: StateFlow<ReplyStyle> = appPreferences.replyStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReplyStyle.NICK)
+
+    fun setReplyStyle(style: ReplyStyle) {
+        viewModelScope.launch { appPreferences.setReplyStyle(style) }
+    }
+
+    fun onReplyCustomTemplateChange(value: String) =
+        _uiState.update { it.copy(replyCustomTemplate = value, replyCustomTemplateSaved = false) }
+
+    fun saveReplyCustomTemplate() {
+        viewModelScope.launch {
+            appPreferences.setReplyCustomTemplate(_uiState.value.replyCustomTemplate)
+            _uiState.update { it.copy(replyCustomTemplateSaved = true) }
+        }
+    }
+
     init {
         viewModelScope.launch {
             val prefsResult = userSettingsRepository.getDisplayPrefs()
@@ -85,6 +106,10 @@ class AppSettingsViewModel(
         }
         viewModelScope.launch {
             authRepository.getMe().onSuccess { me -> _uiState.update { it.copy(isAdmin = me.isAdmin) } }
+        }
+        viewModelScope.launch {
+            val saved = appPreferences.replyCustomTemplate.first()
+            _uiState.update { it.copy(replyCustomTemplate = saved) }
         }
         refreshVhostSettings()
     }

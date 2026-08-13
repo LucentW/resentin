@@ -6,10 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -29,7 +33,7 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val networksRepository: NetworksRepository,
     membersRepository: MembersRepository,
-    appPreferences: AppPreferences,
+    private val appPreferences: AppPreferences,
     private val connectionManager: ConnectionManager,
     private val openChatTracker: OpenChatTracker,
     private val pendingShareHolder: PendingShareHolder,
@@ -107,6 +111,12 @@ class ChatViewModel(
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
+    // One-shot signal for ChatScreen to grab keyboard focus (and move the cursor to the
+    // end of the now-prefilled draft) right after a swipe-to-reply — reply() alone only
+    // changes the draft's TEXT, which doesn't imply focus or cursor position on its own.
+    private val _replyFocusRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val replyFocusRequests: SharedFlow<Unit> = _replyFocusRequests.asSharedFlow()
+
     init {
         openChatTracker.onChatOpened(networkSlug, channelName)
         // Arrived here via the Android share sheet (ShareTargetScreen staged the URIs
@@ -168,11 +178,18 @@ class ChatViewModel(
         _draft.value = text
     }
 
-    /** Swipe-to-reply: prefills the draft with `nick: ` (IRC has no real threaded
-     * replies, this is just the addressing convention most bouncers highlight on). */
-    fun reply(nick: String) {
-        val prefix = "$nick: "
-        if (!_draft.value.startsWith(prefix)) _draft.value = prefix + _draft.value
+    /** Swipe-to-reply: prefills the draft using the active reply-style template
+     * (Settings) — plain `nick: ` by default, optionally a quoted preview of the
+     * original message, or a fully custom template. IRC has no real threaded replies,
+     * this is just the addressing/quoting convention most bouncers highlight on. */
+    fun reply(nick: String, messageBody: String) {
+        viewModelScope.launch {
+            val style = appPreferences.replyStyle.first()
+            val customTemplate = appPreferences.replyCustomTemplate.first()
+            val prefix = buildReplyPrefix(style, customTemplate, nick, messageBody)
+            if (!_draft.value.startsWith(prefix)) _draft.value = prefix + _draft.value
+            _replyFocusRequests.tryEmit(Unit)
+        }
     }
 
     fun send() {

@@ -51,6 +51,10 @@ private val linkStyles = TextLinkStyles(
     style = SpanStyle(color = Color(0xFF4A9EFF), textDecoration = TextDecoration.Underline),
 )
 
+/** The message with every mIRC control code consumed and none of its formatting kept —
+ * for contexts that need plain text (a reply-quote preview), not a styled [AnnotatedString]. */
+fun stripMircCodes(text: String): String = MircParser.parse(text).joinToString("") { it.text }
+
 fun mircAnnotatedString(text: String): AnnotatedString = buildAnnotatedString {
     MircParser.parse(text).forEach { span ->
         withStyle(

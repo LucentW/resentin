@@ -139,6 +139,13 @@
     <string name="settings_stay_connected">Stay connected in background</string>
     <string name="settings_stay_connected_desc">Keeps the connection alive and shows notifications for direct messages and mentions</string>
     <string name="settings_colored_nicklist">Colored nicks</string>
+    <string name="settings_reply_style_title">Reply behavior</string>
+    <string name="settings_reply_style_nick">Nick</string>
+    <string name="settings_reply_style_quote">Quote</string>
+    <string name="settings_reply_style_custom">Custom</string>
+    <string name="settings_reply_custom_hint">e.g. $nick wrote: $msg »</string>
+    <string name="settings_reply_custom_placeholders_hint">Use $nick and $msg for the nickname and the (truncated) message</string>
+    <string name="settings_reply_custom_saved">Saved</string>
     <string name="settings_chat_display">Chat display</string>
     <string name="settings_display_bubbles">Bubbles</string>
     <string name="settings_display_irc_line">IRC single-line</string>

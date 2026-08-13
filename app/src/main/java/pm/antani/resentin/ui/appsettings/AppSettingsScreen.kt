@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,6 +50,7 @@ import androidx.core.os.LocaleListCompat
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.ChatDisplayMode
+import pm.antani.resentin.data.prefs.ReplyStyle
 import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
 import pm.antani.resentin.net.dto.VhostOptionDto
 import java.time.Instant
@@ -65,6 +67,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
+    val replyStyle by viewModel.replyStyle.collectAsState()
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -228,6 +231,52 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         )
                     }
                     Switch(checked = showSeconds, onCheckedChange = viewModel::setShowSeconds)
+                }
+                Spacer(Modifier.height(24.dp))
+                Text(stringResource(R.string.settings_reply_style_title), style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                        selected = replyStyle == ReplyStyle.NICK,
+                        onClick = { viewModel.setReplyStyle(ReplyStyle.NICK) },
+                        label = { Text(stringResource(R.string.settings_reply_style_nick)) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    FilterChip(
+                        selected = replyStyle == ReplyStyle.QUOTE,
+                        onClick = { viewModel.setReplyStyle(ReplyStyle.QUOTE) },
+                        label = { Text(stringResource(R.string.settings_reply_style_quote)) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    FilterChip(
+                        selected = replyStyle == ReplyStyle.CUSTOM,
+                        onClick = { viewModel.setReplyStyle(ReplyStyle.CUSTOM) },
+                        label = { Text(stringResource(R.string.settings_reply_style_custom)) },
+                    )
+                }
+                if (replyStyle == ReplyStyle.CUSTOM) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = state.replyCustomTemplate,
+                        onValueChange = viewModel::onReplyCustomTemplateChange,
+                        placeholder = { Text(stringResource(R.string.settings_reply_custom_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        stringResource(R.string.settings_reply_custom_placeholders_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = viewModel::saveReplyCustomTemplate) {
+                            Text(stringResource(R.string.network_settings_save))
+                        }
+                        if (state.replyCustomTemplateSaved) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.settings_reply_custom_saved), color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
                 Spacer(Modifier.height(24.dp))
                 Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.bodyLarge)

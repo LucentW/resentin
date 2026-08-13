@@ -139,6 +139,13 @@
     <string name="settings_stay_connected">Resta connesso in background</string>
     <string name="settings_stay_connected_desc">Mantiene la connessione attiva e mostra notifiche per i messaggi privati e le menzioni</string>
     <string name="settings_colored_nicklist">Nick colorati</string>
+    <string name="settings_reply_style_title">Comportamento di risposta</string>
+    <string name="settings_reply_style_nick">Nick</string>
+    <string name="settings_reply_style_quote">Citazione</string>
+    <string name="settings_reply_style_custom">Personalizzato</string>
+    <string name="settings_reply_custom_hint">es. $nick ha scritto: $msg »</string>
+    <string name="settings_reply_custom_placeholders_hint">Usa $nick e $msg per nickname e messaggio (troncato)</string>
+    <string name="settings_reply_custom_saved">Salvato</string>
     <string name="settings_chat_display">Visualizzazione chat</string>
     <string name="settings_display_bubbles">Bolle</string>
     <string name="settings_display_irc_line">Monoriga IRC</string>

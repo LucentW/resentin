@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -59,9 +61,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
@@ -113,6 +117,22 @@ fun ChatScreen(
     val topic by viewModel.topic.collectAsState()
     val channelModes by viewModel.channelModes.collectAsState()
     val draft by viewModel.draft.collectAsState()
+    // Local TextFieldValue (not just the String from the ViewModel) so an externally
+    // triggered draft change — a swipe-to-reply prefill, or send() clearing it — can
+    // explicitly place the cursor, instead of leaning on Compose's default "diff the new
+    // text against whatever selection happened to be there" behavior, which does NOT
+    // reliably land the cursor at the end (the reported bug: reply prefilled the text but
+    // the caret stayed wherever it last was, not focused, not at the end).
+    var draftFieldValue by remember { mutableStateOf(TextFieldValue(draft)) }
+    val draftFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(draft) {
+        if (draftFieldValue.text != draft) {
+            draftFieldValue = TextFieldValue(text = draft, selection = TextRange(draft.length))
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.replyFocusRequests.collect { draftFocusRequester.requestFocus() }
+    }
     val error by viewModel.error.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
     val ownSigils by viewModel.ownSigils.collectAsState()
@@ -257,9 +277,12 @@ fun ChatScreen(
                     }
                 }
                 OutlinedTextField(
-                    value = draft,
-                    onValueChange = viewModel::onDraftChange,
-                    modifier = Modifier.weight(1f),
+                    value = draftFieldValue,
+                    onValueChange = { newValue ->
+                        draftFieldValue = newValue
+                        viewModel.onDraftChange(newValue.text)
+                    },
+                    modifier = Modifier.weight(1f).focusRequester(draftFocusRequester),
                     placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                 )
                 IconButton(onClick = viewModel::send) {
@@ -388,7 +411,7 @@ private fun MessageRow(
     displayMode: ChatDisplayMode,
     showSeconds: Boolean,
     coloredNicklist: Boolean,
-    onReply: (String) -> Unit,
+    onReply: (nick: String, body: String) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
     val meta = remember(message.metaJson) {
@@ -413,7 +436,7 @@ private fun MessageRow(
             )
         }
         is FormattedEvent.Chat -> {
-            SwipeToReply(onReply = { onReply(message.sender) }, onLongPress = { onLongPress(message.sender) }) {
+            SwipeToReply(onReply = { onReply(message.sender, formatted.text) }, onLongPress = { onLongPress(message.sender) }) {
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
                     IrcLineRow(message, formatted, prefix, time, coloredNicklist)
                 } else {

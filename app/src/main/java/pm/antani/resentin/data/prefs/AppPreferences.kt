@@ -18,12 +18,22 @@ enum class ChatDisplayMode {
     IRC_LINE,
 }
 
+/** How swipe-to-reply prefills the draft — see [pm.antani.resentin.ui.chat.buildReplyPrefix]
+ * for what each style actually expands to. Purely local, like [ChatDisplayMode]. */
+enum class ReplyStyle {
+    NICK,
+    QUOTE,
+    CUSTOM,
+}
+
 class AppPreferences(private val context: Context) {
 
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
     private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
+    private val keyReplyStyle = stringPreferencesKey("reply_style")
+    private val keyReplyCustomTemplate = stringPreferencesKey("reply_custom_template")
     private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
     private val keyUnifiedPushEnabled = booleanPreferencesKey("unifiedpush_enabled")
     private val keyUnifiedPushEndpoint = stringPreferencesKey("unifiedpush_endpoint")
@@ -59,6 +69,22 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setColoredNicklist(value: Boolean) {
         context.dataStore.edit { it[keyColoredNicklist] = value }
+    }
+
+    val replyStyle: Flow<ReplyStyle> = context.dataStore.data.map {
+        runCatching { ReplyStyle.valueOf(it[keyReplyStyle] ?: ReplyStyle.NICK.name) }.getOrDefault(ReplyStyle.NICK)
+    }
+
+    suspend fun setReplyStyle(style: ReplyStyle) {
+        context.dataStore.edit { it[keyReplyStyle] = style.name }
+    }
+
+    /** Empty means "nothing saved yet" — callers fall back to a sensible default
+     * rather than persisting one just to have something to show. */
+    val replyCustomTemplate: Flow<String> = context.dataStore.data.map { it[keyReplyCustomTemplate] ?: "" }
+
+    suspend fun setReplyCustomTemplate(template: String) {
+        context.dataStore.edit { it[keyReplyCustomTemplate] = template }
     }
 
     /** The host every locally-cached table (networks/channels/messages/...) was last
