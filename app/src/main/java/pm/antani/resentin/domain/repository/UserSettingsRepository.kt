@@ -3,6 +3,8 @@ package pm.antani.resentin.domain.repository
 import pm.antani.resentin.net.dto.AliasesEnvelopeDto
 import pm.antani.resentin.net.dto.DisplayPrefsDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
+import pm.antani.resentin.net.dto.VhostSelectionUpdateDto
+import pm.antani.resentin.net.dto.VhostSettingsDto
 import pm.antani.resentin.net.rest.UserSettingsApi
 
 class UserSettingsRepository(private val authRepository: AuthRepository) {
@@ -22,5 +24,13 @@ class UserSettingsRepository(private val authRepository: AuthRepository) {
 
     suspend fun updateAliases(aliases: Map<String, String>): Result<Map<String, String>> = runCatching {
         authRepository.api(UserSettingsApi::class.java).updateAliases(AliasesEnvelopeDto(aliases)).aliases
+    }
+
+    suspend fun getVhostSettings(): Result<VhostSettingsDto> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).getVhostSettings()
+    }
+
+    suspend fun updateVhostSelection(selection: List<String>): Result<VhostSettingsDto> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).updateVhostSelection(VhostSelectionUpdateDto(selection))
     }
 }

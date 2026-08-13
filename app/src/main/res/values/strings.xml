@@ -93,6 +93,8 @@
     <string name="settings_language_system">Sistema</string>
     <string name="settings_language_italian">Italiano</string>
     <string name="settings_language_english">English</string>
+    <string name="settings_vhost_title">Vhost</string>
+    <string name="settings_vhost_desc">Scegli quali indirizzi puoi usare per collegarti alle reti IRC. Vale per tutto l\'account, non per una singola rete: se una rete ha un indirizzo fisso impostato dall\'amministratore, quello ha sempre la precedenza.</string>
     <string name="settings_push_enabled">Notifiche push a basso consumo</string>
     <string name="settings_push_enabled_desc">Usa un distributore UnifiedPush per ricevere le notifiche senza tenere la connessione sempre aperta</string>
     <string name="settings_push_no_distributor">Nessun distributore UnifiedPush trovato: installane uno (ad es. ntfy) e riprova</string>

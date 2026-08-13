@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -48,6 +49,7 @@ import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
+import pm.antani.resentin.net.dto.VhostOptionDto
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -248,6 +250,27 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                         label = { Text(stringResource(R.string.settings_language_english)) },
                     )
                 }
+                if (state.vhostOptions.isNotEmpty()) {
+                    Spacer(Modifier.height(24.dp))
+                    Text(stringResource(R.string.settings_vhost_title), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        stringResource(R.string.settings_vhost_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+            items(state.vhostOptions, key = { it.address }) { option ->
+                VhostRow(
+                    option = option,
+                    checked = option.address in state.vhostSelection,
+                    onToggle = { viewModel.toggleVhostSelection(option.address) },
+                )
+            }
+            item {
+                state.vhostError?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
                 Spacer(Modifier.height(24.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -362,6 +385,22 @@ private fun PushSubscriptionRow(
         }
         IconButton(onClick = onRevoke) {
             Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_push_revoke))
+        }
+    }
+}
+
+@Composable
+private fun VhostRow(option: VhostOptionDto, checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+        Column(Modifier.weight(1f)) {
+            Text(option.name, style = MaterialTheme.typography.bodyLarge)
+            if (option.name != option.address) {
+                Text(option.address, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

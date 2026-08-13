@@ -20,6 +20,7 @@ import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.DisplayPrefsDto
 import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
+import pm.antani.resentin.net.dto.VhostOptionDto
 
 data class AppSettingsUiState(
     val displayPrefs: DisplayPrefsDto = DisplayPrefsDto(),
@@ -32,6 +33,9 @@ data class AppSettingsUiState(
     val pushSubscriptionsLoading: Boolean = false,
     val ownPushSubscriptionId: String? = null,
     val pushError: String? = null,
+    val vhostOptions: List<VhostOptionDto> = emptyList(),
+    val vhostSelection: List<String> = emptyList(),
+    val vhostError: String? = null,
 )
 
 class AppSettingsViewModel(
@@ -73,6 +77,28 @@ class AppSettingsViewModel(
                     error = prefsResult.exceptionOrNull()?.message ?: aliasesResult.exceptionOrNull()?.message,
                 )
             }
+        }
+        refreshVhostSettings()
+    }
+
+    fun refreshVhostSettings() {
+        viewModelScope.launch {
+            userSettingsRepository.getVhostSettings()
+                .onSuccess { settings -> _uiState.update { it.copy(vhostOptions = settings.available, vhostSelection = settings.selection) } }
+                .onFailure { error -> _uiState.update { it.copy(vhostError = error.message) } }
+        }
+    }
+
+    /** Toggles [address] in the selection set. The server allows more than one
+     * active selection (random pick per connection), so this is a multi-select,
+     * not a radio choice. */
+    fun toggleVhostSelection(address: String) {
+        val current = _uiState.value.vhostSelection
+        val updated = if (address in current) current - address else current + address
+        viewModelScope.launch {
+            userSettingsRepository.updateVhostSelection(updated)
+                .onSuccess { settings -> _uiState.update { it.copy(vhostOptions = settings.available, vhostSelection = settings.selection, vhostError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(vhostError = error.message) } }
         }
     }
 

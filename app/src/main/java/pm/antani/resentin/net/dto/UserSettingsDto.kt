@@ -20,3 +20,25 @@ data class DisplayPrefsDto(
 data class AliasesEnvelopeDto(
     val aliases: Map<String, String> = emptyMap(),
 )
+
+@Serializable
+data class VhostOptionDto(
+    val address: String,
+    val inPool: Boolean = false,
+    val granted: Boolean = false,
+    /** Reverse-DNS name when one resolves, otherwise the raw address again. */
+    val name: String,
+)
+
+@Serializable
+data class VhostSettingsDto(
+    val available: List<VhostOptionDto> = emptyList(),
+    /** Addresses currently selected — more than one means "random per connection"
+     * server-side, not "first wins". */
+    val selection: List<String> = emptyList(),
+)
+
+@Serializable
+data class VhostSelectionUpdateDto(
+    val selection: List<String>,
+)

@@ -93,6 +93,8 @@
     <string name="settings_language_system">System</string>
     <string name="settings_language_italian">Italiano</string>
     <string name="settings_language_english">English</string>
+    <string name="settings_vhost_title">Vhost</string>
+    <string name="settings_vhost_desc">Pick which addresses you can connect to IRC networks from. This applies account-wide, not to a single network: if a network has an admin-pinned source address, that always wins.</string>
     <string name="settings_push_enabled">Low-power push notifications</string>
     <string name="settings_push_enabled_desc">Use a UnifiedPush distributor to receive notifications without keeping the connection always open</string>
     <string name="settings_push_no_distributor">No UnifiedPush distributor found: install one (e.g. ntfy) and try again</string>
