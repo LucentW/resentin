@@ -23,6 +23,9 @@ class AppPreferences(private val context: Context) {
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
     private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
+    private val keyUnifiedPushEnabled = booleanPreferencesKey("unifiedpush_enabled")
+    private val keyUnifiedPushEndpoint = stringPreferencesKey("unifiedpush_endpoint")
+    private val keyUnifiedPushSubscriptionId = stringPreferencesKey("unifiedpush_subscription_id")
 
     val stayConnected: Flow<Boolean> = context.dataStore.data.map { it[keyStayConnected] ?: false }
 
@@ -56,5 +59,36 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setLastSyncedHost(host: String) {
         context.dataStore.edit { it[keyLastSyncedHost] = host }
+    }
+
+    /** User opt-in for battery-friendly notifications via a UnifiedPush distributor,
+     * independent of [stayConnected] (the always-on WS fallback) — the two can both be
+     * on at once, e.g. during the rollout of foreground-only WS sync. */
+    val unifiedPushEnabled: Flow<Boolean> = context.dataStore.data.map { it[keyUnifiedPushEnabled] ?: false }
+
+    suspend fun setUnifiedPushEnabled(value: Boolean) {
+        context.dataStore.edit { it[keyUnifiedPushEnabled] = value }
+    }
+
+    /** The endpoint URL last handed to the server, so a distributor-initiated re-issue
+     * (token rotation, distributor reinstall) can be sent to `POST /push/subscriptions`
+     * as `supersedes`, letting the server prune the stale row atomically instead of
+     * accumulating ghost subscriptions for the same device. */
+    val unifiedPushEndpoint: Flow<String?> = context.dataStore.data.map { it[keyUnifiedPushEndpoint] }
+
+    suspend fun setUnifiedPushEndpoint(endpoint: String?) {
+        context.dataStore.edit {
+            if (endpoint != null) it[keyUnifiedPushEndpoint] = endpoint else it.remove(keyUnifiedPushEndpoint)
+        }
+    }
+
+    /** This device's own subscription id, so the Settings device list can highlight
+     * "this device" among every subscription the account owns. */
+    val unifiedPushSubscriptionId: Flow<String?> = context.dataStore.data.map { it[keyUnifiedPushSubscriptionId] }
+
+    suspend fun setUnifiedPushSubscriptionId(id: String?) {
+        context.dataStore.edit {
+            if (id != null) it[keyUnifiedPushSubscriptionId] = id else it.remove(keyUnifiedPushSubscriptionId)
+        }
     }
 }

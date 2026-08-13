@@ -1,5 +1,6 @@
 package pm.antani.resentin.ui.appsettings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,10 +12,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.ChatDisplayMode
+import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.DisplayPrefsDto
+import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
 
 data class AppSettingsUiState(
     val displayPrefs: DisplayPrefsDto = DisplayPrefsDto(),
@@ -23,11 +27,17 @@ data class AppSettingsUiState(
     val newAliasExpansion: String = "",
     val isLoading: Boolean = true,
     val error: String? = null,
+    val pushSubscriptions: List<PushSubscriptionSummaryDto> = emptyList(),
+    val pushSubscriptionsLoading: Boolean = false,
+    val ownPushSubscriptionId: String? = null,
+    val pushError: String? = null,
 )
 
 class AppSettingsViewModel(
     private val userSettingsRepository: UserSettingsRepository,
     private val appPreferences: AppPreferences,
+    private val pushRepository: PushRepository,
+    private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppSettingsUiState())
@@ -67,6 +77,61 @@ class AppSettingsViewModel(
 
     fun setStayConnected(enabled: Boolean) {
         viewModelScope.launch { appPreferences.setStayConnected(enabled) }
+    }
+
+    val pushEnabled: StateFlow<Boolean> = appPreferences.unifiedPushEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    init {
+        viewModelScope.launch { appPreferences.unifiedPushSubscriptionId.collect { id -> _uiState.update { it.copy(ownPushSubscriptionId = id) } } }
+        refreshPushSubscriptions()
+    }
+
+    fun refreshPushSubscriptions() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(pushSubscriptionsLoading = true) }
+            pushRepository.listSubscriptions()
+                .onSuccess { subs -> _uiState.update { it.copy(pushSubscriptions = subs, pushSubscriptionsLoading = false) } }
+                .onFailure { error -> _uiState.update { it.copy(pushSubscriptionsLoading = false, pushError = error.message) } }
+        }
+    }
+
+    fun revokePushSubscription(id: String) {
+        viewModelScope.launch {
+            pushRepository.deleteSubscription(id)
+                .onSuccess { refreshPushSubscriptions() }
+                .onFailure { error -> _uiState.update { it.copy(pushError = error.message) } }
+        }
+    }
+
+    /** Called once a UnifiedPush distributor is linked (see AppSettingsScreen's
+     * `tryUseCurrentOrDefaultDistributor` callback, which needs an Activity context this
+     * ViewModel doesn't hold) — fetches the server's VAPID key and requests registration.
+     * The actual server-side subscription is created asynchronously once the distributor
+     * replies with an endpoint, in `UnifiedPushService.onNewEndpoint`. */
+    fun enablePushAfterDistributorLinked() {
+        viewModelScope.launch {
+            val vapid = pushRepository.fetchVapidPublicKey().getOrElse {
+                _uiState.update { s -> s.copy(pushError = it.message) }
+                return@launch
+            }
+            runCatching { UnifiedPush.register(appContext, vapid = vapid) }
+                .onSuccess { appPreferences.setUnifiedPushEnabled(true) }
+                .onFailure { error -> _uiState.update { it.copy(pushError = error.message) } }
+        }
+    }
+
+    fun reportPushLinkFailed(message: String) {
+        _uiState.update { it.copy(pushError = message) }
+    }
+
+    fun disablePush() {
+        viewModelScope.launch {
+            runCatching { UnifiedPush.unregister(appContext) }
+            pushRepository.deleteOwnSubscription()
+            appPreferences.setUnifiedPushEnabled(false)
+            refreshPushSubscriptions()
+        }
     }
 
     fun toggleColoredNicklist() {
@@ -117,10 +182,12 @@ class AppSettingsViewModel(
         fun factory(
             userSettingsRepository: UserSettingsRepository,
             appPreferences: AppPreferences,
+            pushRepository: PushRepository,
+            appContext: Context,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return AppSettingsViewModel(userSettingsRepository, appPreferences) as T
+                return AppSettingsViewModel(userSettingsRepository, appPreferences, pushRepository, appContext) as T
             }
         }
     }

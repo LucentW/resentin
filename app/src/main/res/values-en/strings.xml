@@ -70,6 +70,15 @@
     <string name="settings_language_system">System</string>
     <string name="settings_language_italian">Italiano</string>
     <string name="settings_language_english">English</string>
+    <string name="settings_push_enabled">Low-power push notifications</string>
+    <string name="settings_push_enabled_desc">Use a UnifiedPush distributor to receive notifications without keeping the connection always open</string>
+    <string name="settings_push_no_distributor">No UnifiedPush distributor found: install one (e.g. ntfy) and try again</string>
+    <string name="settings_push_devices">Registered devices</string>
+    <string name="settings_push_device_unknown">UnifiedPush device</string>
+    <string name="settings_push_device_browser">Browser</string>
+    <string name="settings_push_this_device">This device</string>
+    <string name="settings_push_last_used">Last used: %1$s</string>
+    <string name="settings_push_revoke">Revoke</string>
     <string name="settings_aliases">Aliases</string>
     <string name="settings_alias_name_label">Alias name</string>
     <string name="settings_alias_expansion_label">Expansion</string>

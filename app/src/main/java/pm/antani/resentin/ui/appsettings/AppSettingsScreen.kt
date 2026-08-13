@@ -44,14 +44,21 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
+import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.ChatDisplayMode
+import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
+    val pushEnabled by viewModel.pushEnabled.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val context = LocalContext.current
@@ -74,6 +81,41 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
             viewModel.setStayConnected(true)
+        }
+    }
+
+    val noDistributorMessage = stringResource(R.string.settings_push_no_distributor)
+
+    fun linkDistributorAndEnable() {
+        // tryUseCurrentOrDefaultDistributor reuses the already-saved distributor without
+        // needing an Activity; it only falls into the Activity-requiring deeplink path
+        // (`context is Activity`, true here since LocalContext.current is the hosting
+        // MainActivity) the first time, or after the saved distributor was uninstalled.
+        UnifiedPush.tryUseCurrentOrDefaultDistributor(context) { success ->
+            if (success) {
+                viewModel.enablePushAfterDistributorLinked()
+            } else {
+                viewModel.reportPushLinkFailed(noDistributorMessage)
+            }
+        }
+    }
+
+    val pushPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) linkDistributorAndEnable() }
+
+    fun onPushEnabledChange(enabled: Boolean) {
+        if (!enabled) {
+            viewModel.disablePush()
+            return
+        }
+        val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        if (needsPermission) {
+            pushPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            linkDistributorAndEnable()
         }
     }
 
@@ -206,6 +248,37 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.settings_push_enabled))
+                        Text(
+                            stringResource(R.string.settings_push_enabled_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = pushEnabled, onCheckedChange = ::onPushEnabledChange)
+                }
+                state.pushError?.let { error ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                if (state.pushSubscriptions.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(stringResource(R.string.settings_push_devices), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            items(state.pushSubscriptions, key = { it.id }) { subscription ->
+                PushSubscriptionRow(
+                    subscription = subscription,
+                    isThisDevice = subscription.id == state.ownPushSubscriptionId,
+                    onRevoke = { viewModel.revokePushSubscription(subscription.id) },
+                )
+            }
+            item {
+                Spacer(Modifier.height(24.dp))
                 Text(stringResource(R.string.settings_aliases), style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
             }
@@ -251,4 +324,43 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun PushSubscriptionRow(
+    subscription: PushSubscriptionSummaryDto,
+    isThisDevice: Boolean,
+    onRevoke: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                subscription.userAgent?.takeIf { it.isNotBlank() }
+                    ?: stringResource(if (subscription.provider == "unifiedpush") R.string.settings_push_device_unknown else R.string.settings_push_device_browser),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                if (isThisDevice) {
+                    stringResource(R.string.settings_push_this_device)
+                } else {
+                    stringResource(R.string.settings_push_last_used, formatIsoTimestamp(subscription.lastUsedAt))
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        IconButton(onClick = onRevoke) {
+            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_push_revoke))
+        }
+    }
+}
+
+private val SUBSCRIPTION_TIMESTAMP_FORMATTER =
+    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
+
+private fun formatIsoTimestamp(iso: String?): String {
+    if (iso == null) return "—"
+    return runCatching { SUBSCRIPTION_TIMESTAMP_FORMATTER.format(Instant.parse(iso)) }.getOrDefault(iso)
 }

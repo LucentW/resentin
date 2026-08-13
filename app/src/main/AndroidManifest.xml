@@ -48,6 +48,18 @@
             android:name=".service.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- Battery-friendly push delivery via a UnifiedPush distributor (see
+             AppSettingsScreen's "Notifiche push" section) — the counterpart to the
+             always-on WS "stay connected" fallback. Must be a <service>, not a
+             <receiver>: the connector library binds to it directly. -->
+        <service
+            android:name=".service.UnifiedPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Lets AppCompatDelegate.setApplicationLocales() persist + auto-apply the
              per-app language on process start even though MainActivity is a plain
              ComponentActivity, not an AppCompatActivity. -->
