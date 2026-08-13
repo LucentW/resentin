@@ -28,12 +28,6 @@ data class NetworkCreateRequestDto(
 )
 
 @Serializable
-data class NetworkUpdateRequestDto(
-    val visitorEnabled: Boolean,
-    val visitorAutoconnect: Boolean,
-)
-
-@Serializable
 data class ServerAdminDto(
     val id: Int,
     val networkId: Int,

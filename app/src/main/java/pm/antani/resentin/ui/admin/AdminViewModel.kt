@@ -78,8 +78,37 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
     }
 
     fun toggleVisitorEnabled(network: NetworkAdminDto) {
+        updateNetwork(
+            network.slug,
+            !network.visitorEnabled,
+            network.visitorAutoconnect,
+            network.maxConcurrentVisitorSessions,
+            network.maxConcurrentUserSessions,
+            network.maxPerIp,
+        )
+    }
+
+    /** Full edit — everything the "edit network" dialog exposes, sent together
+     * (the server keeps unsupplied caps as-is only when the KEY is absent; this
+     * client always sends every field, so `null` here is a deliberate "clear to
+     * unlimited", never "leave unchanged" — see AdminRepository.updateNetwork). */
+    fun updateNetwork(
+        slug: String,
+        visitorEnabled: Boolean,
+        visitorAutoconnect: Boolean,
+        maxConcurrentVisitorSessions: Int?,
+        maxConcurrentUserSessions: Int?,
+        maxPerIp: Int?,
+    ) {
         viewModelScope.launch {
-            adminRepository.updateNetwork(network.slug, !network.visitorEnabled, network.visitorAutoconnect)
+            adminRepository.updateNetwork(
+                slug,
+                visitorEnabled,
+                visitorAutoconnect,
+                maxConcurrentVisitorSessions,
+                maxConcurrentUserSessions,
+                maxPerIp,
+            )
                 .onSuccess { updated -> replaceNetwork(updated) }
                 .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
         }

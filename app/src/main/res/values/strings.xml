@@ -68,6 +68,13 @@
     <string name="admin_network_caps">max utenti %1$d · max visitor %2$d (-1 = illimitato)</string>
     <string name="admin_network_visitors_label">Visitor</string>
     <string name="admin_add_server">Aggiungi server</string>
+    <string name="admin_edit_network">Modifica rete</string>
+    <string name="admin_edit_network_title">Modifica %1$s</string>
+    <string name="admin_network_autoconnect_label">Autoconnessione visitor</string>
+    <string name="admin_caps_hint">Lascia vuoto per illimitato</string>
+    <string name="admin_cap_visitor_label">Max sessioni visitor</string>
+    <string name="admin_cap_user_label">Max sessioni utente</string>
+    <string name="admin_cap_per_ip_label">Max per IP</string>
     <string name="admin_new_network_title">Nuova rete</string>
     <string name="admin_new_network_hint">slug (es. libera)</string>
     <string name="admin_delete_network_title">Elimina rete</string>
@@ -92,7 +99,7 @@
     <string name="admin_delete_user_title">Elimina utente</string>
     <string name="admin_delete_user_confirm">Eliminare definitivamente %1$s?</string>
     <string name="admin_sessions_empty">Nessuna sessione attiva</string>
-    <string name="admin_session_meta">%1$s · %2$s</string>
+    <string name="admin_session_meta">%1$s · %2$s · %3$s</string>
     <string name="admin_session_disconnect">Disconnetti</string>
     <string name="admin_session_kill">Termina processo</string>
     <string name="admin_visitors_empty">Nessun visitor</string>

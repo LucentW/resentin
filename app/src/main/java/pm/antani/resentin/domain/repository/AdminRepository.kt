@@ -1,8 +1,11 @@
 package pm.antani.resentin.domain.repository
 
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import pm.antani.resentin.net.dto.NetworkAdminDto
 import pm.antani.resentin.net.dto.NetworkCreateRequestDto
-import pm.antani.resentin.net.dto.NetworkUpdateRequestDto
 import pm.antani.resentin.net.dto.ReaperRunResultDto
 import pm.antani.resentin.net.dto.ServerAdminDto
 import pm.antani.resentin.net.dto.ServerCreateRequestDto
@@ -32,12 +35,30 @@ class AdminRepository(private val authRepository: AuthRepository) {
         checkNotNull(response.body())
     }
 
-    suspend fun updateNetwork(slug: String, visitorEnabled: Boolean, visitorAutoconnect: Boolean): Result<NetworkAdminDto> =
-        runCatching {
-            val response = api().updateNetwork(slug, NetworkUpdateRequestDto(visitorEnabled, visitorAutoconnect))
-            check(response.isSuccessful) { "HTTP ${response.code()}" }
-            checkNotNull(response.body())
+    /** [maxConcurrentVisitorSessions]/[maxConcurrentUserSessions]/[maxPerIp]: `null` is a
+     * meaningful "clear this cap to unlimited" — the server's three-valued contract
+     * (`nil` clears, `0` locks down, `N>0` caps at N) — not "leave unchanged"; every
+     * cap is always sent on every call. See [pm.antani.resentin.net.rest.AdminApi.updateNetwork]
+     * for why this builds the body by hand instead of a normal `@Serializable` DTO. */
+    suspend fun updateNetwork(
+        slug: String,
+        visitorEnabled: Boolean,
+        visitorAutoconnect: Boolean,
+        maxConcurrentVisitorSessions: Int?,
+        maxConcurrentUserSessions: Int?,
+        maxPerIp: Int?,
+    ): Result<NetworkAdminDto> = runCatching {
+        val body = buildJsonObject {
+            put("visitor_enabled", visitorEnabled)
+            put("visitor_autoconnect", visitorAutoconnect)
+            put("max_concurrent_visitor_sessions", maxConcurrentVisitorSessions?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("max_concurrent_user_sessions", maxConcurrentUserSessions?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("max_per_ip", maxPerIp?.let { JsonPrimitive(it) } ?: JsonNull)
         }
+        val response = api().updateNetwork(slug, body)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        checkNotNull(response.body())
+    }
 
     suspend fun deleteNetwork(id: Int): Result<Unit> = runCatching {
         val response = api().deleteNetwork(id)

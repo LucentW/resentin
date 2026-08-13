@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -114,7 +115,7 @@ fun AdminScreen(viewModel: AdminViewModel, onBack: () -> Unit) {
                     AdminTab.NETWORKS -> NetworksTab(state.networks, viewModel)
                     AdminTab.VHOSTS -> VhostsTab(state.vhosts, viewModel)
                     AdminTab.USERS -> UsersTab(state.users, viewModel)
-                    AdminTab.SESSIONS -> SessionsTab(state.sessions, viewModel)
+                    AdminTab.SESSIONS -> SessionsTab(state.sessions, state.networks, viewModel)
                     AdminTab.VISITORS -> VisitorsTab(state.visitors, state.lastSweepCount, viewModel)
                 }
             }
@@ -154,6 +155,7 @@ fun AdminScreen(viewModel: AdminViewModel, onBack: () -> Unit) {
 private fun NetworksTab(networks: List<NetworkAdminDto>, viewModel: AdminViewModel) {
     var addServerFor by remember { mutableStateOf<NetworkAdminDto?>(null) }
     var pendingDelete by remember { mutableStateOf<NetworkAdminDto?>(null) }
+    var editing by remember { mutableStateOf<NetworkAdminDto?>(null) }
 
     if (networks.isEmpty()) {
         EmptyHint(stringResource(R.string.admin_networks_empty))
@@ -178,6 +180,9 @@ private fun NetworksTab(networks: List<NetworkAdminDto>, viewModel: AdminViewMod
                     }
                     Text(stringResource(R.string.admin_network_visitors_label), style = MaterialTheme.typography.bodySmall)
                     Switch(checked = network.visitorEnabled, onCheckedChange = { viewModel.toggleVisitorEnabled(network) })
+                    IconButton(onClick = { editing = network }) {
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.admin_edit_network))
+                    }
                     IconButton(onClick = { addServerFor = network }) {
                         Icon(Icons.Default.Add, contentDescription = stringResource(R.string.admin_add_server))
                     }
@@ -204,6 +209,79 @@ private fun NetworksTab(networks: List<NetworkAdminDto>, viewModel: AdminViewMod
             onConfirm = { viewModel.deleteNetwork(network); pendingDelete = null },
         )
     }
+    editing?.let { network ->
+        EditNetworkDialog(
+            network = network,
+            onDismiss = { editing = null },
+            onSave = { visitorEnabled, visitorAutoconnect, maxVisitor, maxUser, maxPerIp ->
+                viewModel.updateNetwork(network.slug, visitorEnabled, visitorAutoconnect, maxVisitor, maxUser, maxPerIp)
+                editing = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditNetworkDialog(
+    network: NetworkAdminDto,
+    onDismiss: () -> Unit,
+    onSave: (visitorEnabled: Boolean, visitorAutoconnect: Boolean, maxVisitor: Int?, maxUser: Int?, maxPerIp: Int?) -> Unit,
+) {
+    var visitorEnabled by remember { mutableStateOf(network.visitorEnabled) }
+    var visitorAutoconnect by remember { mutableStateOf(network.visitorAutoconnect) }
+    var maxVisitor by remember { mutableStateOf(network.maxConcurrentVisitorSessions?.toString().orEmpty()) }
+    var maxUser by remember { mutableStateOf(network.maxConcurrentUserSessions?.toString().orEmpty()) }
+    var maxPerIp by remember { mutableStateOf(network.maxPerIp?.toString().orEmpty()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.admin_edit_network_title, network.slug)) },
+        text = {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.admin_network_visitors_label), modifier = Modifier.weight(1f))
+                    Switch(checked = visitorEnabled, onCheckedChange = { visitorEnabled = it })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.admin_network_autoconnect_label), modifier = Modifier.weight(1f))
+                    Switch(checked = visitorAutoconnect, onCheckedChange = { visitorAutoconnect = it })
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.admin_caps_hint), style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = maxVisitor,
+                    onValueChange = { maxVisitor = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.admin_cap_visitor_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = maxUser,
+                    onValueChange = { maxUser = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.admin_cap_user_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = maxPerIp,
+                    onValueChange = { maxPerIp = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.admin_cap_per_ip_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(visitorEnabled, visitorAutoconnect, maxVisitor.toIntOrNull(), maxUser.toIntOrNull(), maxPerIp.toIntOrNull())
+                },
+            ) {
+                Text(stringResource(R.string.network_settings_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.home_dialog_cancel)) } },
+    )
 }
 
 @Composable
@@ -285,7 +363,8 @@ private fun UsersTab(users: List<UserAdminDto>, viewModel: AdminViewModel) {
 }
 
 @Composable
-private fun SessionsTab(sessions: List<SessionAdminDto>, viewModel: AdminViewModel) {
+private fun SessionsTab(sessions: List<SessionAdminDto>, networks: List<NetworkAdminDto>, viewModel: AdminViewModel) {
+    val networkSlugs = remember(networks) { networks.associate { it.id to it.slug } }
     if (sessions.isEmpty()) {
         EmptyHint(stringResource(R.string.admin_sessions_empty))
     } else {
@@ -298,7 +377,12 @@ private fun SessionsTab(sessions: List<SessionAdminDto>, viewModel: AdminViewMod
                     Column(Modifier.weight(1f)) {
                         Text(session.subjectLabel ?: session.subjectId, style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            stringResource(R.string.admin_session_meta, session.subjectKind, session.liveState?.nick ?: "—"),
+                            stringResource(
+                                R.string.admin_session_meta,
+                                networkSlugs[session.networkId] ?: session.networkId.toString(),
+                                session.subjectKind,
+                                session.liveState?.nick ?: "—",
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

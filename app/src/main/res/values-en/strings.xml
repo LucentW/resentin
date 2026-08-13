@@ -68,6 +68,13 @@
     <string name="admin_network_caps">max users %1$d · max visitors %2$d (-1 = unlimited)</string>
     <string name="admin_network_visitors_label">Visitors</string>
     <string name="admin_add_server">Add server</string>
+    <string name="admin_edit_network">Edit network</string>
+    <string name="admin_edit_network_title">Edit %1$s</string>
+    <string name="admin_network_autoconnect_label">Visitor autoconnect</string>
+    <string name="admin_caps_hint">Leave blank for unlimited</string>
+    <string name="admin_cap_visitor_label">Max visitor sessions</string>
+    <string name="admin_cap_user_label">Max user sessions</string>
+    <string name="admin_cap_per_ip_label">Max per IP</string>
     <string name="admin_new_network_title">New network</string>
     <string name="admin_new_network_hint">slug (e.g. libera)</string>
     <string name="admin_delete_network_title">Delete network</string>
@@ -92,7 +99,7 @@
     <string name="admin_delete_user_title">Delete user</string>
     <string name="admin_delete_user_confirm">Permanently delete %1$s?</string>
     <string name="admin_sessions_empty">No live sessions</string>
-    <string name="admin_session_meta">%1$s · %2$s</string>
+    <string name="admin_session_meta">%1$s · %2$s · %3$s</string>
     <string name="admin_session_disconnect">Disconnect</string>
     <string name="admin_session_kill">Kill process</string>
     <string name="admin_visitors_empty">No visitors</string>

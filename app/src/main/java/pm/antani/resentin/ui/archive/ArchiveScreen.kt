@@ -145,7 +145,7 @@ private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: ()
         Column(Modifier.weight(1f)) {
             Text(entry.target, style = MaterialTheme.typography.bodyLarge)
             Text(
-                stringResource(R.string.archive_row_meta, entry.rowCount, formatEpochSeconds(entry.lastActivity)),
+                stringResource(R.string.archive_row_meta, entry.rowCount, formatEpochMillis(entry.lastActivity)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -159,5 +159,7 @@ private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: ()
 private val ARCHIVE_TIMESTAMP_FORMATTER =
     DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withZone(ZoneId.systemDefault())
 
-private fun formatEpochSeconds(seconds: Long): String =
-    runCatching { ARCHIVE_TIMESTAMP_FORMATTER.format(Instant.ofEpochSecond(seconds)) }.getOrDefault(seconds.toString())
+// `last_activity` is `max(m.server_time)` — `server_time` is epoch MILLISECONDS
+// (see grappa's `Grappa.Scrollback.Message` schema doc), not seconds.
+private fun formatEpochMillis(millis: Long): String =
+    runCatching { ARCHIVE_TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(millis)) }.getOrDefault(millis.toString())

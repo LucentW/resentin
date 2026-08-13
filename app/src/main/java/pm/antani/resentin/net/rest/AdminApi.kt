@@ -1,9 +1,9 @@
 package pm.antani.resentin.net.rest
 
+import kotlinx.serialization.json.JsonObject
 import okhttp3.ResponseBody
 import pm.antani.resentin.net.dto.NetworkAdminDto
 import pm.antani.resentin.net.dto.NetworkCreateRequestDto
-import pm.antani.resentin.net.dto.NetworkUpdateRequestDto
 import pm.antani.resentin.net.dto.NetworksAdminEnvelopeDto
 import pm.antani.resentin.net.dto.ReaperRunResultDto
 import pm.antani.resentin.net.dto.ServerAdminDto
@@ -38,8 +38,13 @@ interface AdminApi {
     @POST("admin/networks")
     suspend fun createNetwork(@Body body: NetworkCreateRequestDto): Response<NetworkAdminDto>
 
+    /** Body is a hand-built [JsonObject] (not a fixed DTO) because a cap field needs
+     * three distinct wire states — "set to N", "explicit null (clear to unlimited)",
+     * and "key absent (leave unchanged)" — and the app's shared `AppJson` config sets
+     * `explicitNulls = false`, which would silently turn "clear this cap" into "leave
+     * it unchanged" for a normal data-class body. See [pm.antani.resentin.domain.repository.AdminRepository.updateNetwork]. */
     @PATCH("admin/networks/{slug}")
-    suspend fun updateNetwork(@Path("slug") slug: String, @Body body: NetworkUpdateRequestDto): Response<NetworkAdminDto>
+    suspend fun updateNetwork(@Path("slug") slug: String, @Body body: JsonObject): Response<NetworkAdminDto>
 
     @DELETE("admin/networks/{id}")
     suspend fun deleteNetwork(@Path("id") id: Int): Response<ResponseBody>
