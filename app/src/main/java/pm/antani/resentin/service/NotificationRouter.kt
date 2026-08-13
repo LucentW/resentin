@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
@@ -114,16 +115,36 @@ class NotificationRouter(
      * newly-arrived row against the ordinary [shouldNotify] gate — same notifications a
      * live WS delivery would have produced, just discovered a beat late. Records the
      * failure so Settings can show a quiet note; the note is why this exists at all
-     * instead of a plain `return`. */
+     * instead of a plain `return`.
+     *
+     * Live-observed failure mode this retry exists for: the push wakes the process
+     * before the device's network stack has caught up from Doze/WLAN-suspend, so
+     * EVERY channel in the first pass fails with UnknownHostException within
+     * milliseconds — exactly the scenario this fallback is supposed to cover, defeated
+     * by bad timing rather than a real outage. One retry after a short delay is cheap
+     * and harmless either way: `backfill` is idempotent (cursor is `after: maxId`). */
     suspend fun notifyFromUndecryptablePush() {
         appPreferences.setPushDecryptionFailureAt(System.currentTimeMillis())
+        if (sweepForNotifications() > 0) return
+        Log.w(TAG, "catch-up sweep reached zero channels, retrying once after a delay")
+        delay(5_000)
+        sweepForNotifications()
+    }
+
+    /** One pass over every known channel/query; returns how many were actually
+     * reachable (backfill didn't throw), regardless of whether any produced a
+     * notification — the signal [notifyFromUndecryptablePush] retries on is "the
+     * network wasn't up at all", not "nothing new happened". */
+    private suspend fun sweepForNotifications(): Int {
+        var reachable = 0
         val networks = db.networkDao().observeNetworksWithChannels().first()
         for (nwc in networks) {
             val nick = nwc.network.nick
             for (channel in nwc.channels.filter { it.joined }) {
                 val beforeMaxId = db.messageDao().maxId(nwc.network.slug, channel.name) ?: 0
-                chatRepository.backfill(nwc.network.slug, channel.name)
-                    .onFailure { Log.w(TAG, "catch-up backfill failed for ${nwc.network.slug}/${channel.name}", it) }
+                val result = chatRepository.backfill(nwc.network.slug, channel.name)
+                result.onFailure { Log.w(TAG, "catch-up backfill failed for ${nwc.network.slug}/${channel.name}", it) }
+                if (result.isSuccess) reachable++
                 val newRows = db.messageDao().messagesAfter(nwc.network.slug, channel.name, beforeMaxId)
                 for (row in newRows) {
                     val message = ScrollbackMessageDto(
@@ -142,6 +163,7 @@ class NotificationRouter(
                 }
             }
         }
+        return reachable
     }
 
     private suspend fun handle(message: ScrollbackMessageDto) {
