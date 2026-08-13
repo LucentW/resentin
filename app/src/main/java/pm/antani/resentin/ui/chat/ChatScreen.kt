@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -35,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
@@ -43,6 +45,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,9 +58,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import java.time.Instant
@@ -77,7 +83,10 @@ import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.UserCardSheet
+import pm.antani.resentin.ui.common.colorForNick
+import pm.antani.resentin.ui.common.mircAnnotatedString
 import pm.antani.resentin.ui.common.sigilsOf
+import pm.antani.resentin.ui.common.withClickableLinks
 
 private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 private val TIME_FORMATTER_WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss")
@@ -115,6 +124,7 @@ fun ChatScreen(
     val showSeconds by viewModel.showSeconds.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val coloredNicklist by viewModel.coloredNicklist.collectAsState()
     val listState = rememberLazyListState()
     var hasScrolledInitially by remember { mutableStateOf(false) }
     var showTopicDialog by remember { mutableStateOf(false) }
@@ -147,11 +157,26 @@ fun ChatScreen(
         hasScrolledInitially = true
     }
 
-    // Only jump to bottom when a new message lands at the tail (after the initial
-    // placement above) — loadOlder() prepends at the head and must not yank the view
-    // back down. +1 accounts for the divider's own LazyColumn row when present.
+    // Whether the tail of the list is already on screen — read BEFORE a new message's
+    // recomposition lands (LazyColumn hasn't re-laid-out to include it yet), so this is
+    // "was the reader already following the bottom" at the moment the new item arrives,
+    // not a stale flag that needs separate resetting. A 1-item tolerance covers the
+    // divider's own row without needing to special-case it here.
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+            lastVisible.index >= layoutInfo.totalItemsCount - 2
+        }
+    }
+
+    // Only auto-follow to the tail when the reader was already there — landing on the
+    // unread divider (potentially far above the bottom, e.g. after a big backfill) must
+    // NOT get yanked down the instant one more message arrives; a still-unread backlog
+    // stays exactly where the reader put it. loadOlder() prepends at the head, which
+    // doesn't change `lastOrNull()?.id`, so this never fires for that case either.
     LaunchedEffect(messages.lastOrNull()?.id) {
-        if (hasScrolledInitially && messages.isNotEmpty()) {
+        if (hasScrolledInitially && messages.isNotEmpty() && isAtBottom) {
             val lastIndex = messages.size - 1 + if (dividerIndex != null) 1 else 0
             listState.animateScrollToItem(lastIndex)
         }
@@ -255,6 +280,7 @@ fun ChatScreen(
                             members = members,
                             displayMode = displayMode,
                             showSeconds = showSeconds,
+                            coloredNicklist = coloredNicklist,
                             onReply = viewModel::reply,
                             onLongPress = viewModel::onMessageLongPress,
                         )
@@ -264,6 +290,18 @@ fun ChatScreen(
             error?.let { message ->
                 Snackbar(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
                     Text(message)
+                }
+            }
+            if (hasScrolledInitially && messages.isNotEmpty() && !isAtBottom) {
+                val scope = rememberCoroutineScope()
+                SmallFloatingActionButton(
+                    onClick = {
+                        val lastIndex = messages.size - 1 + if (dividerIndex != null) 1 else 0
+                        scope.launch { listState.animateScrollToItem(lastIndex) }
+                    },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.cd_scroll_to_bottom))
                 }
             }
         }
@@ -349,6 +387,7 @@ private fun MessageRow(
     members: List<MemberEntity>,
     displayMode: ChatDisplayMode,
     showSeconds: Boolean,
+    coloredNicklist: Boolean,
     onReply: (String) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
@@ -376,17 +415,39 @@ private fun MessageRow(
         is FormattedEvent.Chat -> {
             SwipeToReply(onReply = { onReply(message.sender) }, onLongPress = { onLongPress(message.sender) }) {
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time)
+                    IrcLineRow(message, formatted, prefix, time, coloredNicklist)
                 } else {
-                    BubbleRow(message, formatted, prefix, time)
+                    BubbleRow(message, formatted, prefix, time, coloredNicklist)
                 }
             }
         }
     }
 }
 
+/** Nick color (when [coloredNicklist] is on) applies to the bare nick only — the role
+ * prefix sigil (`@`/`+`/...) and any "* "/"< >"/"(notice)" decoration around it stay
+ * the surrounding text's own color, matching how real IRC clients color-code nicks. */
+private fun buildNickLine(
+    before: String,
+    prefix: String,
+    sender: String,
+    after: String,
+    body: String,
+    coloredNicklist: Boolean,
+) = buildAnnotatedString {
+    append(before)
+    append(prefix)
+    if (coloredNicklist) {
+        withStyle(SpanStyle(color = colorForNick(sender))) { append(sender) }
+    } else {
+        append(sender)
+    }
+    append(after)
+    append(withClickableLinks(mircAnnotatedString(body)))
+}
+
 @Composable
-private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, prefix: String, time: String) {
+private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, prefix: String, time: String, coloredNicklist: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -394,8 +455,11 @@ private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, pr
     ) {
         if (formatted.isAction) {
             Row(verticalAlignment = Alignment.Bottom) {
-                MircText(
-                    text = "* $prefix${message.sender} ${formatted.text}",
+                val annotated = remember(prefix, message.sender, formatted.text, coloredNicklist) {
+                    buildNickLine("* ", prefix, message.sender, " ", formatted.text, coloredNicklist)
+                }
+                Text(
+                    text = annotated,
                     style = MaterialTheme.typography.bodyLarge.copy(fontStyle = FontStyle.Italic),
                     modifier = Modifier.weight(1f),
                 )
@@ -406,7 +470,7 @@ private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, pr
                 Text(
                     text = if (formatted.isNotice) "$prefix${message.sender} (notice)" else "$prefix${message.sender}",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (coloredNicklist) colorForNick(message.sender) else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(text = time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -419,14 +483,22 @@ private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, pr
 /** `[HH:mm] <nick> message`, classic IRC-client style. Role prefix (if any) sits right
  * inside the angle brackets — `<@nick>` — matching how real IRC clients render it. */
 @Composable
-private fun IrcLineRow(message: MessageEntity, formatted: FormattedEvent.Chat, prefix: String, time: String) {
-    val line = when {
-        formatted.isAction -> "[$time] * $prefix${message.sender} ${formatted.text}"
-        formatted.isNotice -> "[$time] -$prefix${message.sender}- ${formatted.text}"
-        else -> "[$time] <$prefix${message.sender}> ${formatted.text}"
+private fun IrcLineRow(
+    message: MessageEntity,
+    formatted: FormattedEvent.Chat,
+    prefix: String,
+    time: String,
+    coloredNicklist: Boolean,
+) {
+    val annotated = remember(message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist) {
+        when {
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist)
+        }
     }
-    MircText(
-        text = line,
+    Text(
+        text = annotated,
         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         modifier = Modifier
             .fillMaxWidth()

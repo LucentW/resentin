@@ -242,6 +242,7 @@ fun AppRoot(
                 factory = MembersViewModel.factory(
                     container.membersRepository,
                     container.networksRepository,
+                    container.appPreferences,
                     networkSlug,
                     channelName,
                     currentSession.username,

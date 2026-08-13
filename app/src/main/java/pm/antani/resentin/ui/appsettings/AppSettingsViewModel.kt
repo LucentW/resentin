@@ -72,14 +72,16 @@ class AppSettingsViewModel(
         viewModelScope.launch {
             val prefsResult = userSettingsRepository.getDisplayPrefs()
             val aliasesResult = userSettingsRepository.getAliases()
+            val prefs = prefsResult.getOrDefault(DisplayPrefsDto())
             _uiState.update {
                 it.copy(
-                    displayPrefs = prefsResult.getOrDefault(DisplayPrefsDto()),
+                    displayPrefs = prefs,
                     aliases = aliasesResult.getOrNull().orEmpty(),
                     isLoading = false,
                     error = prefsResult.exceptionOrNull()?.message ?: aliasesResult.exceptionOrNull()?.message,
                 )
             }
+            appPreferences.setColoredNicklist(prefs.coloredNicklist)
         }
         viewModelScope.launch {
             authRepository.getMe().onSuccess { me -> _uiState.update { it.copy(isAdmin = me.isAdmin) } }
@@ -187,6 +189,7 @@ class AppSettingsViewModel(
         val updated = _uiState.value.displayPrefs.copy(coloredNicklist = !_uiState.value.displayPrefs.coloredNicklist)
         _uiState.update { it.copy(displayPrefs = updated) }
         viewModelScope.launch {
+            appPreferences.setColoredNicklist(updated.coloredNicklist)
             userSettingsRepository.updateDisplayPrefs(updated)
                 .onFailure { _uiState.update { s -> s.copy(error = it.message) } }
         }

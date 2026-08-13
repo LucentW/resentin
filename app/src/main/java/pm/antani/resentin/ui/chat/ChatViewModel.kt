@@ -56,6 +56,9 @@ class ChatViewModel(
     val showSeconds: StateFlow<Boolean> = appPreferences.showSeconds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val coloredNicklist: StateFlow<Boolean> = appPreferences.coloredNicklist
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     // Long-press-on-message user card: same whois/moderation logic as the member list,
     // scoped to this same (network, channel) — empty members/sigils for a query/$server,
     // which naturally hides the channel-only actions in the card.

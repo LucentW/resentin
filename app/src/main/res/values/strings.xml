@@ -116,6 +116,7 @@
     <string name="cd_attach_file">Allega file</string>
     <string name="chat_message_placeholder">Messaggio</string>
     <string name="cd_send">Invia</string>
+    <string name="cd_scroll_to_bottom">Vai al fondo</string>
     <string name="chat_topic_dialog_title">Topic</string>
     <string name="chat_dialog_close">Chiudi</string>
     <string name="chat_unread_divider">Hai letto fino a qui</string>
@@ -137,7 +138,7 @@
     <string name="settings_title">Impostazioni</string>
     <string name="settings_stay_connected">Resta connesso in background</string>
     <string name="settings_stay_connected_desc">Mantiene la connessione attiva e mostra notifiche per i messaggi privati e le menzioni</string>
-    <string name="settings_colored_nicklist">Nicklist colorata</string>
+    <string name="settings_colored_nicklist">Nick colorati</string>
     <string name="settings_chat_display">Visualizzazione chat</string>
     <string name="settings_display_bubbles">Bolle</string>
     <string name="settings_display_irc_line">Monoriga IRC</string>

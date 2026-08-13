@@ -28,6 +28,7 @@ import pm.antani.resentin.data.db.MemberEntity
 import pm.antani.resentin.irc.SIGIL_PRIORITY
 import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.ui.common.UserCardSheet
+import pm.antani.resentin.ui.common.colorForNick
 import pm.antani.resentin.ui.common.sigilsOf
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,6 +45,7 @@ fun MemberListScreen(
     val ownSigils by viewModel.ownSigils.collectAsState()
     val privilegeModes by viewModel.privilegeModes.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
+    val coloredNicklist by viewModel.coloredNicklist.collectAsState()
     val sorted = remember(members) { members.sortedWith(memberOrdering) }
 
     LaunchedEffect(Unit) {
@@ -70,7 +72,12 @@ fun MemberListScreen(
                         .clickable { viewModel.onMemberClick(member.nick) }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
-                    Text("${sigilsOf(member)}${member.nick}", style = MaterialTheme.typography.bodyLarge)
+                    Text(sigilsOf(member), style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        member.nick,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (coloredNicklist) colorForNick(member.nick) else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         }

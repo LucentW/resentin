@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import pm.antani.resentin.data.db.MemberEntity
+import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
 import pm.antani.resentin.ui.common.UserCardController
@@ -13,6 +16,7 @@ import pm.antani.resentin.ui.common.UserCardController
 class MembersViewModel(
     membersRepository: MembersRepository,
     networksRepository: NetworksRepository,
+    appPreferences: AppPreferences,
     networkSlug: String,
     channelName: String,
     username: String,
@@ -28,6 +32,9 @@ class MembersViewModel(
     val error = controller.error
     val navigateToQuery = controller.navigateToQuery
 
+    val coloredNicklist: StateFlow<Boolean> = appPreferences.coloredNicklist
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun onMemberClick(nick: String) = controller.onNickClick(nick)
     fun dismissWhois() = controller.dismissWhois()
     fun kick(nick: String) = controller.kick(nick)
@@ -40,13 +47,14 @@ class MembersViewModel(
         fun factory(
             membersRepository: MembersRepository,
             networksRepository: NetworksRepository,
+            appPreferences: AppPreferences,
             networkSlug: String,
             channelName: String,
             username: String,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return MembersViewModel(membersRepository, networksRepository, networkSlug, channelName, username) as T
+                return MembersViewModel(membersRepository, networksRepository, appPreferences, networkSlug, channelName, username) as T
             }
         }
     }

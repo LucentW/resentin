@@ -116,6 +116,7 @@
     <string name="cd_attach_file">Attach file</string>
     <string name="chat_message_placeholder">Message</string>
     <string name="cd_send">Send</string>
+    <string name="cd_scroll_to_bottom">Scroll to bottom</string>
     <string name="chat_topic_dialog_title">Topic</string>
     <string name="chat_dialog_close">Close</string>
     <string name="chat_unread_divider">You\'ve read up to here</string>
@@ -137,7 +138,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_stay_connected">Stay connected in background</string>
     <string name="settings_stay_connected_desc">Keeps the connection alive and shows notifications for direct messages and mentions</string>
-    <string name="settings_colored_nicklist">Colored nicklist</string>
+    <string name="settings_colored_nicklist">Colored nicks</string>
     <string name="settings_chat_display">Chat display</string>
     <string name="settings_display_bubbles">Bubbles</string>
     <string name="settings_display_irc_line">IRC single-line</string>

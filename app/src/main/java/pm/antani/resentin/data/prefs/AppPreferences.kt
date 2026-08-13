@@ -23,6 +23,7 @@ class AppPreferences(private val context: Context) {
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
+    private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
     private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
     private val keyUnifiedPushEnabled = booleanPreferencesKey("unifiedpush_enabled")
     private val keyUnifiedPushEndpoint = stringPreferencesKey("unifiedpush_endpoint")
@@ -48,6 +49,16 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setShowSeconds(value: Boolean) {
         context.dataStore.edit { it[keyShowSeconds] = value }
+    }
+
+    /** Local, fast-reading mirror of the server-persisted `DisplayPrefsDto.coloredNicklist`
+     * (AppSettingsViewModel owns the actual read/write to the server; this is just so
+     * ChatScreen/MemberListScreen can render off a synchronous local Flow instead of a
+     * per-screen network round-trip). Kept in sync on every load and every toggle. */
+    val coloredNicklist: Flow<Boolean> = context.dataStore.data.map { it[keyColoredNicklist] ?: false }
+
+    suspend fun setColoredNicklist(value: Boolean) {
+        context.dataStore.edit { it[keyColoredNicklist] = value }
     }
 
     /** The host every locally-cached table (networks/channels/messages/...) was last
