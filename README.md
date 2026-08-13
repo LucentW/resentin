@@ -39,9 +39,53 @@ rete Azzurra.)*
 - Upload di file/foto in chat (pulsante allegato) e integrazione come
   **Share Target** Android — puoi condividere foto/file da altre app
   direttamente su una chat di Resentin.
-- Notifiche push per messaggi privati e menzioni, con servizio in
-  background opzionale.
+- Notifiche push per messaggi privati e menzioni: di default la
+  connessione resta aperta solo ad app in primo piano (risparmio batteria),
+  con due modalità opzionali per riceverle anche ad app chiusa — vedi
+  [Notifiche push a basso consumo](#notifiche-push-a-basso-consumo-unifiedpush)
+  sotto.
 - Alias di testo personalizzabili.
+
+## Notifiche push a basso consumo (UnifiedPush)
+
+Di default Resentin tiene la connessione WebSocket aperta solo quando l'app
+è in primo piano, per non consumare batteria in background. Per ricevere
+comunque le notifiche di messaggi privati e menzioni ad app chiusa, ci sono
+due opzioni indipendenti in Impostazioni:
+
+- **Notifiche push a basso consumo**, che usa
+  [UnifiedPush](https://unifiedpush.org/) — un protocollo aperto e
+  decentralizzato per le notifiche push su Android, alternativa a Firebase
+  Cloud Messaging che non richiede servizi Google. Resentin registra un
+  endpoint reale con crittografia Web Push (VAPID + RFC 8291), esattamente
+  come farebbe un service worker da browser: il payload è cifrato end-to-end
+  fino al dispositivo, il distributore fa solo da relay. Lato server serve
+  [grappa-irc](https://github.com/vjt/grappa-irc) con supporto UnifiedPush
+  (attualmente in revisione, [PR #1261](https://github.com/vjt/grappa-irc/pull/1261)).
+- **Resta connesso in background**, la vecchia modalità always-on, se
+  preferisci non installare un distributore.
+
+Le due modalità sono indipendenti e possono anche coesistere.
+
+### Dove trovare un distributore UnifiedPush
+
+Per usare la prima modalità serve un'app "distributore" installata sul
+telefono — è lei che riceve le notifiche dal sistema operativo e le
+inoltra alle app registrate, incluso Resentin:
+
+- [ntfy](https://ntfy.sh/) — probabilmente il più semplice: funziona da
+  subito come distributore senza account né configurazione. Disponibile su
+  [F-Droid](https://f-droid.org/packages/io.heckel.ntfy/) e
+  [Google Play](https://play.google.com/store/apps/details?id=io.heckel.ntfy).
+- Elenco completo e aggiornato, mantenuto dal progetto UnifiedPush:
+  <https://unifiedpush.org/users/distributors/>
+
+Una volta installato un distributore, basta attivare il toggle in
+Impostazioni → "Notifiche push a basso consumo": Resentin chiederà quale
+distributore usare (o userà quello di default del sistema) e completerà la
+registrazione. Le sottoscrizioni attive — sia UnifiedPush che Web Push da
+browser, se usi anche [cicchetto](https://github.com/vjt/grappa-irc) — sono
+visibili e revocabili singolarmente da lì, sotto "Dispositivi registrati".
 
 ## Requisiti
 
