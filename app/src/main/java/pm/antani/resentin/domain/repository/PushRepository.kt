@@ -24,16 +24,28 @@ class PushRepository(
     /** Registers a freshly (re-)issued distributor endpoint with the server. Chains a
      * `supersedes` on the endpoint this device last registered, if any, so token
      * rotation or a distributor reinstall doesn't accumulate ghost rows for the same
-     * device (mirrors cic's own re-subscribe dedup, #181). */
+     * device (mirrors cic's own re-subscribe dedup, #181).
+     *
+     * `AppContainer` re-confirms the distributor link on every app start (per
+     * UnifiedPush's own guidance), which calls this again with whatever endpoint the
+     * distributor currently reports — usually the SAME one, since most distributors
+     * (ntfy included) hand back a stable endpoint rather than rotating it per launch.
+     * Live-observed: re-posting an unchanged endpoint 422s — the server's unique
+     * constraint on `(subject, endpoint)` correctly rejects it as a duplicate, since
+     * `supersedes` is (rightly) omitted when there's nothing to supersede. Short-circuit
+     * that case entirely instead of re-hitting the network for a no-op every launch. */
     suspend fun registerEndpoint(endpoint: PushEndpoint): Result<Unit> = runCatching {
-        val keys = checkNotNull(endpoint.pubKeySet) { "distributor endpoint carries no Web Push key set" }
         val previousEndpoint = appPreferences.unifiedPushEndpoint.first()
+        if (previousEndpoint == endpoint.url && appPreferences.unifiedPushSubscriptionId.first() != null) {
+            return@runCatching
+        }
+        val keys = checkNotNull(endpoint.pubKeySet) { "distributor endpoint carries no Web Push key set" }
         val api = authRepository.api(PushApi::class.java)
         val response = api.subscribe(
             PushSubscriptionRequestDto(
                 endpoint = endpoint.url,
                 keys = PushKeysDto(p256dh = keys.pubKey, auth = keys.auth),
-                supersedes = previousEndpoint?.takeIf { it != endpoint.url },
+                supersedes = previousEndpoint,
             ),
         )
         check(response.isSuccessful) { "HTTP ${response.code()}" }
