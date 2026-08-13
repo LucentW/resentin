@@ -20,6 +20,7 @@ import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.irc.formatChannelModes
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.net.dto.ArchiveEntryDto
 import pm.antani.resentin.net.dto.ChannelDto
 import pm.antani.resentin.net.dto.ChannelModesEntryDto
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
@@ -237,6 +238,16 @@ class NetworksRepository(
     suspend fun refreshDirectory(slug: String): Result<Unit> = runCatching {
         val api = authRepository.api(NetworksApi::class.java)
         val response = api.refreshDirectory(slug)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
+
+    suspend fun getArchive(slug: String): Result<List<ArchiveEntryDto>> = runCatching {
+        authRepository.api(NetworksApi::class.java).getArchive(slug).archive
+    }
+
+    suspend fun deleteArchiveEntry(slug: String, target: String): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.deleteArchiveEntry(slug, target)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
     }
 }

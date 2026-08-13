@@ -133,6 +133,15 @@
     <string name="network_settings_perform_placeholder">Un comando IRC per riga</string>
     <string name="network_settings_saved">Salvato</string>
     <string name="network_settings_save">Salva</string>
+    <string name="network_settings_archive">Conversazioni archiviate</string>
+
+    <!-- Archive -->
+    <string name="archive_title">Archivio di %1$s</string>
+    <string name="archive_empty">Nessuna conversazione archiviata</string>
+    <string name="archive_row_meta">%1$d messaggi · %2$s</string>
+    <string name="archive_delete_title">Elimina definitivamente</string>
+    <string name="archive_delete_confirm">Eliminare per sempre la cronologia locale di %1$s? Il canale resta comunque raggiungibile lato server.</string>
+    <string name="archive_delete_action">Elimina</string>
 
     <!-- Share target -->
     <string name="share_target_title">Condividi in...</string>

@@ -46,6 +46,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.DirectoryEntryDto
+import pm.antani.resentin.ui.common.MircText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,8 +190,8 @@ private fun DirectoryRow(entry: DirectoryEntryDto, onClick: () -> Unit) {
                 }
             }
             entry.topic?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    it,
+                MircText(
+                    text = it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

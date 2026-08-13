@@ -22,6 +22,8 @@ import pm.antani.resentin.ui.appsettings.AppSettingsScreen
 import pm.antani.resentin.ui.appsettings.AppSettingsViewModel
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsScreen
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsViewModel
+import pm.antani.resentin.ui.archive.ArchiveScreen
+import pm.antani.resentin.ui.archive.ArchiveViewModel
 import pm.antani.resentin.ui.chat.ChatScreen
 import pm.antani.resentin.ui.chat.ChatViewModel
 import pm.antani.resentin.ui.directory.DirectoryScreen
@@ -44,6 +46,7 @@ private const val ROUTE_CHANNEL_SETTINGS = "channelsettings/{networkSlug}/{chann
 private const val ROUTE_APP_SETTINGS = "appsettings"
 private const val ROUTE_SHARE_TARGET = "share-target"
 private const val ROUTE_DIRECTORY = "directory/{networkSlug}"
+private const val ROUTE_ARCHIVE = "archive/{networkSlug}"
 
 private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
 private fun decode(value: String) = URLDecoder.decode(value, "UTF-8")
@@ -248,7 +251,37 @@ fun AppRoot(
                 key = "networksettings/$networkSlug",
                 factory = NetworkSettingsViewModel.factory(container.networksRepository, networkSlug),
             )
-            NetworkSettingsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            NetworkSettingsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onArchiveClick = { navController.navigate("archive/$networkSlug") },
+            )
+        }
+        composable(
+            ROUTE_ARCHIVE,
+            arguments = listOf(navArgument("networkSlug") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val networkSlug = backStackEntry.arguments?.getString("networkSlug").orEmpty()
+            val viewModel: ArchiveViewModel = viewModel(
+                key = "archive/$networkSlug",
+                factory = ArchiveViewModel.factory(
+                    container.networksRepository,
+                    container.membersRepository,
+                    networkSlug,
+                    currentSession.username,
+                    appContext,
+                ),
+            )
+            ArchiveScreen(
+                viewModel = viewModel,
+                networkSlug = networkSlug,
+                onBack = { navController.popBackStack() },
+                onRecovered = { target ->
+                    navController.navigate("chat/$networkSlug/${encode(target)}") {
+                        popUpTo(ROUTE_HOME)
+                    }
+                },
+            )
         }
         composable(
             ROUTE_CHANNEL_SETTINGS,

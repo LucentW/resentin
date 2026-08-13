@@ -133,6 +133,15 @@
     <string name="network_settings_perform_placeholder">One IRC command per line</string>
     <string name="network_settings_saved">Saved</string>
     <string name="network_settings_save">Save</string>
+    <string name="network_settings_archive">Archived conversations</string>
+
+    <!-- Archive -->
+    <string name="archive_title">%1$s archive</string>
+    <string name="archive_empty">No archived conversations</string>
+    <string name="archive_row_meta">%1$d messages · %2$s</string>
+    <string name="archive_delete_title">Permanently delete</string>
+    <string name="archive_delete_confirm">Permanently delete the local history for %1$s? The channel stays reachable server-side either way.</string>
+    <string name="archive_delete_action">Delete</string>
 
     <!-- Share target -->
     <string name="share_target_title">Share to...</string>

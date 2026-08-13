@@ -16,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -32,7 +33,7 @@ import pm.antani.resentin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Unit) {
+fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Unit, onArchiveClick: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -106,6 +107,10 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
             }
             Button(onClick = viewModel::save, enabled = !state.isSaving, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.network_settings_save))
+            }
+            Spacer(Modifier.height(24.dp))
+            OutlinedButton(onClick = onArchiveClick, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.network_settings_archive))
             }
         }
     }
