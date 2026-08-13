@@ -59,6 +59,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
     val pushEnabled by viewModel.pushEnabled.collectAsState()
+    val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val context = LocalContext.current
@@ -265,6 +266,14 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                     Spacer(Modifier.height(4.dp))
                     Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
+                pushDecryptionFailureAt?.let { epochMillis ->
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.settings_push_decryption_failure, formatEpochMillis(epochMillis)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (state.pushSubscriptions.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
                     Text(stringResource(R.string.settings_push_devices), style = MaterialTheme.typography.bodyLarge)
@@ -364,3 +373,6 @@ private fun formatIsoTimestamp(iso: String?): String {
     if (iso == null) return "—"
     return runCatching { SUBSCRIPTION_TIMESTAMP_FORMATTER.format(Instant.parse(iso)) }.getOrDefault(iso)
 }
+
+private fun formatEpochMillis(epochMillis: Long): String =
+    SUBSCRIPTION_TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(epochMillis))

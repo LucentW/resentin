@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -82,8 +83,22 @@ class AppSettingsViewModel(
     val pushEnabled: StateFlow<Boolean> = appPreferences.unifiedPushEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val pushDecryptionFailureAt: StateFlow<Long?> = appPreferences.pushDecryptionFailureAt
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     init {
-        viewModelScope.launch { appPreferences.unifiedPushSubscriptionId.collect { id -> _uiState.update { it.copy(ownPushSubscriptionId = id) } } }
+        // Registration completes asynchronously, in a different component
+        // (UnifiedPushService.onNewEndpoint, triggered by a distributor callback
+        // that can land seconds after the toggle) — this ViewModel has no other
+        // signal for "the POST to /push/subscriptions just succeeded" than watching
+        // for this id to appear. Without it, the device list only ever reflects
+        // whatever existed when the screen happened to load.
+        viewModelScope.launch {
+            appPreferences.unifiedPushSubscriptionId.distinctUntilChanged().collect { id ->
+                _uiState.update { it.copy(ownPushSubscriptionId = id) }
+                if (id != null) refreshPushSubscriptions()
+            }
+        }
         refreshPushSubscriptions()
     }
 

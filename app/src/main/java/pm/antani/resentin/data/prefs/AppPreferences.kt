@@ -3,6 +3,7 @@ package pm.antani.resentin.data.prefs
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,7 @@ class AppPreferences(private val context: Context) {
     private val keyUnifiedPushEnabled = booleanPreferencesKey("unifiedpush_enabled")
     private val keyUnifiedPushEndpoint = stringPreferencesKey("unifiedpush_endpoint")
     private val keyUnifiedPushSubscriptionId = stringPreferencesKey("unifiedpush_subscription_id")
+    private val keyPushDecryptionFailureAt = longPreferencesKey("push_decryption_failure_at")
 
     val stayConnected: Flow<Boolean> = context.dataStore.data.map { it[keyStayConnected] ?: false }
 
@@ -89,6 +91,20 @@ class AppPreferences(private val context: Context) {
     suspend fun setUnifiedPushSubscriptionId(id: String?) {
         context.dataStore.edit {
             if (id != null) it[keyUnifiedPushSubscriptionId] = id else it.remove(keyUnifiedPushSubscriptionId)
+        }
+    }
+
+    /** Epoch millis of the last push this client received but could not decrypt — the
+     * server-side `web_push_elixir` dependency currently emits the pre-RFC8291 "aesgcm"
+     * draft, which no spec-compliant UnifiedPush distributor can decode (see
+     * UnifiedPushService.onMessage). Surfaced as a quiet Settings note, not a
+     * notification of its own, and cleared on the next successful decrypt so it reflects
+     * whether this is CURRENTLY a problem rather than a permanent scar. */
+    val pushDecryptionFailureAt: Flow<Long?> = context.dataStore.data.map { it[keyPushDecryptionFailureAt] }
+
+    suspend fun setPushDecryptionFailureAt(epochMillis: Long?) {
+        context.dataStore.edit {
+            if (epochMillis != null) it[keyPushDecryptionFailureAt] = epochMillis else it.remove(keyPushDecryptionFailureAt)
         }
     }
 }

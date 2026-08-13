@@ -32,12 +32,26 @@ class UnifiedPushService : PushService() {
 
     /** [message.content] arrives ALREADY DECRYPTED — the connector library owns the full
      * RFC8291 Web Push crypto (ECDH + HKDF + aes128gcm) using the keypair it generated
-     * and handed to the server in [onNewEndpoint]; nothing here does any decryption. */
+     * and handed to the server in [onNewEndpoint]; nothing here does any decryption.
+     *
+     * As of 2026-08, decryption reliably FAILS: the server's `web_push_elixir` dependency
+     * emits the pre-RFC8291 "aesgcm" draft, which puts the salt and sender's ephemeral
+     * public key in HTTP headers a UnifiedPush distributor never forwards (spec: only the
+     * raw POST body reaches the device) — a fix belongs server-side (grappa-irc), tracked
+     * separately. Until then, [NotificationRouter.notifyFromUndecryptablePush] is the
+     * interim fallback: the push carries no readable payload to route from, so it treats
+     * the arrival as a blind wake-up and backfills everything instead of dropping it. */
     override fun onMessage(message: PushMessage, instance: String) {
+        val container = (application as AppApplication).container
         if (!message.decrypted) {
-            Log.w(TAG, "received a push message that failed decryption, dropping")
+            Log.w(TAG, "received a push message that failed decryption, falling back to a full catch-up sync")
+            scope.launch {
+                runCatching { container.notificationRouter.notifyFromUndecryptablePush() }
+                    .onFailure { Log.w(TAG, "undecryptable-push catch-up sync failed", it) }
+            }
             return
         }
+        scope.launch { container.appPreferences.setPushDecryptionFailureAt(null) }
         val payload = runCatching {
             AppJson.decodeFromString(PushNotificationPayloadDto.serializer(), message.content.toString(Charsets.UTF_8))
         }.getOrElse {
@@ -52,7 +66,6 @@ class UnifiedPushService : PushService() {
             Log.w(TAG, "push payload url missing network/channel: ${payload.url}")
             return
         }
-        val container = (application as AppApplication).container
         scope.launch {
             runCatching { container.notificationRouter.notifyFromPush(network, channel) }
                 .onFailure { Log.w(TAG, "failed to handle push wake-up for $network/$channel", it) }

@@ -73,6 +73,7 @@
     <string name="settings_push_enabled">Low-power push notifications</string>
     <string name="settings_push_enabled_desc">Use a UnifiedPush distributor to receive notifications without keeping the connection always open</string>
     <string name="settings_push_no_distributor">No UnifiedPush distributor found: install one (e.g. ntfy) and try again</string>
+    <string name="settings_push_decryption_failure">Last push notification couldn\'t be decrypted: %1$s — until the server-side fix ships, the app is catching up messages with a fallback sync</string>
     <string name="settings_push_devices">Registered devices</string>
     <string name="settings_push_device_unknown">UnifiedPush device</string>
     <string name="settings_push_device_browser">Browser</string>

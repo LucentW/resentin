@@ -27,6 +27,15 @@ interface MessageDao {
     )
     suspend fun latestMessage(networkSlug: String, channelName: String): MessageEntity?
 
+    /** Used by the undecryptable-push catch-up sweep to find exactly which rows a
+     * backfill just added, so each can be evaluated for notify-worthiness individually
+     * (a single wake-up can cover several new messages across a channel). */
+    @Query(
+        "SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName " +
+            "AND id > :afterId ORDER BY id ASC",
+    )
+    suspend fun messagesAfter(networkSlug: String, channelName: String, afterId: Long): List<MessageEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(message: MessageEntity)
 }

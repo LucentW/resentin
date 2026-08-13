@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.onEach
 import pm.antani.resentin.MainActivity
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
+import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.session.ConnectionManager
@@ -62,6 +63,7 @@ class NotificationRouter(
     private val db: AppDatabase,
     private val openChatTracker: OpenChatTracker,
     private val chatRepository: ChatRepository,
+    private val appPreferences: AppPreferences,
 ) {
     fun startListening(scope: CoroutineScope) {
         connectionManager.events
@@ -99,6 +101,47 @@ class NotificationRouter(
         val bucket = queryBucket(message, nick)
         if (!shouldNotify(message, openChatTracker.current.value, nick, bucket)) return
         postNotification(message, bucket)
+    }
+
+    /** Fallback for a push this client received but could not decrypt (see
+     * `UnifiedPushService.onMessage`) — currently expected, since the server's
+     * `web_push_elixir` dependency emits the pre-RFC8291 "aesgcm" draft, which no
+     * spec-compliant UnifiedPush distributor can decode; tracked as a to-fix on the
+     * grappa-irc side. Deliberately dirty: since the payload is unreadable we don't know
+     * WHICH conversation woke us, so instead of staying blind until the app is next
+     * foregrounded, this backfills every channel/query this client already knows about
+     * (queries live in the same `channels` table, `source="query"`) and evaluates each
+     * newly-arrived row against the ordinary [shouldNotify] gate — same notifications a
+     * live WS delivery would have produced, just discovered a beat late. Records the
+     * failure so Settings can show a quiet note; the note is why this exists at all
+     * instead of a plain `return`. */
+    suspend fun notifyFromUndecryptablePush() {
+        appPreferences.setPushDecryptionFailureAt(System.currentTimeMillis())
+        val networks = db.networkDao().observeNetworksWithChannels().first()
+        for (nwc in networks) {
+            val nick = nwc.network.nick
+            for (channel in nwc.channels.filter { it.joined }) {
+                val beforeMaxId = db.messageDao().maxId(nwc.network.slug, channel.name) ?: 0
+                chatRepository.backfill(nwc.network.slug, channel.name)
+                    .onFailure { Log.w(TAG, "catch-up backfill failed for ${nwc.network.slug}/${channel.name}", it) }
+                val newRows = db.messageDao().messagesAfter(nwc.network.slug, channel.name, beforeMaxId)
+                for (row in newRows) {
+                    val message = ScrollbackMessageDto(
+                        id = row.id,
+                        network = nwc.network.slug,
+                        channel = channel.name,
+                        serverTime = row.serverTime,
+                        kind = row.kind,
+                        sender = row.sender,
+                        body = row.body,
+                    )
+                    val bucket = queryBucket(message, nick)
+                    if (shouldNotify(message, openChatTracker.current.value, nick, bucket)) {
+                        postNotification(message, bucket)
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun handle(message: ScrollbackMessageDto) {
