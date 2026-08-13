@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withTimeoutOrNull
 import pm.antani.resentin.MainActivity
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
@@ -28,7 +29,9 @@ import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.OpenChat
 import pm.antani.resentin.domain.session.OpenChatTracker
 import pm.antani.resentin.irc.isQueryTarget
+import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
+import pm.antani.resentin.net.ws.SocketState
 
 private val NOTIFIABLE_KINDS = setOf("privmsg", "action", "notice")
 
@@ -65,6 +68,7 @@ class NotificationRouter(
     private val openChatTracker: OpenChatTracker,
     private val chatRepository: ChatRepository,
     private val appPreferences: AppPreferences,
+    private val tokenStore: TokenStore,
 ) {
     fun startListening(scope: CoroutineScope) {
         connectionManager.events
@@ -122,13 +126,50 @@ class NotificationRouter(
      * EVERY channel in the first pass fails with UnknownHostException within
      * milliseconds — exactly the scenario this fallback is supposed to cover, defeated
      * by bad timing rather than a real outage. One retry after a short delay is cheap
-     * and harmless either way: `backfill` is idempotent (cursor is `after: maxId`). */
+     * and harmless either way: `backfill` is idempotent (cursor is `after: maxId`).
+     *
+     * Live-observed gap the WS discovery step exists for: a first-ever DM from a nick
+     * this client has never seen — or a query window closed on another client (cic) —
+     * has no row in the local `channels` table yet, so the REST sweep below skips
+     * right past it; there's no REST endpoint for the query-windows list, only the WS
+     * event `query_windows_list`. Rather than staying blind to that case, this briefly
+     * joins the per-user topic to receive it before sweeping. */
     suspend fun notifyFromUndecryptablePush() {
         appPreferences.setPushDecryptionFailureAt(System.currentTimeMillis())
+        discoverQueryWindows()
         if (sweepForNotifications() > 0) return
         Log.w(TAG, "catch-up sweep reached zero channels, retrying once after a delay")
         delay(5_000)
         sweepForNotifications()
+    }
+
+    /** Joins the per-user topic just long enough to receive `query_windows_list` —
+     * `NetworksRepository` (subscribed since app start) persists it to the `channels`
+     * table as a side effect, which is all [sweepForNotifications] needs. Leaves the
+     * connection exactly as it found it: doesn't disconnect a socket that was already
+     * open (foreground, or `stayConnected`), so it can't fight `AppContainer`'s own
+     * foreground-based connect/disconnect logic. */
+    private suspend fun discoverQueryWindows() {
+        val session = tokenStore.session.value ?: return
+        val wasOpen = connectionManager.state.value == SocketState.OPEN
+        if (!wasOpen) {
+            runCatching { connectionManager.connect() }
+                .onFailure {
+                    Log.w(TAG, "discovery connect failed, skipping query-window discovery", it)
+                    return
+                }
+        }
+        runCatching { connectionManager.joinChannel("grappa:user:${session.username}") }
+            .onFailure { Log.w(TAG, "failed to join per-user topic for query-window discovery", it) }
+        withTimeoutOrNull(6_000) {
+            connectionManager.events.filterIsInstance<WsEvent.QueryWindowsListReceived>().first()
+        }
+        // NetworksRepository's own collector receives the same broadcast — give its DB
+        // write a moment to land before the sweep below reads the channels table.
+        delay(300)
+        if (!wasOpen && !appPreferences.stayConnected.first()) {
+            connectionManager.disconnect()
+        }
     }
 
     /** One pass over every known channel/query; returns how many were actually
