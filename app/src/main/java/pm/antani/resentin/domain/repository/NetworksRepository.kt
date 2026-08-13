@@ -21,7 +21,9 @@ import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.irc.formatChannelModes
 import pm.antani.resentin.net.dto.ChannelDto
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
+import pm.antani.resentin.net.dto.DirectoryPageDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
+import pm.antani.resentin.net.dto.JoinChannelRequestDto
 import pm.antani.resentin.net.dto.NetworkDto
 import pm.antani.resentin.net.dto.PerformDto
 import pm.antani.resentin.net.dto.PerformUpdateDto
@@ -202,6 +204,27 @@ class NetworksRepository(
         val response = api.partChannel(slug, channel)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         refresh().getOrThrow()
+    }
+
+    /** JOINs [name] (a channel, optionally +k-keyed) on [slug]. The row appears via the
+     * follow-up [refresh] as `:pending`/`:joined` per the server's own JOIN lifecycle —
+     * this does not itself wait for the upstream JOIN to land. */
+    suspend fun joinChannel(slug: String, name: String, key: String? = null): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.joinChannel(slug, JoinChannelRequestDto(name, key))
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        refresh().getOrThrow()
+    }
+
+    suspend fun getDirectory(slug: String, sort: String, q: String? = null, cursor: String? = null): Result<DirectoryPageDto> =
+        runCatching {
+            authRepository.api(NetworksApi::class.java).getDirectory(slug, sort, q, cursor)
+        }
+
+    suspend fun refreshDirectory(slug: String): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.refreshDirectory(slug)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
     }
 }
 

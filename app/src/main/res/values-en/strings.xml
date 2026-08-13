@@ -31,6 +31,29 @@
     <string name="cd_network_settings">Network settings</string>
     <string name="cd_direct_message">Direct message</string>
     <string name="home_unknown_error">Unknown error</string>
+    <string name="home_action_mark_read">Mark as read</string>
+    <string name="home_action_leave_channel">Leave channel</string>
+    <string name="home_action_close_query">Close conversation</string>
+    <string name="home_leave_channel_confirm">Leave %1$s?</string>
+    <string name="home_close_query_confirm">Close the conversation with %1$s?</string>
+    <string name="home_dialog_cancel">Cancel</string>
+    <string name="cd_new_chat">New conversation</string>
+    <string name="home_new_chat_title">New conversation</string>
+    <string name="home_new_chat_hint">#channel or nick</string>
+    <string name="home_new_chat_join">Join channel</string>
+    <string name="home_new_chat_dm">Direct message</string>
+    <string name="home_new_chat_browse">Browse channel directory</string>
+
+    <!-- Channel directory -->
+    <string name="directory_title">Channels on %1$s</string>
+    <string name="directory_search_hint">Search channel…</string>
+    <string name="directory_sort_users">Users</string>
+    <string name="directory_sort_name">Name</string>
+    <string name="directory_empty">No channels found</string>
+    <string name="directory_refreshing">Refreshing…</string>
+    <string name="directory_captured_at_label">Updated: %1$s</string>
+    <string name="directory_featured">Featured</string>
+    <string name="directory_load_more">Load more</string>
 
     <!-- Chat -->
     <string name="cd_members">Members</string>

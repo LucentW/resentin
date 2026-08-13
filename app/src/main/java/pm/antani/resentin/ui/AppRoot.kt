@@ -24,6 +24,8 @@ import pm.antani.resentin.ui.channelsettings.ChannelSettingsScreen
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsViewModel
 import pm.antani.resentin.ui.chat.ChatScreen
 import pm.antani.resentin.ui.chat.ChatViewModel
+import pm.antani.resentin.ui.directory.DirectoryScreen
+import pm.antani.resentin.ui.directory.DirectoryViewModel
 import pm.antani.resentin.ui.home.HomeScreen
 import pm.antani.resentin.ui.home.HomeViewModel
 import pm.antani.resentin.ui.login.LoginScreen
@@ -41,6 +43,7 @@ private const val ROUTE_NETWORK_SETTINGS = "networksettings/{networkSlug}"
 private const val ROUTE_CHANNEL_SETTINGS = "channelsettings/{networkSlug}/{channelName}"
 private const val ROUTE_APP_SETTINGS = "appsettings"
 private const val ROUTE_SHARE_TARGET = "share-target"
+private const val ROUTE_DIRECTORY = "directory/{networkSlug}"
 
 private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
 private fun decode(value: String) = URLDecoder.decode(value, "UTF-8")
@@ -93,7 +96,13 @@ fun AppRoot(
     NavHost(navController = navController, startDestination = ROUTE_HOME) {
         composable(ROUTE_HOME) {
             val viewModel: HomeViewModel = viewModel(
-                factory = HomeViewModel.factory(container.networksRepository, appContext),
+                factory = HomeViewModel.factory(
+                    container.networksRepository,
+                    container.chatRepository,
+                    container.membersRepository,
+                    currentSession.username,
+                    appContext,
+                ),
             )
             HomeScreen(
                 viewModel = viewModel,
@@ -106,6 +115,27 @@ fun AppRoot(
                     navController.navigate("networksettings/$networkSlug")
                 },
                 onAppSettingsClick = { navController.navigate(ROUTE_APP_SETTINGS) },
+                onBrowseDirectory = { networkSlug -> navController.navigate("directory/$networkSlug") },
+            )
+        }
+        composable(
+            ROUTE_DIRECTORY,
+            arguments = listOf(navArgument("networkSlug") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val networkSlug = backStackEntry.arguments?.getString("networkSlug").orEmpty()
+            val viewModel: DirectoryViewModel = viewModel(
+                key = "directory/$networkSlug",
+                factory = DirectoryViewModel.factory(container.networksRepository, networkSlug, appContext),
+            )
+            DirectoryScreen(
+                viewModel = viewModel,
+                networkSlug = networkSlug,
+                onBack = { navController.popBackStack() },
+                onJoined = { channelName ->
+                    navController.navigate("chat/$networkSlug/${encode(channelName)}") {
+                        popUpTo(ROUTE_HOME)
+                    }
+                },
             )
         }
         composable(ROUTE_APP_SETTINGS) {
@@ -122,7 +152,13 @@ fun AppRoot(
         composable(ROUTE_SHARE_TARGET) {
             val viewModel: HomeViewModel = viewModel(
                 key = ROUTE_SHARE_TARGET,
-                factory = HomeViewModel.factory(container.networksRepository, appContext),
+                factory = HomeViewModel.factory(
+                    container.networksRepository,
+                    container.chatRepository,
+                    container.membersRepository,
+                    currentSession.username,
+                    appContext,
+                ),
             )
             ShareTargetScreen(
                 viewModel = viewModel,

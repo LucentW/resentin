@@ -164,4 +164,20 @@ class MembersRepository(
             },
         )
     }
+
+    /** Closes a DM window server-side (deletes the `query_windows` row) — the server
+     * then re-broadcasts `query_windows_list`, which [NetworksRepository] already
+     * listens for to drop the local `channels` row (source="query"). Local removal is
+     * NOT done optimistically here so a failed push (e.g. WS not connected) doesn't
+     * desync the two. */
+    suspend fun closeQueryWindow(username: String, networkId: Int, targetNick: String) {
+        connectionManager.sendVerb(
+            "grappa:user:$username",
+            "close_query_window",
+            buildJsonObject {
+                put("network_id", networkId)
+                put("target_nick", targetNick)
+            },
+        )
+    }
 }

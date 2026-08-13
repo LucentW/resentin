@@ -31,6 +31,29 @@
     <string name="cd_network_settings">Impostazioni rete</string>
     <string name="cd_direct_message">Messaggio privato</string>
     <string name="home_unknown_error">Errore sconosciuto</string>
+    <string name="home_action_mark_read">Segna come letto</string>
+    <string name="home_action_leave_channel">Abbandona canale</string>
+    <string name="home_action_close_query">Chiudi conversazione</string>
+    <string name="home_leave_channel_confirm">Abbandonare %1$s?</string>
+    <string name="home_close_query_confirm">Chiudere la conversazione con %1$s?</string>
+    <string name="home_dialog_cancel">Annulla</string>
+    <string name="cd_new_chat">Nuova conversazione</string>
+    <string name="home_new_chat_title">Nuova conversazione</string>
+    <string name="home_new_chat_hint">#canale o nick</string>
+    <string name="home_new_chat_join">Entra nel canale</string>
+    <string name="home_new_chat_dm">Messaggio privato</string>
+    <string name="home_new_chat_browse">Sfoglia elenco canali</string>
+
+    <!-- Channel directory -->
+    <string name="directory_title">Canali su %1$s</string>
+    <string name="directory_search_hint">Cerca canale…</string>
+    <string name="directory_sort_users">Utenti</string>
+    <string name="directory_sort_name">Nome</string>
+    <string name="directory_empty">Nessun canale trovato</string>
+    <string name="directory_refreshing">Aggiornamento in corso…</string>
+    <string name="directory_captured_at_label">Aggiornato: %1$s</string>
+    <string name="directory_featured">In evidenza</string>
+    <string name="directory_load_more">Carica altri</string>
 
     <!-- Chat -->
     <string name="cd_members">Membri</string>

@@ -112,6 +112,17 @@ class ChatRepository(
         db.channelDao().advanceLastReadMessageId(networkSlug, channelName, messageId)
     }
 
+    /** Marks a channel fully read from outside the chat screen (e.g. a long-press on
+     * Home) — advances the cursor to the newest locally-known message and zeroes the
+     * unread badge immediately rather than waiting on the `window_counts` broadcast,
+     * which only reaches this device while the channel's WS topic happens to be
+     * joined. No-ops (successfully) on a channel with no cached messages yet. */
+    suspend fun markAllRead(networkSlug: String, channelName: String): Result<Unit> = runCatching {
+        val lastId = db.messageDao().maxId(networkSlug, channelName) ?: return@runCatching
+        markRead(networkSlug, channelName, lastId).getOrThrow()
+        db.channelDao().updateUnreadCounts(networkSlug, channelName, 0, 0, "none")
+    }
+
     /** Uploads [bytes] via the embedded media endpoint, then sends the resulting URL as
      * an ordinary chat message — the server has no separate "attachment" message kind,
      * cicchetto itself just posts the upload URL as the PRIVMSG body (the extension in
