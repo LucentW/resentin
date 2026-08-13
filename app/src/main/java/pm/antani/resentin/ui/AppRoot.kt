@@ -22,6 +22,8 @@ import pm.antani.resentin.ui.appsettings.AppSettingsScreen
 import pm.antani.resentin.ui.appsettings.AppSettingsViewModel
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsScreen
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsViewModel
+import pm.antani.resentin.ui.admin.AdminScreen
+import pm.antani.resentin.ui.admin.AdminViewModel
 import pm.antani.resentin.ui.archive.ArchiveScreen
 import pm.antani.resentin.ui.archive.ArchiveViewModel
 import pm.antani.resentin.ui.chat.ChatScreen
@@ -44,6 +46,7 @@ private const val ROUTE_MEMBERS = "members/{networkSlug}/{channelName}"
 private const val ROUTE_NETWORK_SETTINGS = "networksettings/{networkSlug}"
 private const val ROUTE_CHANNEL_SETTINGS = "channelsettings/{networkSlug}/{channelName}"
 private const val ROUTE_APP_SETTINGS = "appsettings"
+private const val ROUTE_ADMIN = "admin"
 private const val ROUTE_SHARE_TARGET = "share-target"
 private const val ROUTE_DIRECTORY = "directory/{networkSlug}"
 private const val ROUTE_ARCHIVE = "archive/{networkSlug}"
@@ -147,10 +150,21 @@ fun AppRoot(
                     container.userSettingsRepository,
                     container.appPreferences,
                     container.pushRepository,
+                    container.authRepository,
                     appContext,
                 ),
             )
-            AppSettingsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            AppSettingsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onAdminClick = { navController.navigate(ROUTE_ADMIN) },
+            )
+        }
+        composable(ROUTE_ADMIN) {
+            val viewModel: AdminViewModel = viewModel(
+                factory = AdminViewModel.factory(container.adminRepository),
+            )
+            AdminScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(ROUTE_SHARE_TARGET) {
             val viewModel: HomeViewModel = viewModel(

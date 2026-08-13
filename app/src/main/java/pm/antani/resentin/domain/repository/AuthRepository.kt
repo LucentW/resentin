@@ -10,6 +10,7 @@ import pm.antani.resentin.net.HttpClients
 import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.dto.AuthLoginRequestDto
 import pm.antani.resentin.net.dto.ConfigDto
+import pm.antani.resentin.net.dto.MeDto
 import pm.antani.resentin.net.rest.AuthApi
 import pm.antani.resentin.net.rest.ConfigApi
 import pm.antani.resentin.net.rest.MeApi
@@ -65,6 +66,12 @@ class AuthRepository(
         }
         appPreferences.setLastSyncedHost(host)
         tokenStore.saveSession(host, token, username)
+    }
+
+    suspend fun getMe(): Result<MeDto> = runCatching {
+        val response = api(MeApi::class.java).getMe()
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        checkNotNull(response.body())
     }
 
     fun signOut() {

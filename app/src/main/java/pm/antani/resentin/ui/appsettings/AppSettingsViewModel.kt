@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.ChatDisplayMode
+import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.DisplayPrefsDto
@@ -36,12 +37,14 @@ data class AppSettingsUiState(
     val vhostOptions: List<VhostOptionDto> = emptyList(),
     val vhostSelection: List<String> = emptyList(),
     val vhostError: String? = null,
+    val isAdmin: Boolean = false,
 )
 
 class AppSettingsViewModel(
     private val userSettingsRepository: UserSettingsRepository,
     private val appPreferences: AppPreferences,
     private val pushRepository: PushRepository,
+    private val authRepository: AuthRepository,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -77,6 +80,9 @@ class AppSettingsViewModel(
                     error = prefsResult.exceptionOrNull()?.message ?: aliasesResult.exceptionOrNull()?.message,
                 )
             }
+        }
+        viewModelScope.launch {
+            authRepository.getMe().onSuccess { me -> _uiState.update { it.copy(isAdmin = me.isAdmin) } }
         }
         refreshVhostSettings()
     }
@@ -224,11 +230,12 @@ class AppSettingsViewModel(
             userSettingsRepository: UserSettingsRepository,
             appPreferences: AppPreferences,
             pushRepository: PushRepository,
+            authRepository: AuthRepository,
             appContext: Context,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return AppSettingsViewModel(userSettingsRepository, appPreferences, pushRepository, appContext) as T
+                return AppSettingsViewModel(userSettingsRepository, appPreferences, pushRepository, authRepository, appContext) as T
             }
         }
     }

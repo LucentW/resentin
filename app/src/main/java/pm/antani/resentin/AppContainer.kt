@@ -18,6 +18,7 @@ import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.domain.events.WsEvent
+import pm.antani.resentin.domain.repository.AdminRepository
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
@@ -43,6 +44,7 @@ class AppContainer(private val context: Context) {
     val membersRepository = MembersRepository(connectionManager, database)
     val userSettingsRepository = UserSettingsRepository(authRepository)
     val pushRepository = PushRepository(authRepository, appPreferences)
+    val adminRepository = AdminRepository(authRepository)
     val openChatTracker = OpenChatTracker()
     val pendingShareHolder = PendingShareHolder()
     val notificationRouter =

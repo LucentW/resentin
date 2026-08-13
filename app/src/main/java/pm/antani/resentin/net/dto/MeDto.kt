@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 data class MeDto(
     val name: String? = null,
     val homeData: MeHomeDataDto? = null,
+    val isAdmin: Boolean = false,
 ) {
     val displayName: String?
         get() = name ?: homeData?.networks?.firstOrNull { !it.nick.isNullOrBlank() }?.nick

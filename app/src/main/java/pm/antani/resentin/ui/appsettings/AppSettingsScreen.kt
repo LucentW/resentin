@@ -27,6 +27,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -57,7 +58,7 @@ import java.time.format.FormatStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
+fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdminClick: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
     val pushEnabled by viewModel.pushEnabled.collectAsState()
@@ -352,6 +353,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit) {
                 state.error?.let { error ->
                     Spacer(Modifier.height(8.dp))
                     Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                if (state.isAdmin) {
+                    Spacer(Modifier.height(24.dp))
+                    OutlinedButton(onClick = onAdminClick, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.settings_admin_panel))
+                    }
                 }
             }
         }

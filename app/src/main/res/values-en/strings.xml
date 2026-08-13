@@ -55,6 +55,54 @@
     <string name="directory_featured">Featured</string>
     <string name="directory_load_more">Load more</string>
 
+    <!-- Admin -->
+    <string name="settings_admin_panel">Admin panel</string>
+    <string name="admin_title">Admin</string>
+    <string name="admin_tab_networks">Networks</string>
+    <string name="admin_tab_vhosts">Vhosts</string>
+    <string name="admin_tab_users">Users</string>
+    <string name="admin_tab_sessions">Sessions</string>
+    <string name="admin_tab_visitors">Visitors</string>
+    <string name="admin_create">Create</string>
+    <string name="admin_networks_empty">No networks</string>
+    <string name="admin_network_caps">max users %1$d · max visitors %2$d (-1 = unlimited)</string>
+    <string name="admin_network_visitors_label">Visitors</string>
+    <string name="admin_add_server">Add server</string>
+    <string name="admin_new_network_title">New network</string>
+    <string name="admin_new_network_hint">slug (e.g. libera)</string>
+    <string name="admin_delete_network_title">Delete network</string>
+    <string name="admin_delete_network_confirm">Permanently delete %1$s? Requires no leftover credentials or scrollback.</string>
+    <string name="admin_add_server_title">Add server to %1$s</string>
+    <string name="admin_server_host_hint">host</string>
+    <string name="admin_server_port_hint">port</string>
+    <string name="admin_server_tls">TLS</string>
+    <string name="admin_vhosts_empty">No vhosts configured</string>
+    <string name="admin_vhost_pool">pool</string>
+    <string name="admin_vhost_available">available to everyone</string>
+    <string name="admin_new_vhost_title">New vhost</string>
+    <string name="admin_new_vhost_hint">address</string>
+    <string name="admin_delete_vhost_title">Delete vhost</string>
+    <string name="admin_delete_vhost_confirm">Delete %1$s? Any grants will be revoked.</string>
+    <string name="admin_users_empty">No users</string>
+    <string name="admin_user_sessions">%1$d live sessions</string>
+    <string name="admin_user_admin_label">Admin</string>
+    <string name="admin_new_user_title">New user</string>
+    <string name="admin_user_name_hint">username</string>
+    <string name="admin_user_password_hint">password</string>
+    <string name="admin_delete_user_title">Delete user</string>
+    <string name="admin_delete_user_confirm">Permanently delete %1$s?</string>
+    <string name="admin_sessions_empty">No live sessions</string>
+    <string name="admin_session_meta">%1$s · %2$s</string>
+    <string name="admin_session_disconnect">Disconnect</string>
+    <string name="admin_session_kill">Kill process</string>
+    <string name="admin_visitors_empty">No visitors</string>
+    <string name="admin_visitor_identified">Identified</string>
+    <string name="admin_visitor_anonymous">Anonymous</string>
+    <string name="admin_delete_visitor_title">Delete visitor</string>
+    <string name="admin_delete_visitor_confirm">Delete visitor %1$s?</string>
+    <string name="admin_sweep_now">Sweep visitors now</string>
+    <string name="admin_sweep_result">Removed %1$d expired visitors</string>
+
     <!-- Chat -->
     <string name="cd_members">Members</string>
     <string name="cd_channel_settings">Channel settings</string>
