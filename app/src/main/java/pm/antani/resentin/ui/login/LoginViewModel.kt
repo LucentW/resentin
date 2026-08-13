@@ -30,14 +30,31 @@ data class LoginUiState(
 class LoginViewModel(
     private val authRepository: AuthRepository,
     private val context: Context,
-    defaultHost: String,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(LoginUiState(host = defaultHost))
+    private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     fun onHostChange(host: String) {
         _uiState.update { it.copy(host = host, error = null) }
+    }
+
+    /** Fires when the host field loses focus — if what's actually in there is a
+     * pasted `grappa://host/token` URL rather than a hostname, split it into the two
+     * fields instead of trying to sign in against a URL-shaped "host". Does not
+     * submit on its own; the user still reviews + taps sign-in (unlike
+     * [signInFromLink], which is the OS deep-link handoff and submits immediately). */
+    fun onHostFieldBlur() {
+        val (host, token) = parseGrappaLoginLink(_uiState.value.host) ?: return
+        _uiState.update { it.copy(host = host, mode = LoginMode.TOKEN, token = token, error = null) }
+    }
+
+    /** The OS intent-filter handoff for a `grappa://host/token` magic link — unlike
+     * [onHostFieldBlur], this is the user having tapped an actual link (e.g. a QR-code
+     * login), so it submits right away instead of just prefilling the fields. */
+    fun signInFromLink(host: String, token: String) {
+        _uiState.update { it.copy(host = host, mode = LoginMode.TOKEN, token = token) }
+        signIn()
     }
 
     fun onModeChange(mode: LoginMode) {
@@ -125,11 +142,11 @@ class LoginViewModel(
     }
 
     companion object {
-        fun factory(authRepository: AuthRepository, context: Context, defaultHost: String): ViewModelProvider.Factory =
+        fun factory(authRepository: AuthRepository, context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return LoginViewModel(authRepository, context.applicationContext, defaultHost) as T
+                    return LoginViewModel(authRepository, context.applicationContext) as T
                 }
             }
     }

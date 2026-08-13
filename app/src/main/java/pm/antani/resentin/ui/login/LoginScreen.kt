@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -46,7 +47,9 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 label = { Text(stringResource(R.string.login_server_label)) },
                 singleLine = true,
                 enabled = !state.isLoading,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState -> if (!focusState.isFocused) viewModel.onHostFieldBlur() },
             )
             Spacer(Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth()) {

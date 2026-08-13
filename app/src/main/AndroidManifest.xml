@@ -35,6 +35,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- grappa://<host>/<token> magic-link login (QR code / shared link from
+                 grappa-irc's own generator) — see MainActivity.loginLinkFrom. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="grappa" android:host="*" />
+            </intent-filter>
         </activity>
 
         <service

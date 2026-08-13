@@ -15,7 +15,6 @@ import androidx.navigation.navArgument
 import java.net.URLDecoder
 import java.net.URLEncoder
 import pm.antani.resentin.AppContainer
-import pm.antani.resentin.BuildConfig
 import pm.antani.resentin.R
 import pm.antani.resentin.irc.isQueryTarget
 import pm.antani.resentin.ui.appsettings.AppSettingsScreen
@@ -63,14 +62,22 @@ fun AppRoot(
     onDeepLinkConsumed: () -> Unit = {},
     sharePick: Boolean = false,
     onSharePickConsumed: () -> Unit = {},
+    loginLink: Pair<String, String>? = null,
+    onLoginLinkConsumed: () -> Unit = {},
 ) {
     val session by container.tokenStore.session.collectAsState()
     val appContext = LocalContext.current.applicationContext
 
     if (session == null) {
         val viewModel: LoginViewModel = viewModel(
-            factory = LoginViewModel.factory(container.authRepository, appContext, BuildConfig.DEFAULT_SERVER_HOST),
+            factory = LoginViewModel.factory(container.authRepository, appContext),
         )
+        LaunchedEffect(loginLink) {
+            loginLink?.let { (host, token) ->
+                viewModel.signInFromLink(host, token)
+                onLoginLinkConsumed()
+            }
+        }
         LoginScreen(viewModel = viewModel)
         return
     }

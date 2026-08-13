@@ -13,12 +13,14 @@ import androidx.compose.runtime.setValue
 import pm.antani.resentin.service.NotificationRouter
 import pm.antani.resentin.ui.AppRoot
 import pm.antani.resentin.ui.DeepLinkChat
+import pm.antani.resentin.ui.login.parseGrappaLoginLink
 import pm.antani.resentin.ui.theme.ResentinTheme
 
 class MainActivity : ComponentActivity() {
 
     private var pendingDeepLink = mutableStateOf<DeepLinkChat?>(null)
     private var pendingSharePick = mutableStateOf(false)
+    private var pendingLoginLink = mutableStateOf<Pair<String, String>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +35,8 @@ class MainActivity : ComponentActivity() {
                     onDeepLinkConsumed = { pendingDeepLink.value = null },
                     sharePick = pendingSharePick.value,
                     onSharePickConsumed = { pendingSharePick.value = false },
+                    loginLink = pendingLoginLink.value,
+                    onLoginLinkConsumed = { pendingLoginLink.value = null },
                 )
             }
         }
@@ -46,6 +50,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         deepLinkFrom(intent)?.let { pendingDeepLink.value = it }
+        loginLinkFrom(intent)?.let { pendingLoginLink.value = it }
         val sharedUris = shareUrisFrom(intent)
         if (sharedUris.isNotEmpty()) {
             (application as AppApplication).container.pendingShareHolder.set(sharedUris)
@@ -57,6 +62,17 @@ class MainActivity : ComponentActivity() {
         val networkSlug = intent?.getStringExtra(NotificationRouter.EXTRA_NETWORK_SLUG) ?: return null
         val channelName = intent.getStringExtra(NotificationRouter.EXTRA_CHANNEL_NAME) ?: return null
         return DeepLinkChat(networkSlug, channelName)
+    }
+
+    /** `grappa://<host>/<token>` magic-link login — a QR code / shared link from
+     * grappa-irc's own generator (for TOTP/passkey-gated accounts). Ignored entirely
+     * when a session already exists: "open the app" is the whole of the contract then,
+     * not a re-login or an account switch the user never asked for. */
+    private fun loginLinkFrom(intent: Intent?): Pair<String, String>? {
+        if (intent?.action != Intent.ACTION_VIEW) return null
+        val data = intent.data ?: return null
+        if ((application as AppApplication).container.tokenStore.session.value != null) return null
+        return parseGrappaLoginLink(data.toString())
     }
 
     /** The Android share sheet — another app's "Condividi" → Resentin. */

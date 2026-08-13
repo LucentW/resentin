@@ -18,8 +18,6 @@ android {
         versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField("String", "DEFAULT_SERVER_HOST", "\"grappa.antani.pm\"")
     }
 
     signingConfigs {
