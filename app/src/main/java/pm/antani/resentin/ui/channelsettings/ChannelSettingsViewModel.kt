@@ -48,6 +48,7 @@ class ChannelSettingsViewModel(
     private val networkSlug: String,
     private val channelName: String,
     private val username: String,
+    private val subject: String,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChannelSettingsUiState())
@@ -103,7 +104,7 @@ class ChannelSettingsViewModel(
 
     fun toggleSimpleMode(letter: Char) {
         val grant = letter !in _uiState.value.modes.modes.map { it.firstOrNull() }
-        runVerb { networkId -> membersRepository.setMode(username, networkId, channelName, "${if (grant) "+" else "-"}$letter", emptyList()) }
+        runVerb { networkId -> membersRepository.setMode(subject, networkId, channelName, "${if (grant) "+" else "-"}$letter", emptyList()) }
     }
 
     fun onRawModeInputChange(value: String) = _uiState.update { it.copy(rawModeInput = value) }
@@ -117,7 +118,7 @@ class ChannelSettingsViewModel(
         val parts = raw.split(" ").filter { it.isNotBlank() }
         val modeString = parts.first()
         val params = parts.drop(1)
-        runVerb { networkId -> membersRepository.setMode(username, networkId, channelName, modeString, params) }
+        runVerb { networkId -> membersRepository.setMode(subject, networkId, channelName, modeString, params) }
         _uiState.update { it.copy(rawModeInput = "") }
     }
 
@@ -128,7 +129,7 @@ class ChannelSettingsViewModel(
 
     fun refreshBanlist() {
         _uiState.update { it.copy(banlistLoading = true) }
-        runVerb { networkId -> membersRepository.requestBanlist(username, networkId, channelName, _uiState.value.activeListMode) }
+        runVerb { networkId -> membersRepository.requestBanlist(subject, networkId, channelName, _uiState.value.activeListMode) }
     }
 
     fun onNewMaskChange(value: String) = _uiState.update { it.copy(newMaskInput = value) }
@@ -147,7 +148,7 @@ class ChannelSettingsViewModel(
             runCatching {
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
                 val letter = _uiState.value.activeListMode
-                membersRepository.setMode(username, networkId, channelName, "${if (grant) "+" else "-"}$letter", listOf(mask))
+                membersRepository.setMode(subject, networkId, channelName, "${if (grant) "+" else "-"}$letter", listOf(mask))
             }.onFailure { _uiState.update { s -> s.copy(error = it.message) } }
             // List-mode changes aren't echoed as a channel_modes_changed snapshot (that
             // carries only the current SIMPLE modes) — re-query the list to reflect it.
@@ -172,10 +173,11 @@ class ChannelSettingsViewModel(
             networkSlug: String,
             channelName: String,
             username: String,
+            subject: String,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChannelSettingsViewModel(networksRepository, membersRepository, networkSlug, channelName, username) as T
+                return ChannelSettingsViewModel(networksRepository, membersRepository, networkSlug, channelName, username, subject) as T
             }
         }
     }

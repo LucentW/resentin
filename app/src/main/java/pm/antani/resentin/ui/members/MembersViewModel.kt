@@ -20,10 +20,11 @@ class MembersViewModel(
     networkSlug: String,
     channelName: String,
     username: String,
+    subject: String,
 ) : ViewModel() {
 
     private val controller =
-        UserCardController(membersRepository, networksRepository, networkSlug, channelName, username, viewModelScope)
+        UserCardController(membersRepository, networksRepository, networkSlug, channelName, username, subject, viewModelScope)
 
     val members: StateFlow<List<MemberEntity>> = controller.members
     val ownSigils = controller.ownSigils
@@ -51,10 +52,11 @@ class MembersViewModel(
             networkSlug: String,
             channelName: String,
             username: String,
+            subject: String,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return MembersViewModel(membersRepository, networksRepository, appPreferences, networkSlug, channelName, username) as T
+                return MembersViewModel(membersRepository, networksRepository, appPreferences, networkSlug, channelName, username, subject) as T
             }
         }
     }

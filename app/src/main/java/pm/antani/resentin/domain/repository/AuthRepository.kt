@@ -48,11 +48,11 @@ class AuthRepository(
         }
     }
 
-    suspend fun verifyToken(host: String, token: String): Result<String> = runCatching {
+    suspend fun verifyToken(host: String, token: String): Result<MeDto> = runCatching {
         val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient { token })
         val response = retrofit.create(MeApi::class.java).getMe()
         check(response.isSuccessful) { "HTTP ${response.code()}" }
-        checkNotNull(response.body()?.displayName) { context.getString(R.string.auth_error_invalid_response) }
+        checkNotNull(response.body()) { context.getString(R.string.auth_error_invalid_response) }
     }
 
     /** Every cached table (networks/channels/messages/members/...) is keyed by network
@@ -61,7 +61,7 @@ class AuthRepository(
      * would otherwise silently merge their data — wrong read-cursor state, cross-server
      * message bleed, the works. Wiping the cache on a detected host change keeps the
      * single-server-at-a-time schema assumption actually true. */
-    suspend fun signIn(host: String, token: String, username: String) {
+    suspend fun signIn(host: String, token: String, username: String, wsSubject: String) {
         val lastHost = appPreferences.lastSyncedHost.first()
         if (lastHost != null && lastHost != host) {
             // Room forbids clearAllTables() on the calling thread — signIn() runs on
@@ -72,7 +72,7 @@ class AuthRepository(
             withContext(Dispatchers.IO) { db.clearAllTables() }
         }
         appPreferences.setLastSyncedHost(host)
-        tokenStore.saveSession(host, token, username)
+        tokenStore.saveSession(host, token, username, wsSubject)
     }
 
     suspend fun getMe(): Result<MeDto> = runCatching {

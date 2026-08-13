@@ -113,14 +113,24 @@ fun AppRoot(
                     container.networksRepository,
                     container.chatRepository,
                     container.membersRepository,
-                    currentSession.username,
+                    currentSession.wsSubject,
                     appContext,
                 ),
             )
             HomeScreen(
                 viewModel = viewModel,
                 host = currentSession.host,
-                onSignOut = { container.authRepository.signOut() },
+                onSignOut = {
+                    // Sign-out only clears the local session — the socket has no reactive
+                    // link to it (AppContainer's connect/disconnect collector filters on
+                    // `tokenStore.session.filterNotNull()`, so a session going null never
+                    // reaches it). Without this, the OLD socket lingers authenticated as
+                    // the OLD subject, and a subsequent sign-in as someone else joins every
+                    // topic on it — server-side authz then rejects each one "forbidden"
+                    // because the topic's subject no longer matches the live socket's.
+                    container.connectionManager.disconnect()
+                    container.authRepository.signOut()
+                },
                 onChannelClick = { networkSlug, channelName ->
                     navController.navigate("chat/$networkSlug/${encode(channelName)}")
                 },
@@ -180,7 +190,7 @@ fun AppRoot(
                     container.networksRepository,
                     container.chatRepository,
                     container.membersRepository,
-                    currentSession.username,
+                    currentSession.wsSubject,
                     appContext,
                 ),
             )
@@ -217,6 +227,7 @@ fun AppRoot(
                     networkSlug,
                     channelName,
                     currentSession.username,
+                    currentSession.wsSubject,
                 ),
             )
             ChatScreen(
@@ -253,6 +264,7 @@ fun AppRoot(
                     networkSlug,
                     channelName,
                     currentSession.username,
+                    currentSession.wsSubject,
                 ),
             )
             MemberListScreen(
@@ -290,7 +302,7 @@ fun AppRoot(
                     container.networksRepository,
                     container.membersRepository,
                     networkSlug,
-                    currentSession.username,
+                    currentSession.wsSubject,
                     appContext,
                 ),
             )
@@ -322,6 +334,7 @@ fun AppRoot(
                     networkSlug,
                     channelName,
                     currentSession.username,
+                    currentSession.wsSubject,
                 ),
             )
             ChannelSettingsScreen(

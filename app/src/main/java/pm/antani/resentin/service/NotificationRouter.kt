@@ -181,7 +181,7 @@ class NotificationRouter(
                     return
                 }
         }
-        runCatching { connectionManager.joinChannel("grappa:user:${session.username}") }
+        runCatching { connectionManager.joinChannel("grappa:user:${session.wsSubject}") }
             .onFailure { Log.w(TAG, "failed to join per-user topic for query-window discovery", it) }
         withTimeoutOrNull(6_000) {
             connectionManager.events.filterIsInstance<WsEvent.QueryWindowsListReceived>().first()

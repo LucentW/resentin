@@ -25,7 +25,7 @@ class HomeViewModel(
     private val networksRepository: NetworksRepository,
     private val chatRepository: ChatRepository,
     private val membersRepository: MembersRepository,
-    private val username: String,
+    private val subject: String,
     private val context: Context,
 ) : ViewModel() {
 
@@ -73,7 +73,7 @@ class HomeViewModel(
             val result = if (channel.source == "query") {
                 runCatching {
                     val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                    membersRepository.closeQueryWindow(username, networkId, channel.name)
+                    membersRepository.closeQueryWindow(subject, networkId, channel.name)
                 }
             } else {
                 networksRepository.partChannel(networkSlug, channel.name)
@@ -96,7 +96,7 @@ class HomeViewModel(
         viewModelScope.launch {
             runCatching {
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                membersRepository.openQueryWindow(username, networkId, nick)
+                membersRepository.openQueryWindow(subject, networkId, nick)
             }.onSuccess { _navigateToChat.tryEmit(networkSlug to nick) }
                 .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
         }
@@ -107,13 +107,13 @@ class HomeViewModel(
             networksRepository: NetworksRepository,
             chatRepository: ChatRepository,
             membersRepository: MembersRepository,
-            username: String,
+            subject: String,
             context: Context,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return HomeViewModel(networksRepository, chatRepository, membersRepository, username, context.applicationContext) as T
+                    return HomeViewModel(networksRepository, chatRepository, membersRepository, subject, context.applicationContext) as T
                 }
             }
     }

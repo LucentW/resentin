@@ -98,10 +98,10 @@ class AppContainer(private val context: Context) {
                 // loop (hammering the server) instead of only when the socket transitions
                 // to OPEN or the actual set of topics to join changes (channel/query
                 // added or removed).
-                .distinctUntilChangedBy { (session, state, networks) -> state to buildTopics(session.username, networks) }
+                .distinctUntilChangedBy { (session, state, networks) -> state to buildTopics(session.wsSubject, networks) }
                 .collect { (session, state, networks) ->
                     if (state != SocketState.OPEN) return@collect
-                    val topics = buildTopics(session.username, networks)
+                    val topics = buildTopics(session.wsSubject, networks)
                     runCatching {
                         connectionManager.joinAll(topics) { topic, response ->
                             networksRepository.applyJoinResponse(topic, response)
@@ -154,10 +154,10 @@ class AppContainer(private val context: Context) {
         }
     }
 
-    private fun buildTopics(username: String, networks: List<NetworkWithChannels>): List<String> = buildList {
-        add("grappa:user:$username")
+    private fun buildTopics(subject: String, networks: List<NetworkWithChannels>): List<String> = buildList {
+        add("grappa:user:$subject")
         networks.forEach { nwc ->
-            add("grappa:user:$username/network:${nwc.network.slug}")
+            add("grappa:user:$subject/network:${nwc.network.slug}")
             // An incoming DM's `message` event is pushed on the topic keyed by OUR OWN
             // nick, not the sender's — the scrollback `channel` field for that row is
             // literally the raw PRIVMSG target, which for an inbound DM is us (see
@@ -175,9 +175,9 @@ class AppContainer(private val context: Context) {
             // token, so plain ASCII lowercasing is the pragmatic fold — it's what every
             // casemapping variant (ascii/rfc1459/strict-rfc1459) agrees on for ordinary
             // A-Z nicks, which is the case that actually occurs in practice.
-            add("grappa:user:$username/network:${nwc.network.slug}/channel:${nwc.network.nick.lowercase()}")
+            add("grappa:user:$subject/network:${nwc.network.slug}/channel:${nwc.network.nick.lowercase()}")
             nwc.channels.filter { it.joined }.forEach { channel ->
-                add("grappa:user:$username/network:${nwc.network.slug}/channel:${channel.name}")
+                add("grappa:user:$subject/network:${nwc.network.slug}/channel:${channel.name}")
             }
         }
     }

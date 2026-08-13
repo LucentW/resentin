@@ -130,13 +130,15 @@ class LoginViewModel(
             }
 
             val verifyResult = authRepository.verifyToken(host, token)
-            val username = verifyResult.getOrNull()
-            if (username == null) {
+            val me = verifyResult.getOrNull()
+            val username = me?.displayName
+            val wsSubject = me?.subject
+            if (username == null || wsSubject == null) {
                 _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.login_error_invalid_token)) }
                 return@launch
             }
 
-            authRepository.signIn(host, token, username)
+            authRepository.signIn(host, token, username, wsSubject)
             _uiState.update { it.copy(isLoading = false) }
         }
     }

@@ -79,9 +79,9 @@ class MembersRepository(
             } ?: emptyList()
         }
 
-    suspend fun requestWhois(username: String, networkId: Int, nick: String) {
+    suspend fun requestWhois(subject: String, networkId: Int, nick: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "whois",
             buildJsonObject {
                 put("network_id", networkId)
@@ -98,9 +98,9 @@ class MembersRepository(
      * invex, `q`/`z` quiet/restrict) — the reply streams back as a [banlistEvents]
      * bundle, not a push ack. A letter this network doesn't support just never gets
      * a reply (see `NetworksApi` sibling doc); there is no distinct error to surface. */
-    suspend fun requestBanlist(username: String, networkId: Int, channel: String, mode: String) {
+    suspend fun requestBanlist(subject: String, networkId: Int, channel: String, mode: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "banlist",
             buildJsonObject {
                 put("network_id", networkId)
@@ -114,9 +114,9 @@ class MembersRepository(
         .filterIsInstance<WsEvent.BanlistBundle>()
         .map { it.bundle }
 
-    suspend fun kick(username: String, networkId: Int, channel: String, nick: String) {
+    suspend fun kick(subject: String, networkId: Int, channel: String, nick: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "kick",
             buildJsonObject {
                 put("network_id", networkId)
@@ -127,9 +127,9 @@ class MembersRepository(
         )
     }
 
-    suspend fun ban(username: String, networkId: Int, channel: String, mask: String) {
+    suspend fun ban(subject: String, networkId: Int, channel: String, mask: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "ban",
             buildJsonObject {
                 put("network_id", networkId)
@@ -139,9 +139,9 @@ class MembersRepository(
         )
     }
 
-    suspend fun unban(username: String, networkId: Int, channel: String, mask: String) {
+    suspend fun unban(subject: String, networkId: Int, channel: String, mask: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "unban",
             buildJsonObject {
                 put("network_id", networkId)
@@ -151,21 +151,21 @@ class MembersRepository(
         )
     }
 
-    suspend fun op(username: String, networkId: Int, channel: String, nick: String) =
-        nickListVerb(username, "op", networkId, channel, nick)
+    suspend fun op(subject: String, networkId: Int, channel: String, nick: String) =
+        nickListVerb(subject, "op", networkId, channel, nick)
 
-    suspend fun deop(username: String, networkId: Int, channel: String, nick: String) =
-        nickListVerb(username, "deop", networkId, channel, nick)
+    suspend fun deop(subject: String, networkId: Int, channel: String, nick: String) =
+        nickListVerb(subject, "deop", networkId, channel, nick)
 
-    suspend fun voice(username: String, networkId: Int, channel: String, nick: String) =
-        nickListVerb(username, "voice", networkId, channel, nick)
+    suspend fun voice(subject: String, networkId: Int, channel: String, nick: String) =
+        nickListVerb(subject, "voice", networkId, channel, nick)
 
-    suspend fun devoice(username: String, networkId: Int, channel: String, nick: String) =
-        nickListVerb(username, "devoice", networkId, channel, nick)
+    suspend fun devoice(subject: String, networkId: Int, channel: String, nick: String) =
+        nickListVerb(subject, "devoice", networkId, channel, nick)
 
-    private suspend fun nickListVerb(username: String, verb: String, networkId: Int, channel: String, nick: String) {
+    private suspend fun nickListVerb(subject: String, verb: String, networkId: Int, channel: String, nick: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             verb,
             buildJsonObject {
                 put("network_id", networkId)
@@ -177,9 +177,9 @@ class MembersRepository(
 
     /** Raw verbatim MODE line — used for privilege sigils that have no dedicated verb
      * (halfop, owner, admin/protect), unlike op/deop/voice/devoice above. */
-    suspend fun setMode(username: String, networkId: Int, target: String, modes: String, params: List<String>) {
+    suspend fun setMode(subject: String, networkId: Int, target: String, modes: String, params: List<String>) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "mode",
             buildJsonObject {
                 put("network_id", networkId)
@@ -190,9 +190,9 @@ class MembersRepository(
         )
     }
 
-    suspend fun openQueryWindow(username: String, networkId: Int, targetNick: String) {
+    suspend fun openQueryWindow(subject: String, networkId: Int, targetNick: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "open_query_window",
             buildJsonObject {
                 put("network_id", networkId)
@@ -206,9 +206,9 @@ class MembersRepository(
      * listens for to drop the local `channels` row (source="query"). Local removal is
      * NOT done optimistically here so a failed push (e.g. WS not connected) doesn't
      * desync the two. */
-    suspend fun closeQueryWindow(username: String, networkId: Int, targetNick: String) {
+    suspend fun closeQueryWindow(subject: String, networkId: Int, targetNick: String) {
         connectionManager.sendVerb(
-            "grappa:user:$username",
+            "grappa:user:$subject",
             "close_query_window",
             buildJsonObject {
                 put("network_id", networkId)

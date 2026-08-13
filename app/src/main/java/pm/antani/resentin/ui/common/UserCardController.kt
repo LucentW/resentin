@@ -56,6 +56,7 @@ class UserCardController(
     private val networkSlug: String,
     private val channelName: String,
     private val username: String,
+    private val subject: String,
     private val scope: CoroutineScope,
 ) {
     val members: StateFlow<List<MemberEntity>> = membersRepository.observeMembers(networkSlug, channelName)
@@ -89,7 +90,7 @@ class UserCardController(
         scope.launch {
             runCatching {
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                membersRepository.requestWhois(username, networkId, nick)
+                membersRepository.requestWhois(subject, networkId, nick)
             }.onFailure { _error.value = it.message }
         }
     }
@@ -98,16 +99,16 @@ class UserCardController(
         _selectedWhois.value = null
     }
 
-    fun kick(nick: String) = runVerb { networkId -> membersRepository.kick(username, networkId, channelName, nick) }
+    fun kick(nick: String) = runVerb { networkId -> membersRepository.kick(subject, networkId, channelName, nick) }
 
     fun ban(nick: String) =
-        runVerb { networkId -> membersRepository.ban(username, networkId, channelName, "$nick!*@*") }
+        runVerb { networkId -> membersRepository.ban(subject, networkId, channelName, "$nick!*@*") }
 
     fun contactPrivately(nick: String) {
         scope.launch {
             runCatching {
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                membersRepository.openQueryWindow(username, networkId, nick)
+                membersRepository.openQueryWindow(subject, networkId, nick)
             }.onSuccess { _navigateToQuery.tryEmit(nick) }
                 .onFailure { _error.value = it.message }
         }
@@ -119,17 +120,17 @@ class UserCardController(
     fun setMode(nick: String, letter: Char, grant: Boolean) = runVerb { networkId ->
         when (letter) {
             'o' -> if (grant) {
-                membersRepository.op(username, networkId, channelName, nick)
+                membersRepository.op(subject, networkId, channelName, nick)
             } else {
-                membersRepository.deop(username, networkId, channelName, nick)
+                membersRepository.deop(subject, networkId, channelName, nick)
             }
             'v' -> if (grant) {
-                membersRepository.voice(username, networkId, channelName, nick)
+                membersRepository.voice(subject, networkId, channelName, nick)
             } else {
-                membersRepository.devoice(username, networkId, channelName, nick)
+                membersRepository.devoice(subject, networkId, channelName, nick)
             }
             else -> membersRepository.setMode(
-                username,
+                subject,
                 networkId,
                 channelName,
                 "${if (grant) "+" else "-"}$letter",

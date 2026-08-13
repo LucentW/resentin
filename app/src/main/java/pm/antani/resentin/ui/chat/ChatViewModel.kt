@@ -41,6 +41,7 @@ class ChatViewModel(
     private val networkSlug: String,
     private val channelName: String,
     private val username: String,
+    private val subject: String,
 ) : ViewModel() {
 
     val messages: StateFlow<List<MessageEntity>> = chatRepository.observeMessages(networkSlug, channelName)
@@ -67,7 +68,7 @@ class ChatViewModel(
     // scoped to this same (network, channel) — empty members/sigils for a query/$server,
     // which naturally hides the channel-only actions in the card.
     private val userCard =
-        UserCardController(membersRepository, networksRepository, networkSlug, channelName, username, viewModelScope)
+        UserCardController(membersRepository, networksRepository, networkSlug, channelName, username, subject, viewModelScope)
     val selectedWhois = userCard.selectedWhois
     val ownSigils = userCard.ownSigils
     val privilegeModes = userCard.privilegeModes
@@ -131,9 +132,9 @@ class ChatViewModel(
             _initialReadCursor.value = networksRepository.getStoredReadCursor(networkSlug, channelName)
             runCatching {
                 connectionManager.connect()
-                connectionManager.joinChannel("grappa:user:$username")
-                connectionManager.joinChannel("grappa:user:$username/network:$networkSlug")
-                val channelTopic = "grappa:user:$username/network:$networkSlug/channel:$channelName"
+                connectionManager.joinChannel("grappa:user:$subject")
+                connectionManager.joinChannel("grappa:user:$subject/network:$networkSlug")
+                val channelTopic = "grappa:user:$subject/network:$networkSlug/channel:$channelName"
                 networksRepository.applyJoinResponse(channelTopic, connectionManager.joinChannel(channelTopic))
                 // A join reply only happens once per process lifetime per topic (usually
                 // AppContainer's app-wide join already consumed it before this screen
@@ -250,6 +251,7 @@ class ChatViewModel(
             networkSlug: String,
             channelName: String,
             username: String,
+            subject: String,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
@@ -265,6 +267,7 @@ class ChatViewModel(
                     networkSlug,
                     channelName,
                     username,
+                    subject,
                 ) as T
             }
         }

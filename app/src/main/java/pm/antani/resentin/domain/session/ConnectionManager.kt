@@ -1,6 +1,7 @@
 package pm.antani.resentin.domain.session
 
 import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
@@ -78,10 +80,21 @@ class ConnectionManager(private val tokenStore: TokenStore) {
         val existing = channels[topic]
         if (existing?.joinRef != null) return null
         val channel = existing ?: PhoenixChannel(socket, topic).also { channels[topic] = it }
-        val reply = channel.join()
+        // The server's post-join snapshot (topic/modes/members "if cached") is pushed via
+        // `Process.send_after(self(), {:after_join, ...}, 0)` — essentially immediately
+        // after it accepts the join, often before `channel.join()` below even returns.
+        // `_frames` has no replay, so a collector started AFTER join() (the previous
+        // ordering) would miss any event frame that lands in that window, permanently —
+        // exactly the "topic/modes/members never load" bug. Waiting for `onStart` here
+        // guarantees the collector is actually attached before we send `phx_join`.
+        val collectorStarted = CompletableDeferred<Unit>()
         scope.launch {
-            channel.events.collect { raw -> _events.emit(WsEventDecoder.decode(raw, topic)) }
+            channel.events
+                .onStart { collectorStarted.complete(Unit) }
+                .collect { raw -> _events.emit(WsEventDecoder.decode(raw, topic)) }
         }
+        collectorStarted.await()
+        val reply = channel.join()
         return reply.payload["response"] as? JsonObject
     }
 

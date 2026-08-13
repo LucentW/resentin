@@ -27,7 +27,7 @@ class ArchiveViewModel(
     private val networksRepository: NetworksRepository,
     private val membersRepository: MembersRepository,
     private val networkSlug: String,
-    private val username: String,
+    private val subject: String,
     private val context: Context,
 ) : ViewModel() {
 
@@ -58,7 +58,7 @@ class ArchiveViewModel(
             val result = if (entry.kind == "query") {
                 runCatching {
                     val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                    membersRepository.openQueryWindow(username, networkId, entry.target)
+                    membersRepository.openQueryWindow(subject, networkId, entry.target)
                 }
             } else {
                 networksRepository.joinChannel(networkSlug, entry.target)
@@ -90,12 +90,12 @@ class ArchiveViewModel(
             networksRepository: NetworksRepository,
             membersRepository: MembersRepository,
             networkSlug: String,
-            username: String,
+            subject: String,
             context: Context,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return ArchiveViewModel(networksRepository, membersRepository, networkSlug, username, context.applicationContext) as T
+                return ArchiveViewModel(networksRepository, membersRepository, networkSlug, subject, context.applicationContext) as T
             }
         }
     }

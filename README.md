@@ -14,28 +14,45 @@ Scritto in Kotlin + Jetpack Compose.
   <img src="docs/screenshots/chat-bubbles.png" width="30%" alt="Chat in modalità bolle">
   <img src="docs/screenshots/chat-irc-line.png" width="30%" alt="Chat in modalità monoriga IRC">
 </p>
+<p align="center">
+  <img src="docs/screenshots/directory.png" width="30%" alt="Directory canali di una rete, con topic e numero di utenti">
+  <img src="docs/screenshots/members.png" width="30%" alt="Elenco membri di un canale con nick colorati">
+</p>
 
 *(Sopra: home con contatori messaggi non letti, chat in modalità "Bolle" con
-link cliccabili e upload immagini, chat in modalità "Monoriga IRC" — screenshot
-presi collegandosi come visitor a [irc.sindro.me](https://irc.sindro.me),
-rete Azzurra.)*
+link cliccabili e upload immagini, chat in modalità "Monoriga IRC", directory
+canali di una rete e elenco membri con nick colorati — screenshot presi
+collegandosi come visitor a [irc.sindro.me](https://irc.sindro.me), rete
+Azzurra.)*
 
 ## Funzionalità
 
-- Login via client token o username/password (inclusi i client token per
-  account con 2FA), con supporto ai login "visitor" anonimi dei bouncer che
-  li offrono.
+- Login via client token, username/password o link magico `grappa://` (es.
+  da QR code) — inclusi i client token per account con 2FA — con supporto ai
+  login "visitor" anonimi dei bouncer che li offrono.
 - Elenco reti/canali con contatori dei messaggi non letti e delle menzioni
   (badge rosso se ci sono menzioni), in grassetto se ci sono messaggi da
-  leggere.
+  leggere; menu a pressione lunga su un canale per segnarlo come letto o
+  abbandonarlo senza doverlo aprire.
+- Directory dei canali di una rete, con ricerca, ordinamento per numero di
+  utenti/nome e topic in anteprima, oltre a join diretto per nome/nick o
+  messaggio privato dalla stessa schermata.
 - Chat in tempo reale via Phoenix Channels, con backfill dello storico e
   cursore di lettura sincronizzato col server (riprende da dove eri rimasto,
   con un divisore "hai letto fino a qui").
 - Due modalità di visualizzazione, selezionabili dalle impostazioni:
   **Bolle** e **Monoriga IRC** (`[timestamp] <nick> messaggio`), entrambe
-  con prefisso di ruolo sul nick (`~&@%+`) e timestamp opzionali coi secondi.
+  con prefisso di ruolo sul nick (`~&@%+`), nick colorati (opzionale) e
+  timestamp opzionali coi secondi.
 - Parsing colori mIRC (nei messaggi e nei topic) e link cliccabili in chat.
 - Popup con il topic completo del canale al tap sull'header.
+- Elenco membri del canale con whois, messaggio privato, kick/ban e
+  gestione dei privilegi (op/voice/halfop/...) al tap su un nick.
+- Impostazioni canale con gestione modalità (mode) e liste ban/exempt/invex,
+  per chi ha i permessi sul canale.
+- Archivio delle conversazioni abbandonate, con possibilità di recuperarle.
+- Pannello di amministrazione (per gli account admin del bouncer).
+- Alias di testo e template di risposta personalizzabili.
 - Upload di file/foto in chat (pulsante allegato) e integrazione come
   **Share Target** Android — puoi condividere foto/file da altre app
   direttamente su una chat di Resentin.
@@ -44,7 +61,6 @@ rete Azzurra.)*
   con due modalità opzionali per riceverle anche ad app chiusa — vedi
   [Notifiche push a basso consumo](#notifiche-push-a-basso-consumo-unifiedpush)
   sotto.
-- Alias di testo personalizzabili.
 
 ## Notifiche push a basso consumo (UnifiedPush)
 
