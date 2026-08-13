@@ -13,11 +13,15 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 import pm.antani.resentin.MainActivity
 import pm.antani.resentin.R
@@ -70,6 +74,16 @@ class NotificationRouter(
     private val appPreferences: AppPreferences,
     private val tokenStore: TokenStore,
 ) {
+    // Guards notifyFromUndecryptablePush against overlapping runs — live-observed: a
+    // sequential 27-channel sweep took long enough (~10s) that the distributor (ntfy)
+    // apparently timed out waiting for an ack and redelivered the same push, firing a
+    // second full sweep concurrently with the first (every request in logcat appeared
+    // in duplicate, back to back). A second pass finding the same conversations already
+    // caught up is harmless on its own; the actual fix is sweepForNotifications now
+    // running channels in parallel instead of one at a time, which this mutex backs up
+    // by skipping the redundant second call outright rather than doing the work twice.
+    private val sweepMutex = Mutex()
+
     fun startListening(scope: CoroutineScope) {
         connectionManager.events
             .filterIsInstance<WsEvent.MessageReceived>()
@@ -135,12 +149,20 @@ class NotificationRouter(
      * event `query_windows_list`. Rather than staying blind to that case, this briefly
      * joins the per-user topic to receive it before sweeping. */
     suspend fun notifyFromUndecryptablePush() {
-        appPreferences.setPushDecryptionFailureAt(System.currentTimeMillis())
-        discoverQueryWindows()
-        if (sweepForNotifications() > 0) return
-        Log.w(TAG, "catch-up sweep reached zero channels, retrying once after a delay")
-        delay(5_000)
-        sweepForNotifications()
+        if (!sweepMutex.tryLock()) {
+            Log.d(TAG, "a catch-up sweep is already running (likely a distributor redelivery), skipping")
+            return
+        }
+        try {
+            appPreferences.setPushDecryptionFailureAt(System.currentTimeMillis())
+            discoverQueryWindows()
+            if (sweepForNotifications() > 0) return
+            Log.w(TAG, "catch-up sweep reached zero channels, retrying once after a delay")
+            delay(5_000)
+            sweepForNotifications()
+        } finally {
+            sweepMutex.unlock()
+        }
     }
 
     /** Joins the per-user topic just long enough to receive `query_windows_list` —
@@ -175,36 +197,47 @@ class NotificationRouter(
     /** One pass over every known channel/query; returns how many were actually
      * reachable (backfill didn't throw), regardless of whether any produced a
      * notification — the signal [notifyFromUndecryptablePush] retries on is "the
-     * network wasn't up at all", not "nothing new happened". */
-    private suspend fun sweepForNotifications(): Int {
-        var reachable = 0
+     * network wasn't up at all", not "nothing new happened".
+     *
+     * Channels run in parallel, not sequentially: a 27-channel sequential sweep
+     * live-measured at ~10 seconds, long enough that ntfy apparently gave up waiting
+     * for an ack and redelivered the same push mid-sweep (see [sweepMutex]) — plausibly
+     * also long enough to run into Android's background-execution time limits, which
+     * would explain the live-observed `SocketException: Software caused connection
+     * abort` mid-request. OkHttp's own dispatcher already caps concurrent requests per
+     * host (5 by default), so firing every channel's backfill at once just lets OkHttp
+     * pipeline them instead of this loop serializing what didn't need to be serial. */
+    private suspend fun sweepForNotifications(): Int = coroutineScope {
         val networks = db.networkDao().observeNetworksWithChannels().first()
-        for (nwc in networks) {
-            val nick = nwc.network.nick
-            for (channel in nwc.channels.filter { it.joined }) {
-                val beforeMaxId = db.messageDao().maxId(nwc.network.slug, channel.name) ?: 0
-                val result = chatRepository.backfill(nwc.network.slug, channel.name)
-                result.onFailure { Log.w(TAG, "catch-up backfill failed for ${nwc.network.slug}/${channel.name}", it) }
-                if (result.isSuccess) reachable++
-                val newRows = db.messageDao().messagesAfter(nwc.network.slug, channel.name, beforeMaxId)
-                for (row in newRows) {
-                    val message = ScrollbackMessageDto(
-                        id = row.id,
-                        network = nwc.network.slug,
-                        channel = channel.name,
-                        serverTime = row.serverTime,
-                        kind = row.kind,
-                        sender = row.sender,
-                        body = row.body,
-                    )
-                    val bucket = queryBucket(message, nick)
-                    if (shouldNotify(message, openChatTracker.current.value, nick, bucket)) {
-                        postNotification(message, bucket)
-                    }
-                }
+        networks.flatMap { nwc -> nwc.channels.filter { it.joined }.map { nwc.network to it } }
+            .map { (network, channel) -> async { sweepChannel(network.slug, channel.name, network.nick) } }
+            .awaitAll()
+            .count { it }
+    }
+
+    /** Backfills one channel/query and notifies for whatever's new; returns whether the
+     * backfill itself was reachable (see [sweepForNotifications]). */
+    private suspend fun sweepChannel(networkSlug: String, channelName: String, nick: String): Boolean {
+        val beforeMaxId = db.messageDao().maxId(networkSlug, channelName) ?: 0
+        val result = chatRepository.backfill(networkSlug, channelName)
+        result.onFailure { Log.w(TAG, "catch-up backfill failed for $networkSlug/$channelName", it) }
+        val newRows = db.messageDao().messagesAfter(networkSlug, channelName, beforeMaxId)
+        for (row in newRows) {
+            val message = ScrollbackMessageDto(
+                id = row.id,
+                network = networkSlug,
+                channel = channelName,
+                serverTime = row.serverTime,
+                kind = row.kind,
+                sender = row.sender,
+                body = row.body,
+            )
+            val bucket = queryBucket(message, nick)
+            if (shouldNotify(message, openChatTracker.current.value, nick, bucket)) {
+                postNotification(message, bucket)
             }
         }
-        return reachable
+        return result.isSuccess
     }
 
     private suspend fun handle(message: ScrollbackMessageDto) {
