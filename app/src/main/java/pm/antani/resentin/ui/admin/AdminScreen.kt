@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,13 @@ fun AdminScreen(viewModel: AdminViewModel, onBack: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
 
+    // Only NETWORKS/VHOSTS/USERS have a create dialog wired below — without this,
+    // switching tabs while the dialog state was still true from a tab that never
+    // rendered it (e.g. VISITORS, which has no `when` branch and silently no-ops)
+    // let a stale `showCreateDialog = true` surface later on whichever tab the user
+    // landed on next, popping up the wrong dialog.
+    LaunchedEffect(state.tab) { showCreateDialog = false }
+
     Scaffold(
         topBar = {
             Column {
@@ -67,7 +75,7 @@ fun AdminScreen(viewModel: AdminViewModel, onBack: () -> Unit) {
                         }
                     },
                     actions = {
-                        if (state.tab != AdminTab.SESSIONS) {
+                        if (state.tab == AdminTab.NETWORKS || state.tab == AdminTab.VHOSTS || state.tab == AdminTab.USERS) {
                             IconButton(onClick = { showCreateDialog = true }) {
                                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_new_chat))
                             }
