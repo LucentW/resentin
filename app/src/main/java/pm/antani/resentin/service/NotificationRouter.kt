@@ -21,6 +21,7 @@ import pm.antani.resentin.MainActivity
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.domain.events.WsEvent
+import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.OpenChat
 import pm.antani.resentin.domain.session.OpenChatTracker
@@ -60,12 +61,44 @@ class NotificationRouter(
     private val connectionManager: ConnectionManager,
     private val db: AppDatabase,
     private val openChatTracker: OpenChatTracker,
+    private val chatRepository: ChatRepository,
 ) {
     fun startListening(scope: CoroutineScope) {
         connectionManager.events
             .filterIsInstance<WsEvent.MessageReceived>()
             .onEach { handle(it.message) }
             .launchIn(scope)
+    }
+
+    /** Entry point for a UnifiedPush wake-up (see `UnifiedPushService.onMessage`): the
+     * push payload only carries a title/body/tag/url summary — server-picked, unlocalized
+     * strings per `Grappa.Push.Payload`'s moduledoc — with no message id to hang a
+     * reply/mark-read action off of. This backfills the conversation via REST first and
+     * notifies off the freshly-synced row instead, reusing the exact same action
+     * machinery as a live WS-delivered notification. [channelName] is already the
+     * bucket-normalized name (partner nick for a DM) — see `Grappa.Push.Payload`'s
+     * `deep_link_target`, which mirrors `ChatRepository.queryBucket` on the server side. */
+    suspend fun notifyFromPush(networkSlug: String, channelName: String) {
+        chatRepository.backfill(networkSlug, channelName)
+            .onFailure { Log.w(TAG, "backfill failed for push wake-up on $networkSlug/$channelName", it) }
+        val nick = db.networkDao().observeNetwork(networkSlug).first()?.nick
+        if (nick == null) {
+            Log.d(TAG, "no cached nick for network=$networkSlug, dropping push wake-up")
+            return
+        }
+        val latest = db.messageDao().latestMessage(networkSlug, channelName) ?: return
+        val message = ScrollbackMessageDto(
+            id = latest.id,
+            network = networkSlug,
+            channel = channelName,
+            serverTime = latest.serverTime,
+            kind = latest.kind,
+            sender = latest.sender,
+            body = latest.body,
+        )
+        val bucket = queryBucket(message, nick)
+        if (!shouldNotify(message, openChatTracker.current.value, nick, bucket)) return
+        postNotification(message, bucket)
     }
 
     private suspend fun handle(message: ScrollbackMessageDto) {

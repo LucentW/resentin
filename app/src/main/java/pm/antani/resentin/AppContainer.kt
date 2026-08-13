@@ -1,14 +1,19 @@
 package pm.antani.resentin
 
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.data.prefs.AppPreferences
@@ -17,6 +22,7 @@ import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.OpenChatTracker
@@ -36,9 +42,11 @@ class AppContainer(private val context: Context) {
     val connectionManager = ConnectionManager(tokenStore)
     val membersRepository = MembersRepository(connectionManager, database)
     val userSettingsRepository = UserSettingsRepository(authRepository)
+    val pushRepository = PushRepository(authRepository, appPreferences)
     val openChatTracker = OpenChatTracker()
     val pendingShareHolder = PendingShareHolder()
-    private val notificationRouter = NotificationRouter(context.applicationContext, connectionManager, database, openChatTracker)
+    val notificationRouter =
+        NotificationRouter(context.applicationContext, connectionManager, database, openChatTracker, chatRepository)
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -48,10 +56,31 @@ class AppContainer(private val context: Context) {
         networksRepository.startListening(connectionManager, appScope)
         notificationRouter.startListening(appScope)
 
+        // Battery-friendly sync: the WS stays open only while the app is actually
+        // foreground (ProcessLifecycleOwner.currentStateFlow reaches STARTED on the
+        // first Activity's onStart and drops below it once the last one stops — the
+        // standard whole-app foreground/background signal) OR while the user has
+        // explicitly opted into the always-on fallback via `stayConnected`. Backgrounded
+        // without that opt-in, this client relies on UnifiedPush (if enabled in
+        // Settings) for mention/DM delivery instead of a persistent socket; foreground
+        // resume re-triggers the join+backfill effect below via the resulting state
+        // transition to OPEN, so nothing is missed.
         appScope.launch {
-            tokenStore.session.filterNotNull().collect {
-                runCatching { connectionManager.connect() }
+            combine(
+                tokenStore.session.filterNotNull(),
+                ProcessLifecycleOwner.get().lifecycle.currentStateFlow,
+                appPreferences.stayConnected,
+            ) { _, lifecycleState, stayConnected ->
+                lifecycleState.isAtLeast(Lifecycle.State.STARTED) || stayConnected
             }
+                .distinctUntilChanged()
+                .collect { shouldBeConnected ->
+                    if (shouldBeConnected) {
+                        runCatching { connectionManager.connect() }
+                    } else {
+                        connectionManager.disconnect()
+                    }
+                }
         }
 
         appScope.launch {
@@ -90,6 +119,24 @@ class AppContainer(private val context: Context) {
                     ConnectionForegroundService.start(context.applicationContext)
                 } else {
                     ConnectionForegroundService.stop(context.applicationContext)
+                }
+            }
+        }
+
+        // Re-confirms the distributor link on every app start, per UnifiedPush's own
+        // guidance: if the previously-saved distributor was uninstalled since our last
+        // run, this transparently falls back to the OS default (when one is unambiguous)
+        // instead of leaving the user silently unregistered. Uses the ack'd-distributor
+        // fast path, which doesn't require an Activity context — only first-time setup
+        // (AppSettingsScreen, no saved distributor yet) needs one.
+        appScope.launch {
+            if (appPreferences.unifiedPushEnabled.first()) {
+                UnifiedPush.tryUseCurrentOrDefaultDistributor(context.applicationContext) { success ->
+                    if (!success) return@tryUseCurrentOrDefaultDistributor
+                    appScope.launch {
+                        val vapid = pushRepository.fetchVapidPublicKey().getOrNull()
+                        runCatching { UnifiedPush.register(context.applicationContext, vapid = vapid) }
+                    }
                 }
             }
         }

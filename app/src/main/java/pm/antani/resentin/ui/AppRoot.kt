@@ -110,7 +110,12 @@ fun AppRoot(
         }
         composable(ROUTE_APP_SETTINGS) {
             val viewModel: AppSettingsViewModel = viewModel(
-                factory = AppSettingsViewModel.factory(container.userSettingsRepository, container.appPreferences),
+                factory = AppSettingsViewModel.factory(
+                    container.userSettingsRepository,
+                    container.appPreferences,
+                    container.pushRepository,
+                    appContext,
+                ),
             )
             AppSettingsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }

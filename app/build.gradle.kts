@@ -14,8 +14,8 @@ android {
         applicationId = "pm.antani.resentin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.2"
+        versionCode = 4
+        versionName = "0.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.service)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -95,6 +96,15 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.appcompat)
+    implementation(libs.unifiedpush.connector) {
+        // The connector pulls plain com.google.crypto.tink:tink (its own Web Push crypto
+        // dep), which duplicate-class-conflicts with tink-android — already pulled in by
+        // androidx.security:security-crypto (EncryptedSharedPreferences' Keystore-backed
+        // keyset manager, used for TokenStore) — at packaging time. tink-android is a
+        // superset for our purposes (wraps the same core Tink primitives plus Android
+        // Keystore integration), so it wins and the plain JVM variant is excluded.
+        exclude(group = "com.google.crypto.tink", module = "tink")
+    }
 
     debugImplementation(libs.androidx.ui.tooling)
 
