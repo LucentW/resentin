@@ -24,6 +24,11 @@ import pm.antani.resentin.net.rest.UploadsApi
 
 private const val BACKFILL_LIMIT = 200
 private const val PAGE_LIMIT = 50
+// A single after=lastId&limit=200 fetch only ever proves "at least 200 more" — a busy
+// channel can pile up more than that while the app is backgrounded/disconnected, which
+// silently truncated the catch-up to the first page forever (nothing re-requested the
+// rest). Page forward up to this many full pages before giving up.
+private const val BACKFILL_MAX_PAGES = 5
 
 class ChatRepository(
     private val authRepository: AuthRepository,
@@ -82,16 +87,33 @@ class ChatRepository(
     }
 
     /** Fills the gap since the last locally-known message — called after (re)connecting
-     * to a channel, since the WS event stream does not replay history, only REST does. */
+     * to a channel, since the WS event stream does not replay history, only REST does.
+     * Also callable on demand (ChatViewModel.refresh) as the manual "reload" a user has
+     * no other way to trigger.
+     *
+     * Pages forward up to [BACKFILL_MAX_PAGES] full pages so a gap bigger than one
+     * 200-row fetch actually drains instead of silently stopping at the first page. A
+     * gap wider than that (the app was away long enough, or the channel busy enough,
+     * to pile up 1000+ rows) is abandoned in favor of landing at the tail — the rows
+     * strictly between the old anchor and the new tail are a real, accepted gap;
+     * [loadOlder]'s backward pagination starts from the local minimum, which is on the
+     * OLD side of that gap, so it can't reach across it either. */
     suspend fun backfill(networkSlug: String, channelName: String): Result<Unit> = runCatching {
         val api = authRepository.api(MessagesApi::class.java)
         val lastId = db.messageDao().maxId(networkSlug, channelName)
-        val messages = if (lastId == null) {
-            api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT)
-        } else {
-            api.getMessages(networkSlug, channelName, after = lastId, limit = BACKFILL_LIMIT)
+        if (lastId == null) {
+            api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT).forEach { recordIncoming(it) }
+            return@runCatching
         }
-        messages.forEach { recordIncoming(it) }
+
+        var anchor = lastId
+        repeat(BACKFILL_MAX_PAGES) {
+            val page = api.getMessages(networkSlug, channelName, after = anchor, limit = BACKFILL_LIMIT)
+            page.forEach { recordIncoming(it) }
+            if (page.size < BACKFILL_LIMIT) return@runCatching
+            anchor = page.maxOf { it.id }
+        }
+        api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT).forEach { recordIncoming(it) }
     }
 
     /** Loads a page of history older than the earliest locally-known message, for

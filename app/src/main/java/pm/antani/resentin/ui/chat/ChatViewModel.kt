@@ -85,6 +85,9 @@ class ChatViewModel(
     private val _isLoadingOlder = MutableStateFlow(false)
     val isLoadingOlder: StateFlow<Boolean> = _isLoadingOlder.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     // Snapshot of "where the reader left off" BEFORE this session marks anything new as
     // read — the one-time scroll target. Null until known; ChatScreen should wait for a
     // non-null-or-otherwise-settled value before deciding where to land initially.
@@ -189,6 +192,18 @@ class ChatViewModel(
                     .getOrThrow()
             }.onFailure { _error.value = it.message }
             _isUploading.value = false
+        }
+    }
+
+    /** Manual "reload the buffer" — the only recourse when a backfill silently fell
+     * behind (a gap wider than [pm.antani.resentin.domain.repository.ChatRepository]'s
+     * drain cap) and there's no other trigger to try again from. */
+    fun refresh() {
+        if (_isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            chatRepository.backfill(networkSlug, channelName).onFailure { _error.value = it.message }
+            _isRefreshing.value = false
         }
     }
 

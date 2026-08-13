@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -113,6 +114,7 @@ fun ChatScreen(
     val displayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val isUploading by viewModel.isUploading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val listState = rememberLazyListState()
     var hasScrolledInitially by remember { mutableStateOf(false) }
     var showTopicDialog by remember { mutableStateOf(false) }
@@ -192,6 +194,13 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::refresh, enabled = !isRefreshing) {
+                        if (isRefreshing) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_refresh))
+                        }
+                    }
                     if (!isQuery) {
                         IconButton(onClick = onMembersClick) {
                             Icon(Icons.Default.Person, contentDescription = stringResource(R.string.cd_members))
