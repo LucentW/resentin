@@ -6,6 +6,9 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import pm.antani.resentin.BuildConfig
+
+private val USER_AGENT = "Resentin/${BuildConfig.VERSION_NAME} (Android)"
 
 object HttpClients {
 
@@ -30,6 +33,12 @@ object HttpClients {
                     chain.request()
                 }
                 chain.proceed(request)
+            }
+            // Without this, OkHttp's own default ("okhttp/4.12.0") is what shows up
+            // as the row label in the push-subscriptions device list — meaningless to
+            // a user trying to tell their Android phone apart from other devices.
+            .addInterceptor { chain ->
+                chain.proceed(chain.request().newBuilder().header("User-Agent", USER_AGENT).build())
             }
             .addInterceptor(logging)
             .build()

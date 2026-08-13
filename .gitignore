@@ -25,3 +25,6 @@ keystore.properties
 
 # Log files pulled during debugging
 *.log
+
+# Local Claude Code session state
+/.claude/
