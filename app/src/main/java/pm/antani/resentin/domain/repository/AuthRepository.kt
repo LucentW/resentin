@@ -1,8 +1,10 @@
 package pm.antani.resentin.domain.repository
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.prefs.AppPreferences
@@ -62,7 +64,12 @@ class AuthRepository(
     suspend fun signIn(host: String, token: String, username: String) {
         val lastHost = appPreferences.lastSyncedHost.first()
         if (lastHost != null && lastHost != host) {
-            db.clearAllTables()
+            // Room forbids clearAllTables() on the calling thread — signIn() runs on
+            // Dispatchers.Main.immediate via LoginViewModel's viewModelScope.launch, so
+            // without this it throws IllegalStateException("Cannot access database on
+            // the main thread") and crashes outright the first time anyone actually
+            // signs into a second, different host on the same install.
+            withContext(Dispatchers.IO) { db.clearAllTables() }
         }
         appPreferences.setLastSyncedHost(host)
         tokenStore.saveSession(host, token, username)
