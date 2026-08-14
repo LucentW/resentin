@@ -18,12 +18,17 @@ Scritto in Kotlin + Jetpack Compose.
   <img src="docs/screenshots/directory.png" width="30%" alt="Directory canali di una rete, con topic e numero di utenti">
   <img src="docs/screenshots/members.png" width="30%" alt="Elenco membri di un canale con nick colorati">
 </p>
+<p align="center">
+  <img src="docs/screenshots/settings.png" width="30%" alt="Impostazioni generali dell'app">
+  <img src="docs/screenshots/admin.png" width="30%" alt="Pannello di amministrazione, sezione reti">
+</p>
 
 *(Sopra: home con contatori messaggi non letti, chat in modalità "Bolle" con
 link cliccabili e upload immagini, chat in modalità "Monoriga IRC", directory
-canali di una rete e elenco membri con nick colorati — screenshot presi
+canali di una rete, elenco membri con nick colorati, impostazioni generali e
+pannello di amministrazione (sezione reti) — le prime cinque prese
 collegandosi come visitor a [irc.sindro.me](https://irc.sindro.me), rete
-Azzurra.)*
+Azzurra; le ultime due dal proprio account su un bouncer personale.)*
 
 ## Funzionalità
 
