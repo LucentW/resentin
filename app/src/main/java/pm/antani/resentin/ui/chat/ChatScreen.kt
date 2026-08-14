@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -83,6 +84,7 @@ import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 import pm.antani.resentin.irc.FormattedEvent
 import pm.antani.resentin.irc.SystemEventFormatter
+import pm.antani.resentin.irc.containsMention
 import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.ui.common.MircText
@@ -145,6 +147,7 @@ fun ChatScreen(
     val isUploading by viewModel.isUploading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val coloredNicklist by viewModel.coloredNicklist.collectAsState()
+    val myNick by viewModel.myNick.collectAsState()
     val listState = rememberLazyListState()
     var hasScrolledInitially by remember { mutableStateOf(false) }
     var showTopicDialog by remember { mutableStateOf(false) }
@@ -304,6 +307,7 @@ fun ChatScreen(
                             displayMode = displayMode,
                             showSeconds = showSeconds,
                             coloredNicklist = coloredNicklist,
+                            isMention = isMentionRow(message, myNick, isQuery),
                             onReply = viewModel::reply,
                             onLongPress = viewModel::onMessageLongPress,
                         )
@@ -385,6 +389,16 @@ private fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
     return highestSigil(sigilsOf(member))?.toString().orEmpty()
 }
 
+/** Whether [message] is one that would have fired a notification — see
+ * NotificationRouter.shouldNotify, which this deliberately mirrors (own messages never
+ * count; a DM is skipped here rather than mirrored, since every message in an open DM
+ * would "mention" you and highlighting all of them would just be noise, not a signal). */
+private fun isMentionRow(message: MessageEntity, myNick: String?, isQuery: Boolean): Boolean {
+    if (myNick == null || isQuery) return false
+    if (message.sender.equals(myNick, ignoreCase = true)) return false
+    return message.body?.let { containsMention(it, myNick) } ?: false
+}
+
 @Composable
 private fun reasonSuffix(reason: String?): String =
     if (reason == null) "" else stringResource(R.string.paren_suffix, reason)
@@ -411,6 +425,7 @@ private fun MessageRow(
     displayMode: ChatDisplayMode,
     showSeconds: Boolean,
     coloredNicklist: Boolean,
+    isMention: Boolean,
     onReply: (nick: String, body: String) -> Unit,
     onLongPress: (String) -> Unit,
 ) {
@@ -438,9 +453,9 @@ private fun MessageRow(
         is FormattedEvent.Chat -> {
             SwipeToReply(onReply = { onReply(message.sender, formatted.text) }, onLongPress = { onLongPress(message.sender) }) {
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time, coloredNicklist)
+                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention)
                 } else {
-                    BubbleRow(message, formatted, prefix, time, coloredNicklist)
+                    BubbleRow(message, formatted, prefix, time, coloredNicklist, isMention)
                 }
             }
         }
@@ -470,10 +485,18 @@ private fun buildNickLine(
 }
 
 @Composable
-private fun BubbleRow(message: MessageEntity, formatted: FormattedEvent.Chat, prefix: String, time: String, coloredNicklist: Boolean) {
+private fun BubbleRow(
+    message: MessageEntity,
+    formatted: FormattedEvent.Chat,
+    prefix: String,
+    time: String,
+    coloredNicklist: Boolean,
+    isMention: Boolean,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isMention) Modifier.background(MaterialTheme.colorScheme.tertiaryContainer) else Modifier)
             .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         if (formatted.isAction) {
@@ -512,6 +535,7 @@ private fun IrcLineRow(
     prefix: String,
     time: String,
     coloredNicklist: Boolean,
+    isMention: Boolean,
 ) {
     val annotated = remember(message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist) {
         when {
@@ -525,6 +549,7 @@ private fun IrcLineRow(
         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (isMention) Modifier.background(MaterialTheme.colorScheme.tertiaryContainer) else Modifier)
             .padding(horizontal = 16.dp, vertical = 2.dp),
     )
 }

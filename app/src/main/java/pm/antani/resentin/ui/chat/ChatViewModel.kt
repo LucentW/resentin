@@ -55,6 +55,14 @@ class ChatViewModel(
         .map { it?.modes }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    // The viewer's own current nick on this network — same source NotificationRouter
+    // reads to decide whether an incoming message deserves a notification, reused here
+    // (via irc.containsMention) so a message highlighted as "mentions you" in chat can
+    // never drift from one that actually fired a notification.
+    val myNick: StateFlow<String?> = networksRepository.observeNetwork(networkSlug)
+        .map { it?.nick }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     val chatDisplayMode: StateFlow<ChatDisplayMode> = appPreferences.chatDisplayMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatDisplayMode.BUBBLES)
 

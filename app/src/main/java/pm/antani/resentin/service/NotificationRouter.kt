@@ -32,6 +32,7 @@ import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.OpenChat
 import pm.antani.resentin.domain.session.OpenChatTracker
+import pm.antani.resentin.irc.containsMention
 import pm.antani.resentin.irc.isQueryTarget
 import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
@@ -62,7 +63,7 @@ fun shouldNotify(message: ScrollbackMessageDto, openChat: OpenChat?, myNick: Str
     // (the bug this fixes: a plain "ciao!" DM never contains the recipient's nick).
     if (isQueryTarget(bucket)) return true
 
-    return body.contains(myNick, ignoreCase = true)
+    return containsMention(body, myNick)
 }
 
 class NotificationRouter(
