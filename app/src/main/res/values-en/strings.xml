@@ -181,6 +181,11 @@
     <string name="settings_alias_name_label">Alias name</string>
     <string name="settings_alias_expansion_label">Expansion</string>
     <string name="settings_add_alias">Add alias</string>
+    <string name="settings_storage_title">Storage</string>
+    <string name="settings_clear_messages">Clear message database (%1$s)</string>
+    <string name="settings_clear_messages_confirm_title">Clear the message database?</string>
+    <string name="settings_clear_messages_confirm_body">Deletes the message history cached on this device for every chat. The server is untouched — reopening a chat reloads its history from there.</string>
+    <string name="settings_clear_messages_confirm_action">Clear</string>
 
     <!-- Channel settings -->
     <string name="channel_settings_topic_label">Topic</string>

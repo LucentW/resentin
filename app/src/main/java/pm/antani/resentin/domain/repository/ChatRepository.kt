@@ -1,9 +1,12 @@
 package pm.antani.resentin.domain.repository
 
 import android.content.Context
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -30,6 +33,12 @@ private const val PAGE_LIMIT = 50
 // rest). Page forward up to this many full pages before giving up.
 private const val BACKFILL_MAX_PAGES = 5
 
+// Local cache retention — the server is the durable copy of scrollback (it always
+// answers a backfill for whatever a channel actually needs), so an old, already-read
+// row sitting in Room is pure unbounded growth with no upside. 90 days comfortably
+// covers "scroll back a while", without the cache ever really acting like an archive.
+private const val MESSAGE_RETENTION_DAYS = 90L
+
 class ChatRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
@@ -49,6 +58,50 @@ class ChatRepository(
 
     fun observeMessages(networkSlug: String, channelName: String): Flow<List<MessageEntity>> =
         db.messageDao().observeMessages(networkSlug, channelName)
+
+    /** Startup maintenance (see AppContainer.init) — drops cached messages older than
+     * [MESSAGE_RETENTION_DAYS] across every channel, so the local cache doesn't grow
+     * forever on a long-lived install. Best-effort: a failure here is silently swallowed
+     * rather than surfaced anywhere, since this is background housekeeping, not a user
+     * action with an outcome to report. */
+    suspend fun pruneOldMessages() {
+        val cutoff = System.currentTimeMillis() - MESSAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000
+        runCatching { db.messageDao().deleteOlderThan(cutoff) }
+    }
+
+    /** The manual "svuota database messaggi" settings action — every channel's local
+     * scrollback, gone at once. The server is untouched; each channel just re-backfills
+     * from scratch the next time it's opened.
+     *
+     * SQLite's DELETE never shrinks anything on its own, so without cleanup here the
+     * size shown right after "clearing" would be unchanged and the button would look
+     * like it did nothing — confirmed live (deleteAll() alone left the reported size at
+     * a flat 518.6 KB). Two separate reclaims are needed, not one: VACUUM compacts
+     * `resentin.db` itself (freed pages otherwise just sit on an internal free list for
+     * future inserts to reuse), but Room's WAL journal mode means most of that 518.6 KB
+     * was actually sitting in the `-wal` side file, which VACUUM does not shrink —
+     * `wal_checkpoint(TRUNCATE)` is what flushes it into the main file and truncates it
+     * back down. Both must run outside any transaction and off the main thread — Room
+     * forbids the latter (see AuthRepository.signIn's clearAllTables, the same footgun).
+     * Not run after [pruneOldMessages]'s much smaller, once-per-launch trim: rewriting
+     * the whole file on every cold start isn't worth it for that. */
+    suspend fun clearAllMessages() {
+        withContext(Dispatchers.IO) {
+            db.messageDao().deleteAll()
+            val writable = db.openHelper.writableDatabase
+            writable.execSQL("VACUUM")
+            writable.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+        }
+    }
+
+    /** Total on-disk size of the message cache — the `-wal` file can hold a meaningful
+     * share of not-yet-checkpointed writes on an active install, so it's counted too;
+     * a bare `resentin.db` size alone would under-report right after heavy chat activity. */
+    fun messageDatabaseSizeBytes(): Long {
+        val dbFile = context.getDatabasePath(AppDatabase.DB_NAME)
+        val walFile = File(dbFile.path + "-wal")
+        return dbFile.length() + walFile.length()
+    }
 
     /** For queries, `channel` on a scrollback row is the raw PRIVMSG target — our own
      * nick when the *other* party sent it, the partner's nick when we sent it — so the

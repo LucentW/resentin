@@ -58,6 +58,8 @@ class AppContainer(private val context: Context) {
         networksRepository.startListening(connectionManager, appScope)
         notificationRouter.startListening(appScope)
 
+        appScope.launch { chatRepository.pruneOldMessages() }
+
         // Battery-friendly sync: the WS stays open only while the app is actually
         // foreground (ProcessLifecycleOwner.currentStateFlow reaches STARTED on the
         // first Activity's onStart and drops below it once the last one stops — the

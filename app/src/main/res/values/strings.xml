@@ -181,6 +181,11 @@
     <string name="settings_alias_name_label">Nome alias</string>
     <string name="settings_alias_expansion_label">Espansione</string>
     <string name="settings_add_alias">Aggiungi alias</string>
+    <string name="settings_storage_title">Archiviazione</string>
+    <string name="settings_clear_messages">Svuota database messaggi (%1$s)</string>
+    <string name="settings_clear_messages_confirm_title">Svuotare il database messaggi?</string>
+    <string name="settings_clear_messages_confirm_body">Elimina lo storico dei messaggi salvato sul dispositivo per tutte le chat. Non tocca il server: riaprendo una chat lo storico viene ricaricato da lì.</string>
+    <string name="settings_clear_messages_confirm_action">Svuota</string>
 
     <!-- Channel settings -->
     <string name="channel_settings_topic_label">Topic</string>

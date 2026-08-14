@@ -159,6 +159,7 @@ fun AppRoot(
                     container.appPreferences,
                     container.pushRepository,
                     container.authRepository,
+                    container.chatRepository,
                     appContext,
                 ),
             )

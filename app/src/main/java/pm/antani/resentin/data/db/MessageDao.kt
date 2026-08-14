@@ -38,4 +38,16 @@ interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(message: MessageEntity)
+
+    /** Startup retention sweep (see ChatRepository.pruneOldMessages) — server backfill
+     * can always refetch anything actually needed again, so an old, already-read row is
+     * safe to drop locally rather than let the cache grow forever. */
+    @Query("DELETE FROM messages WHERE serverTime < :cutoffMillis")
+    suspend fun deleteOlderThan(cutoffMillis: Long)
+
+    /** The manual "svuota database messaggi" settings action — every channel's local
+     * scrollback cache, gone; the server is untouched and a channel simply re-backfills
+     * from scratch next time it's opened. */
+    @Query("DELETE FROM messages")
+    suspend fun deleteAll()
 }

@@ -24,8 +24,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memberDao(): MemberDao
 
     companion object {
+        const val DB_NAME = "resentin.db"
+
         fun build(context: Context): AppDatabase =
-            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "resentin.db")
+            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, DB_NAME)
                 .fallbackToDestructiveMigration()
                 .build()
     }

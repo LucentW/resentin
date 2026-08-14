@@ -19,6 +19,7 @@ import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 import pm.antani.resentin.data.prefs.ReplyStyle
 import pm.antani.resentin.domain.repository.AuthRepository
+import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.DisplayPrefsDto
@@ -49,11 +50,27 @@ class AppSettingsViewModel(
     private val appPreferences: AppPreferences,
     private val pushRepository: PushRepository,
     private val authRepository: AuthRepository,
+    private val chatRepository: ChatRepository,
     private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppSettingsUiState())
     val uiState: StateFlow<AppSettingsUiState> = _uiState.asStateFlow()
+
+    private val _messageDbSizeBytes = MutableStateFlow(0L)
+    val messageDbSizeBytes: StateFlow<Long> = _messageDbSizeBytes.asStateFlow()
+
+    fun refreshMessageDbSize() {
+        _messageDbSizeBytes.value = chatRepository.messageDatabaseSizeBytes()
+    }
+
+    /** The manual "svuota database messaggi" settings action. */
+    fun clearMessageDatabase() {
+        viewModelScope.launch {
+            chatRepository.clearAllMessages()
+            refreshMessageDbSize()
+        }
+    }
 
     val stayConnected: StateFlow<Boolean> = appPreferences.stayConnected
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -90,6 +107,7 @@ class AppSettingsViewModel(
     }
 
     init {
+        refreshMessageDbSize()
         viewModelScope.launch {
             val prefsResult = userSettingsRepository.getDisplayPrefs()
             val aliasesResult = userSettingsRepository.getAliases()
@@ -259,11 +277,19 @@ class AppSettingsViewModel(
             appPreferences: AppPreferences,
             pushRepository: PushRepository,
             authRepository: AuthRepository,
+            chatRepository: ChatRepository,
             appContext: Context,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return AppSettingsViewModel(userSettingsRepository, appPreferences, pushRepository, authRepository, appContext) as T
+                return AppSettingsViewModel(
+                    userSettingsRepository,
+                    appPreferences,
+                    pushRepository,
+                    authRepository,
+                    chatRepository,
+                    appContext,
+                ) as T
             }
         }
     }

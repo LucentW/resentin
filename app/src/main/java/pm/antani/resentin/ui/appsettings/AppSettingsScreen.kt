@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -68,6 +70,8 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val replyStyle by viewModel.replyStyle.collectAsState()
+    val messageDbSizeBytes by viewModel.messageDbSizeBytes.collectAsState()
+    var showClearMessagesConfirm by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -403,6 +407,15 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     Spacer(Modifier.height(8.dp))
                     Text(error, color = MaterialTheme.colorScheme.error)
                 }
+                Spacer(Modifier.height(24.dp))
+                Text(stringResource(R.string.settings_storage_title), style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showClearMessagesConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.settings_clear_messages, formatByteSize(messageDbSizeBytes)))
+                }
                 if (state.isAdmin) {
                     Spacer(Modifier.height(24.dp))
                     OutlinedButton(onClick = onAdminClick, modifier = Modifier.fillMaxWidth()) {
@@ -411,6 +424,29 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 }
             }
         }
+    }
+
+    if (showClearMessagesConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearMessagesConfirm = false },
+            title = { Text(stringResource(R.string.settings_clear_messages_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_clear_messages_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearMessageDatabase()
+                        showClearMessagesConfirm = false
+                    },
+                ) {
+                    Text(stringResource(R.string.settings_clear_messages_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearMessagesConfirm = false }) {
+                    Text(stringResource(R.string.home_dialog_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -471,3 +507,20 @@ private fun formatIsoTimestamp(iso: String?): String {
 
 private fun formatEpochMillis(epochMillis: Long): String =
     SUBSCRIPTION_TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(epochMillis))
+
+private val BYTE_UNITS = listOf("B", "KB", "MB", "GB")
+
+private fun formatByteSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    var value = bytes.toDouble()
+    var unitIndex = 0
+    while (value >= 1024 && unitIndex < BYTE_UNITS.lastIndex) {
+        value /= 1024
+        unitIndex++
+    }
+    return if (unitIndex == 0) {
+        "$bytes ${BYTE_UNITS[0]}"
+    } else {
+        "%.1f %s".format(java.util.Locale.US, value, BYTE_UNITS[unitIndex])
+    }
+}
