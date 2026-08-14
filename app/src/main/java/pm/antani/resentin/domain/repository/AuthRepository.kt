@@ -51,7 +51,7 @@ class AuthRepository(
     }
 
     suspend fun verifyToken(host: String, token: String): Result<MeDto> = runCatching {
-        val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient { token })
+        val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient(tokenProvider = { token }))
         val response = retrofit.create(MeApi::class.java).getMe()
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         checkNotNull(response.body()) { context.getString(R.string.auth_error_invalid_response) }
