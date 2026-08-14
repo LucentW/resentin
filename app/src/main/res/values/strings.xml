@@ -12,13 +12,17 @@
     <string name="login_server_label">Server</string>
     <string name="login_mode_token">Token</string>
     <string name="login_mode_password">Username e password</string>
+    <string name="login_mode_visitor">Visitor</string>
     <string name="login_token_label">Token</string>
     <string name="login_username_label">Username</string>
     <string name="login_password_label">Password</string>
+    <string name="login_visitor_nick_label">Nickname</string>
+    <string name="login_visitor_hint">Accesso anonimo, senza account — alcuni bouncer pubblici lo offrono per provare il servizio.</string>
     <string name="login_signin_button">Accedi</string>
     <string name="login_error_host_blank">Inserisci l\'indirizzo del server</string>
     <string name="login_error_token_blank">Inserisci il token</string>
     <string name="login_error_credentials_blank">Inserisci username e password</string>
+    <string name="login_error_visitor_nick_blank">Inserisci un nickname</string>
     <string name="login_error_server_unreachable">Server non raggiungibile: %1$s</string>
     <string name="login_error_protocol_too_old">Il server richiede un protocollo più recente (min %1$d): aggiorna l\'app</string>
     <string name="login_error_invalid_token">Token non valido o accesso negato</string>
@@ -27,6 +31,11 @@
     <string name="cd_refresh">Aggiorna</string>
     <string name="cd_app_settings">Impostazioni</string>
     <string name="cd_sign_out">Esci</string>
+    <string name="home_sign_out_title">Esci</string>
+    <string name="home_sign_out_detach_hint">Chiude solo questa sessione: resti connesso a IRC sul bouncer, come le altre eventuali sessioni attive.</string>
+    <string name="home_sign_out_detach">Disconnetti sessione (detach)</string>
+    <string name="home_sign_out_quit_hint">Disconnette anche dalle reti IRC prima di chiudere la sessione.</string>
+    <string name="home_sign_out_quit">Disconnetti da IRC (quit)</string>
     <string name="home_no_networks">Nessuna rete</string>
     <string name="cd_network_settings">Impostazioni rete</string>
     <string name="cd_direct_message">Messaggio privato</string>
@@ -234,6 +243,8 @@
     <string name="auth_error_invalid_credentials">Username o password non validi</string>
     <string name="auth_error_too_many_attempts">Troppi tentativi falliti, riprova più tardi</string>
     <string name="auth_error_not_authenticated">Non autenticato</string>
+    <string name="auth_error_visitor_nick_taken">Questo nickname è già in uso da un\'altra sessione anonima: riprova tra poco o scegline un altro</string>
+    <string name="auth_error_visitor_capacity">Il server ha raggiunto il limite di sessioni anonime contemporanee: riprova più tardi</string>
 
     <!-- Upload errors -->
     <string name="upload_error_http">Upload fallito: HTTP %1$d</string>

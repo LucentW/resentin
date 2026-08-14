@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
 import pm.antani.resentin.data.db.NetworkWithChannels
+import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
@@ -25,7 +26,9 @@ class HomeViewModel(
     private val networksRepository: NetworksRepository,
     private val chatRepository: ChatRepository,
     private val membersRepository: MembersRepository,
+    private val authRepository: AuthRepository,
     private val subject: String,
+    val isVisitor: Boolean,
     private val context: Context,
 ) : ViewModel() {
 
@@ -102,18 +105,48 @@ class HomeViewModel(
         }
     }
 
+    /** "Detach" (cicchetto parity) — sign-out for a visitor (whose own detach is
+     * already a full teardown server-side) and one of the two choices offered to a
+     * registered user. See AuthRepository.detach. */
+    fun detach() {
+        viewModelScope.launch { authRepository.detach() }
+    }
+
+    /** "Quit" (cicchetto parity, user-only in the UI) — parks every joined network
+     * (server disconnects the upstream IRC connection) before detaching, composed
+     * client-side per grappa-irc's own contract: `DELETE /auth/logout` alone never
+     * tears a persistent identity's IRC session down, only an ephemeral visitor's. */
+    fun quit() {
+        viewModelScope.launch {
+            runCatching {
+                networks.value.forEach { nwc -> networksRepository.updateConnectionState(nwc.network.slug, connected = false) }
+            }
+            authRepository.detach()
+        }
+    }
+
     companion object {
         fun factory(
             networksRepository: NetworksRepository,
             chatRepository: ChatRepository,
             membersRepository: MembersRepository,
+            authRepository: AuthRepository,
             subject: String,
+            isVisitor: Boolean,
             context: Context,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return HomeViewModel(networksRepository, chatRepository, membersRepository, subject, context.applicationContext) as T
+                    return HomeViewModel(
+                        networksRepository,
+                        chatRepository,
+                        membersRepository,
+                        authRepository,
+                        subject,
+                        isVisitor,
+                        context.applicationContext,
+                    ) as T
                 }
             }
     }

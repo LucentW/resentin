@@ -68,10 +68,18 @@ fun LoginScreen(viewModel: LoginViewModel) {
                     enabled = !state.isLoading,
                     modifier = Modifier.weight(1f),
                 )
+                Spacer(Modifier.width(8.dp))
+                FilterChip(
+                    selected = state.mode == LoginMode.VISITOR,
+                    onClick = { viewModel.onModeChange(LoginMode.VISITOR) },
+                    label = { Text(stringResource(R.string.login_mode_visitor)) },
+                    enabled = !state.isLoading,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Spacer(Modifier.height(12.dp))
-            if (state.mode == LoginMode.TOKEN) {
-                OutlinedTextField(
+            when (state.mode) {
+                LoginMode.TOKEN -> OutlinedTextField(
                     value = state.token,
                     onValueChange = viewModel::onTokenChange,
                     label = { Text(stringResource(R.string.login_token_label)) },
@@ -80,25 +88,42 @@ fun LoginScreen(viewModel: LoginViewModel) {
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-            } else {
-                OutlinedTextField(
-                    value = state.username,
-                    onValueChange = viewModel::onUsernameChange,
-                    label = { Text(stringResource(R.string.login_username_label)) },
-                    singleLine = true,
-                    enabled = !state.isLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = state.password,
-                    onValueChange = viewModel::onPasswordChange,
-                    label = { Text(stringResource(R.string.login_password_label)) },
-                    singleLine = true,
-                    enabled = !state.isLoading,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                LoginMode.PASSWORD -> {
+                    OutlinedTextField(
+                        value = state.username,
+                        onValueChange = viewModel::onUsernameChange,
+                        label = { Text(stringResource(R.string.login_username_label)) },
+                        singleLine = true,
+                        enabled = !state.isLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = state.password,
+                        onValueChange = viewModel::onPasswordChange,
+                        label = { Text(stringResource(R.string.login_password_label)) },
+                        singleLine = true,
+                        enabled = !state.isLoading,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                LoginMode.VISITOR -> {
+                    OutlinedTextField(
+                        value = state.visitorNick,
+                        onValueChange = viewModel::onVisitorNickChange,
+                        label = { Text(stringResource(R.string.login_visitor_nick_label)) },
+                        singleLine = true,
+                        enabled = !state.isLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        stringResource(R.string.login_visitor_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             state.error?.let { error ->

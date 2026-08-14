@@ -37,10 +37,10 @@ class AppContainer(private val context: Context) {
     val tokenStore = TokenStore(context.applicationContext)
     val database = AppDatabase.build(context)
     val appPreferences = AppPreferences(context.applicationContext)
-    val authRepository = AuthRepository(tokenStore, database, appPreferences, context.applicationContext)
+    val connectionManager = ConnectionManager(tokenStore)
+    val authRepository = AuthRepository(tokenStore, database, appPreferences, connectionManager, context.applicationContext)
     val networksRepository = NetworksRepository(authRepository, database)
     val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
-    val connectionManager = ConnectionManager(tokenStore)
     val membersRepository = MembersRepository(connectionManager, database)
     val userSettingsRepository = UserSettingsRepository(authRepository)
     val pushRepository = PushRepository(authRepository, appPreferences)
@@ -148,7 +148,6 @@ class AppContainer(private val context: Context) {
         // sign-in, not treat it as a transient network blip.
         appScope.launch {
             connectionManager.events.filterIsInstance<WsEvent.WebSessionSevered>().collect {
-                connectionManager.disconnect()
                 authRepository.signOut()
             }
         }

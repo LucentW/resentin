@@ -15,7 +15,7 @@ import pm.antani.resentin.domain.repository.AuthRepository
 
 private const val SUPPORTED_PROTOCOL_VERSION = 1
 
-enum class LoginMode { TOKEN, PASSWORD }
+enum class LoginMode { TOKEN, PASSWORD, VISITOR }
 
 data class LoginUiState(
     val host: String = "",
@@ -23,6 +23,7 @@ data class LoginUiState(
     val token: String = "",
     val username: String = "",
     val password: String = "",
+    val visitorNick: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -73,6 +74,10 @@ class LoginViewModel(
         _uiState.update { it.copy(password = password, error = null) }
     }
 
+    fun onVisitorNickChange(nick: String) {
+        _uiState.update { it.copy(visitorNick = nick, error = null) }
+    }
+
     fun signIn() {
         val state = _uiState.value
         val host = state.host.trim().removePrefix("https://").removePrefix("http://").removeSuffix("/")
@@ -87,6 +92,10 @@ class LoginViewModel(
         }
         if (state.mode == LoginMode.PASSWORD && (state.username.isBlank() || state.password.isBlank())) {
             _uiState.update { it.copy(error = context.getString(R.string.login_error_credentials_blank)) }
+            return
+        }
+        if (state.mode == LoginMode.VISITOR && state.visitorNick.isBlank()) {
+            _uiState.update { it.copy(error = context.getString(R.string.login_error_visitor_nick_blank)) }
             return
         }
 
@@ -117,28 +126,28 @@ class LoginViewModel(
                 return@launch
             }
 
-            val token = if (state.mode == LoginMode.TOKEN) {
-                state.token.trim()
-            } else {
-                val loginResult = authRepository.loginWithPassword(host, state.username.trim(), state.password)
-                val obtainedToken = loginResult.getOrNull()
-                if (obtainedToken == null) {
-                    _uiState.update { it.copy(isLoading = false, error = loginResult.exceptionOrNull()?.message) }
-                    return@launch
-                }
-                obtainedToken
+            val loginResult = when (state.mode) {
+                LoginMode.TOKEN -> Result.success(state.token.trim())
+                LoginMode.PASSWORD -> authRepository.loginWithPassword(host, state.username.trim(), state.password)
+                LoginMode.VISITOR -> authRepository.loginAsVisitor(host, state.visitorNick.trim())
+            }
+            val token = loginResult.getOrNull()
+            if (token == null) {
+                _uiState.update { it.copy(isLoading = false, error = loginResult.exceptionOrNull()?.message) }
+                return@launch
             }
 
             val verifyResult = authRepository.verifyToken(host, token)
             val me = verifyResult.getOrNull()
             val username = me?.displayName
             val wsSubject = me?.subject
-            if (username == null || wsSubject == null) {
+            val kind = me?.kind
+            if (username == null || wsSubject == null || kind == null) {
                 _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.login_error_invalid_token)) }
                 return@launch
             }
 
-            authRepository.signIn(host, token, username, wsSubject)
+            authRepository.signIn(host, token, username, wsSubject, kind)
             _uiState.update { it.copy(isLoading = false) }
         }
     }

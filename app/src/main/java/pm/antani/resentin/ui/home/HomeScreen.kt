@@ -64,7 +64,6 @@ private data class ChannelActionsTarget(val networkSlug: String, val channel: Ch
 fun HomeScreen(
     viewModel: HomeViewModel,
     host: String,
-    onSignOut: () -> Unit,
     onChannelClick: (networkSlug: String, channelName: String) -> Unit,
     onNetworkSettingsClick: (networkSlug: String) -> Unit,
     onAppSettingsClick: () -> Unit,
@@ -81,6 +80,10 @@ fun HomeScreen(
     var actionsTarget by remember { mutableStateOf<ChannelActionsTarget?>(null) }
     var leaveConfirmTarget by remember { mutableStateOf<ChannelActionsTarget?>(null) }
     var newChatNetwork by remember { mutableStateOf<String?>(null) }
+    // A visitor's own "detach" is already a full teardown server-side (see
+    // AuthRepository.detach), so the sign-out icon skips straight to it; a
+    // registered user gets the cicchetto-parity detach/quit choice.
+    var showSignOutChoice by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.navigateToChat.collect { (networkSlug, nick) -> onChannelClick(networkSlug, nick) }
@@ -97,7 +100,7 @@ fun HomeScreen(
                     IconButton(onClick = onAppSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_app_settings))
                     }
-                    IconButton(onClick = onSignOut) {
+                    IconButton(onClick = { if (viewModel.isVisitor) viewModel.detach() else showSignOutChoice = true }) {
                         Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = stringResource(R.string.cd_sign_out))
                     }
                 },
@@ -189,6 +192,45 @@ fun HomeScreen(
             },
             dismissButton = {
                 TextButton(onClick = { leaveConfirmTarget = null }) {
+                    Text(stringResource(R.string.home_dialog_cancel))
+                }
+            },
+        )
+    }
+
+    if (showSignOutChoice) {
+        AlertDialog(
+            onDismissRequest = { showSignOutChoice = false },
+            title = { Text(stringResource(R.string.home_sign_out_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.home_sign_out_detach_hint), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(
+                        onClick = {
+                            showSignOutChoice = false
+                            viewModel.detach()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.home_sign_out_detach))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.home_sign_out_quit_hint), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(
+                        onClick = {
+                            showSignOutChoice = false
+                            viewModel.quit()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.home_sign_out_quit))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSignOutChoice = false }) {
                     Text(stringResource(R.string.home_dialog_cancel))
                 }
             },

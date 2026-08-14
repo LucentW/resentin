@@ -12,7 +12,7 @@ private val USER_AGENT = "Resentin/${BuildConfig.VERSION_NAME} (Android)"
 
 object HttpClients {
 
-    fun okHttpClient(tokenProvider: () -> String? = { null }): OkHttpClient {
+    fun okHttpClient(tokenProvider: () -> String? = { null }, onUnauthorized: () -> Unit = {}): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
@@ -33,6 +33,15 @@ object HttpClients {
                     chain.request()
                 }
                 chain.proceed(request)
+            }
+            // A 401 on an authenticated call means the bearer is already dead
+            // server-side (expired, revoked, account/session deleted) — no retry
+            // fixes that. Only wired for calls made with a real token (AuthRepository.api());
+            // the unauthenticated login/verify calls pass the default no-op.
+            .addInterceptor { chain ->
+                val response = chain.proceed(chain.request())
+                if (response.code == 401) onUnauthorized()
+                response
             }
             // Without this, OkHttp's own default ("okhttp/4.12.0") is what shows up
             // as the row label in the push-subscriptions device list — meaningless to
