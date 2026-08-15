@@ -162,6 +162,8 @@
     <string name="settings_display_irc_line_desc">IRC single-line: [HH:mm] &lt;nick&gt; message, like a classic IRC client</string>
     <string name="settings_show_seconds">Seconds in timestamps</string>
     <string name="settings_show_seconds_desc">Shows [HH:mm:ss] instead of [HH:mm], in both display modes</string>
+    <string name="settings_show_hostmask">Show hostmask in events</string>
+    <string name="settings_show_hostmask_desc">Shows [ident@host] next to the nick on join/part/quit events, when the server provides one</string>
     <string name="settings_language">Language</string>
     <string name="settings_language_system">System</string>
     <string name="settings_language_italian">Italiano</string>

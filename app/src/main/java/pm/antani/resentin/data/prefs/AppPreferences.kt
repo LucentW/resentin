@@ -31,6 +31,7 @@ class AppPreferences(private val context: Context) {
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
+    private val keyShowHostmaskInEvents = booleanPreferencesKey("show_hostmask_in_events")
     private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
     private val keyReplyStyle = stringPreferencesKey("reply_style")
     private val keyReplyCustomTemplate = stringPreferencesKey("reply_custom_template")
@@ -59,6 +60,17 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setShowSeconds(value: Boolean) {
         context.dataStore.edit { it[keyShowSeconds] = value }
+    }
+
+    /** Whether join/part/quit event lines show the sender's `[ident@host]` mask —
+     * only present on the wire when the server actually captured it (see
+     * `Grappa.Scrollback.Meta`'s `sender_user`/`sender_host`, absent for kick/mode/
+     * nick_change, which carry no hostmask). Off by default: most people don't want
+     * a hostname next to every join. */
+    val showHostmaskInEvents: Flow<Boolean> = context.dataStore.data.map { it[keyShowHostmaskInEvents] ?: false }
+
+    suspend fun setShowHostmaskInEvents(value: Boolean) {
+        context.dataStore.edit { it[keyShowHostmaskInEvents] = value }
     }
 
     /** Local, fast-reading mirror of the server-persisted `DisplayPrefsDto.coloredNicklist`

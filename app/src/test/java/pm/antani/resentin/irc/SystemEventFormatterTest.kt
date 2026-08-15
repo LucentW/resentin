@@ -17,6 +17,21 @@ class SystemEventFormatterTest {
     }
 
     @Test
+    fun `join carries the hostmask when the server sent one`() {
+        val meta = JsonObject(
+            mapOf("sender_user" to JsonPrimitive("~caio"), "sender_host" to JsonPrimitive("sempronio.net")),
+        )
+        val result = SystemEventFormatter.format("join", "tizio", null, meta)
+        assertEquals(FormattedEvent.System.Join("tizio", "~caio@sempronio.net"), result)
+    }
+
+    @Test
+    fun `join has no hostmask when the server didn't send one`() {
+        val result = SystemEventFormatter.format("join", "vjt", null, noMeta)
+        assertEquals(null, (result as FormattedEvent.System.Join).userHost)
+    }
+
+    @Test
     fun `part without reason`() {
         val result = SystemEventFormatter.format("part", "vjt", null, noMeta)
         assertEquals(FormattedEvent.System.Part("vjt", null), result)

@@ -89,6 +89,13 @@ class AppSettingsViewModel(
         viewModelScope.launch { appPreferences.setShowSeconds(enabled) }
     }
 
+    val showHostmaskInEvents: StateFlow<Boolean> = appPreferences.showHostmaskInEvents
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setShowHostmaskInEvents(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setShowHostmaskInEvents(enabled) }
+    }
+
     val replyStyle: StateFlow<ReplyStyle> = appPreferences.replyStyle
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReplyStyle.NICK)
 

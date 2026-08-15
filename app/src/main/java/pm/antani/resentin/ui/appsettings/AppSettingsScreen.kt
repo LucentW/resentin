@@ -69,6 +69,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
+    val showHostmaskInEvents by viewModel.showHostmaskInEvents.collectAsState()
     val replyStyle by viewModel.replyStyle.collectAsState()
     val messageDbSizeBytes by viewModel.messageDbSizeBytes.collectAsState()
     var showClearMessagesConfirm by remember { mutableStateOf(false) }
@@ -235,6 +236,20 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         )
                     }
                     Switch(checked = showSeconds, onCheckedChange = viewModel::setShowSeconds)
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.settings_show_hostmask))
+                        Text(
+                            stringResource(R.string.settings_show_hostmask_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = showHostmaskInEvents, onCheckedChange = viewModel::setShowHostmaskInEvents)
                 }
                 Spacer(Modifier.height(24.dp))
                 Text(stringResource(R.string.settings_reply_style_title), style = MaterialTheme.typography.bodyLarge)

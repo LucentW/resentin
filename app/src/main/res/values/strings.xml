@@ -162,6 +162,8 @@
     <string name="settings_display_irc_line_desc">Monoriga IRC: [HH:mm] &lt;nick&gt; messaggio, come un client IRC classico</string>
     <string name="settings_show_seconds">Secondi nei timestamp</string>
     <string name="settings_show_seconds_desc">Mostra [HH:mm:ss] invece di [HH:mm], in entrambe le visualizzazioni</string>
+    <string name="settings_show_hostmask">Mostra host nelle azioni</string>
+    <string name="settings_show_hostmask_desc">Mostra [ident@host] accanto al nick negli eventi di entrata/uscita dal canale, quando il server lo fornisce</string>
     <string name="settings_language">Lingua</string>
     <string name="settings_language_system">Sistema</string>
     <string name="settings_language_italian">Italiano</string>

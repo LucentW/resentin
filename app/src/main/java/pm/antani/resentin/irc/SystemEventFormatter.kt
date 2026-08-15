@@ -16,13 +16,15 @@ sealed interface FormattedEvent {
     data class Chat(val text: String, val isAction: Boolean, val isNotice: Boolean) : FormattedEvent
 
     sealed interface System : FormattedEvent {
-        data class Join(val sender: String) : System
-        data class Part(val sender: String, val reason: String?) : System
-        data class Quit(val sender: String, val reason: String?) : System
-        data class Kick(val sender: String, val target: String, val reason: String?) : System
-        data class Mode(val sender: String, val modes: String, val args: String?) : System
-        data class NickChange(val sender: String, val newNick: String) : System
-        data class TopicChanged(val sender: String) : System
+        val sender: String
+
+        data class Join(override val sender: String, val userHost: String? = null) : System
+        data class Part(override val sender: String, val reason: String?, val userHost: String? = null) : System
+        data class Quit(override val sender: String, val reason: String?, val userHost: String? = null) : System
+        data class Kick(override val sender: String, val target: String, val reason: String?) : System
+        data class Mode(override val sender: String, val modes: String, val args: String?) : System
+        data class NickChange(override val sender: String, val newNick: String) : System
+        data class TopicChanged(override val sender: String) : System
     }
 }
 
@@ -35,9 +37,9 @@ sealed interface FormattedEvent {
 object SystemEventFormatter {
 
     fun format(kind: String, sender: String, body: String?, meta: JsonObject): FormattedEvent = when (kind) {
-        "join" -> FormattedEvent.System.Join(sender)
-        "part" -> FormattedEvent.System.Part(sender, body?.takeIf { it.isNotBlank() })
-        "quit" -> FormattedEvent.System.Quit(sender, body?.takeIf { it.isNotBlank() })
+        "join" -> FormattedEvent.System.Join(sender, userHost(meta))
+        "part" -> FormattedEvent.System.Part(sender, body?.takeIf { it.isNotBlank() }, userHost(meta))
+        "quit" -> FormattedEvent.System.Quit(sender, body?.takeIf { it.isNotBlank() }, userHost(meta))
         "kick" -> FormattedEvent.System.Kick(
             sender,
             meta.stringOrNull("target") ?: "?",
@@ -58,6 +60,14 @@ object SystemEventFormatter {
     }
 
     private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+    /** `sender_user`/`sender_host` ride together or not at all (see
+     * `Grappa.Scrollback.Meta`'s per-kind doc) — only join/part/quit ever carry them. */
+    private fun userHost(meta: JsonObject): String? {
+        val user = meta.stringOrNull("sender_user") ?: return null
+        val host = meta.stringOrNull("sender_host") ?: return null
+        return "$user@$host"
+    }
 
     /** Strips the CTCP ACTION envelope: `ACTION text` -> `text`. */
     private fun stripAction(body: String?): String {

@@ -147,6 +147,7 @@ fun ChatScreen(
     val isUploading by viewModel.isUploading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val coloredNicklist by viewModel.coloredNicklist.collectAsState()
+    val showHostmaskInEvents by viewModel.showHostmaskInEvents.collectAsState()
     val myNick by viewModel.myNick.collectAsState()
     val listState = rememberLazyListState()
     var hasScrolledInitially by remember { mutableStateOf(false) }
@@ -318,6 +319,7 @@ fun ChatScreen(
                             displayMode = displayMode,
                             showSeconds = showSeconds,
                             coloredNicklist = coloredNicklist,
+                            showHostmaskInEvents = showHostmaskInEvents,
                             isMention = isMentionRow(message, myNick, isQuery),
                             onReply = viewModel::reply,
                             onLongPress = { nick, text ->
@@ -432,13 +434,30 @@ private fun isMentionRow(message: MessageEntity, myNick: String?, isQuery: Boole
 private fun reasonSuffix(reason: String?): String =
     if (reason == null) "" else stringResource(R.string.paren_suffix, reason)
 
+/** The sender nick prefixed with its `[ident@host]` mask when [showHostmask] is on and
+ * the server actually captured one (join/part/quit only — see [FormattedEvent.System]'s
+ * `userHost`, absent for kick/mode/nick_change). */
+private fun actorLabel(sender: String, userHost: String?, showHostmask: Boolean): String =
+    if (showHostmask && userHost != null) "$sender [$userHost]" else sender
+
 /** Renders a structured [FormattedEvent.System] into its localized display line — the
  * templates themselves live in strings.xml so this varies by locale. */
 @Composable
-private fun systemEventText(event: FormattedEvent.System): String = when (event) {
-    is FormattedEvent.System.Join -> stringResource(R.string.event_join, event.sender)
-    is FormattedEvent.System.Part -> stringResource(R.string.event_part, event.sender, reasonSuffix(event.reason))
-    is FormattedEvent.System.Quit -> stringResource(R.string.event_quit, event.sender, reasonSuffix(event.reason))
+private fun systemEventText(event: FormattedEvent.System, showHostmask: Boolean): String = when (event) {
+    is FormattedEvent.System.Join ->
+        stringResource(R.string.event_join, actorLabel(event.sender, event.userHost, showHostmask))
+    is FormattedEvent.System.Part ->
+        stringResource(
+            R.string.event_part,
+            actorLabel(event.sender, event.userHost, showHostmask),
+            reasonSuffix(event.reason),
+        )
+    is FormattedEvent.System.Quit ->
+        stringResource(
+            R.string.event_quit,
+            actorLabel(event.sender, event.userHost, showHostmask),
+            reasonSuffix(event.reason),
+        )
     is FormattedEvent.System.Kick ->
         stringResource(R.string.event_kick, event.sender, event.target, reasonSuffix(event.reason))
     is FormattedEvent.System.Mode ->
@@ -454,6 +473,7 @@ private fun MessageRow(
     displayMode: ChatDisplayMode,
     showSeconds: Boolean,
     coloredNicklist: Boolean,
+    showHostmaskInEvents: Boolean,
     isMention: Boolean,
     onReply: (nick: String, body: String) -> Unit,
     onLongPress: (nick: String, text: String) -> Unit,
@@ -470,13 +490,17 @@ private fun MessageRow(
 
     when (formatted) {
         is FormattedEvent.System -> {
+            val eventText = systemEventText(formatted, showHostmaskInEvents)
             MircText(
-                text = "${systemEventText(formatted)} · $time",
+                text = "$eventText · $time",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .pointerInput(formatted.sender, eventText) {
+                        detectTapGestures(onLongPress = { onLongPress(formatted.sender, eventText) })
+                    },
             )
         }
         is FormattedEvent.Chat -> {
