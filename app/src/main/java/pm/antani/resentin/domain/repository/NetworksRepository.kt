@@ -40,6 +40,7 @@ private const val SERVER_PSEUDO_CHANNEL = "\$server"
 class NetworksRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
+    private val connectionManager: ConnectionManager,
 ) {
     val networksWithChannels: Flow<List<NetworkWithChannels>> = db.networkDao().observeNetworksWithChannels()
 
@@ -213,10 +214,20 @@ class NetworksRepository(
         check(response.isSuccessful) { "HTTP ${response.code()}" }
     }
 
+    /** Leaves a channel's Phoenix topic on an actual PART, mirroring cicchetto's own
+     * "close a channel tab = real PART = phx_leave" behavior (subscribe.ts) — this app
+     * otherwise never leaves a topic once joined, so without this a parted channel would
+     * stay subscribed (still receiving whatever the server pushes to it) until the next
+     * full reconnect. Best-effort: the subject may be unknown (signed out mid-call) or
+     * the topic may never have been joined this session, either of which is harmless to
+     * skip — there's nothing live to tear down. */
     suspend fun partChannel(slug: String, channel: String): Result<Unit> = runCatching {
         val api = authRepository.api(NetworkSettingsApi::class.java)
         val response = api.partChannel(slug, channel)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
+        authRepository.session.value?.wsSubject?.let { subject ->
+            connectionManager.leaveChannel("grappa:user:$subject/network:$slug/channel:$channel")
+        }
         refresh().getOrThrow()
     }
 

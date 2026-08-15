@@ -27,13 +27,18 @@ import pm.antani.resentin.net.ws.SocketState
 
 private const val CONNECT_TIMEOUT_MS = 15_000L
 
+/** A joined topic's channel plus the coroutine collecting its events — paired so
+ * [ConnectionManager.leaveChannel] can cancel the collector instead of leaking it once
+ * the topic is left (no more "event" pushes will ever arrive for it to wake up on). */
+private class JoinedChannel(val channel: PhoenixChannel, val collectorJob: Job)
+
 class ConnectionManager(private val tokenStore: TokenStore) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val socket = PhoenixSocket(HttpClients.okHttpClient())
     val state: StateFlow<SocketState> = socket.state
 
-    private val channels = mutableMapOf<String, PhoenixChannel>()
+    private val channels = mutableMapOf<String, JoinedChannel>()
     private val reconnectPolicy = ReconnectPolicy()
     private var desiredTopics: List<String> = emptyList()
     private var reconnectJob: Job? = null
@@ -69,6 +74,7 @@ class ConnectionManager(private val tokenStore: TokenStore) {
     fun disconnect() {
         userInitiatedDisconnect = true
         reconnectJob?.cancel()
+        channels.values.forEach { it.collectorJob.cancel() }
         channels.clear()
         socket.disconnect()
     }
@@ -78,8 +84,8 @@ class ConnectionManager(private val tokenStore: TokenStore) {
      * or null if this call was a no-op because the topic was already joined. */
     suspend fun joinChannel(topic: String): JsonObject? {
         val existing = channels[topic]
-        if (existing?.joinRef != null) return null
-        val channel = existing ?: PhoenixChannel(socket, topic).also { channels[topic] = it }
+        if (existing?.channel?.joinRef != null) return null
+        val channel = existing?.channel ?: PhoenixChannel(socket, topic)
         // The server's post-join snapshot (topic/modes/members "if cached") is pushed via
         // `Process.send_after(self(), {:after_join, ...}, 0)` — essentially immediately
         // after it accepts the join, often before `channel.join()` below even returns.
@@ -88,14 +94,27 @@ class ConnectionManager(private val tokenStore: TokenStore) {
         // exactly the "topic/modes/members never load" bug. Waiting for `onStart` here
         // guarantees the collector is actually attached before we send `phx_join`.
         val collectorStarted = CompletableDeferred<Unit>()
-        scope.launch {
+        val collectorJob = scope.launch {
             channel.events
                 .onStart { collectorStarted.complete(Unit) }
                 .collect { raw -> _events.emit(WsEventDecoder.decode(raw, topic)) }
         }
+        channels[topic] = JoinedChannel(channel, collectorJob)
         collectorStarted.await()
         val reply = channel.join()
         return reply.payload["response"] as? JsonObject
+    }
+
+    /** Leaves a joined topic — used when the user actually parts a channel (mirrors
+     * cicchetto's own "close = PART = phx_leave" behavior), not just closes its view.
+     * Removed from the map BEFORE the (best-effort) leave push, so a channel re-joined
+     * immediately after starts from a clean PhoenixChannel rather than reusing a stale
+     * joinRef; if the leave push itself fails (e.g. the socket is already down) there's
+     * nothing more to do locally — the topic dies with the connection either way. */
+    suspend fun leaveChannel(topic: String) {
+        val joined = channels.remove(topic) ?: return
+        joined.collectorJob.cancel()
+        runCatching { joined.channel.leave() }
     }
 
     /** Joins every topic in [topics], remembering the set so a reconnect can rejoin them
@@ -108,7 +127,7 @@ class ConnectionManager(private val tokenStore: TokenStore) {
 
     suspend fun sendVerb(topic: String, event: String, payload: JsonObject) {
         val channel = checkNotNull(channels[topic]) { "Canale $topic non joinato" }
-        channel.push(event, payload)
+        channel.channel.push(event, payload)
     }
 
     /**
@@ -129,6 +148,7 @@ class ConnectionManager(private val tokenStore: TokenStore) {
                 delay(delayMs)
                 val result = runCatching {
                     connect()
+                    channels.values.forEach { it.collectorJob.cancel() }
                     channels.clear()
                     desiredTopics.forEach { joinChannel(it) }
                 }

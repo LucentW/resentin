@@ -24,4 +24,9 @@ class PhoenixChannel(private val socket: PhoenixSocket, val topic: String) {
         val currentJoinRef = checkNotNull(joinRef) { "Canale $topic non joinato" }
         return socket.push(joinRef = currentJoinRef, topic = topic, event = event, payload = payload)
     }
+
+    suspend fun leave(): PhoenixFrame {
+        val currentJoinRef = checkNotNull(joinRef) { "Canale $topic non joinato" }
+        return socket.push(joinRef = currentJoinRef, topic = topic, event = "phx_leave", payload = JsonObject(emptyMap()))
+    }
 }

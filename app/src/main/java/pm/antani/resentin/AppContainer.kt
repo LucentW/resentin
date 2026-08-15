@@ -39,7 +39,7 @@ class AppContainer(private val context: Context) {
     val appPreferences = AppPreferences(context.applicationContext)
     val connectionManager = ConnectionManager(tokenStore)
     val authRepository = AuthRepository(tokenStore, database, appPreferences, connectionManager, context.applicationContext)
-    val networksRepository = NetworksRepository(authRepository, database)
+    val networksRepository = NetworksRepository(authRepository, database, connectionManager)
     val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
     val membersRepository = MembersRepository(connectionManager, database)
     val userSettingsRepository = UserSettingsRepository(authRepository)
