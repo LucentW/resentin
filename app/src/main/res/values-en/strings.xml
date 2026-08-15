@@ -232,6 +232,9 @@
     <string name="whois_message_privately">Message privately</string>
     <string name="whois_channel_privileges">Channel privileges</string>
     <string name="whois_remove_privilege">Remove %1$s</string>
+    <string name="whois_copy_message">Copy</string>
+    <string name="whois_copy_message_partial">Copy partial</string>
+    <string name="whois_copy_message_partial_title">Select the text to copy</string>
 
     <!-- Notifications -->
     <string name="notif_content_title">%1$s in %2$s</string>

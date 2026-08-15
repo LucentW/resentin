@@ -232,6 +232,9 @@
     <string name="whois_message_privately">Contatta in privato</string>
     <string name="whois_channel_privileges">Privilegi sul canale</string>
     <string name="whois_remove_privilege">Rimuovi %1$s</string>
+    <string name="whois_copy_message">Copia</string>
+    <string name="whois_copy_message_partial">Copia parziale</string>
+    <string name="whois_copy_message_partial_title">Seleziona il testo da copiare</string>
 
     <!-- Notifications -->
     <string name="notif_content_title">%1$s in %2$s</string>

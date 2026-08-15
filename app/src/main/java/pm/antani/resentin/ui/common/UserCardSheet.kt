@@ -6,17 +6,26 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.WhoisBundleDto
@@ -44,8 +53,13 @@ fun UserCardSheet(
     // Kick/ban/privilege toggles only make sense inside a real channel — hidden for a
     // query or the "$server" pseudo-chat, where there's no channel to moderate.
     showChannelActions: Boolean = true,
+    // Only set when this sheet was opened by long-pressing a chat message (as opposed
+    // to tapping a member in the channel list) — gates the two copy buttons below.
+    messageText: String? = null,
 ) {
     val sheetState = rememberModalBottomSheetState()
+    val clipboardManager = LocalClipboardManager.current
+    var showPartialCopyDialog by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
             Text(whois.target, style = MaterialTheme.typography.headlineSmall)
@@ -75,6 +89,20 @@ fun UserCardSheet(
             if (showContact) {
                 OutlinedButton(onClick = { onContactPrivately(target) }, modifier = Modifier.padding(top = 16.dp)) {
                     Text(stringResource(R.string.whois_message_privately))
+                }
+            }
+
+            if (messageText != null) {
+                Row(modifier = Modifier.padding(top = 8.dp)) {
+                    OutlinedButton(
+                        onClick = { clipboardManager.setText(AnnotatedString(stripMircCodes(messageText))) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.whois_copy_message))
+                    }
+                    OutlinedButton(onClick = { showPartialCopyDialog = true }) {
+                        Text(stringResource(R.string.whois_copy_message_partial))
+                    }
                 }
             }
 
@@ -108,5 +136,25 @@ fun UserCardSheet(
                 }
             }
         }
+    }
+
+    if (showPartialCopyDialog && messageText != null) {
+        AlertDialog(
+            onDismissRequest = { showPartialCopyDialog = false },
+            title = { Text(stringResource(R.string.whois_copy_message_partial_title)) },
+            text = {
+                OutlinedTextField(
+                    value = stripMircCodes(messageText),
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showPartialCopyDialog = false }) {
+                    Text(stringResource(R.string.chat_dialog_close))
+                }
+            },
+        )
     }
 }

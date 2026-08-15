@@ -151,6 +151,10 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     var hasScrolledInitially by remember { mutableStateOf(false) }
     var showTopicDialog by remember { mutableStateOf(false) }
+    // The long-pressed row's plain text, threaded to UserCardSheet for its "Copia"/
+    // "Copia parziale" actions — the sheet itself only knows the sender's nick (it opens
+    // off a WHOIS reply, which arrives async), not which message triggered it.
+    var longPressedMessageText by remember { mutableStateOf<String?>(null) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::uploadFile)
     }
@@ -309,7 +313,10 @@ fun ChatScreen(
                             coloredNicklist = coloredNicklist,
                             isMention = isMentionRow(message, myNick, isQuery),
                             onReply = viewModel::reply,
-                            onLongPress = viewModel::onMessageLongPress,
+                            onLongPress = { nick, text ->
+                                longPressedMessageText = text
+                                viewModel.onMessageLongPress(nick)
+                            },
                         )
                     }
                 }
@@ -342,7 +349,11 @@ fun ChatScreen(
             ownSigils = ownSigils,
             targetSigils = viewModel.sigilsFor(whoisValue.target),
             availableModes = privilegeModes,
-            onDismiss = viewModel::dismissWhois,
+            messageText = longPressedMessageText,
+            onDismiss = {
+                viewModel.dismissWhois()
+                longPressedMessageText = null
+            },
             onContactPrivately = viewModel::contactPrivately,
             onKick = viewModel::kickFromCard,
             onBan = viewModel::banFromCard,
@@ -389,6 +400,17 @@ private fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
     return highestSigil(sigilsOf(member))?.toString().orEmpty()
 }
 
+/** A low-alpha tint of the theme's `tertiary` accent, laid OVER whatever background is
+ * already there rather than replacing it — using the opaque `tertiaryContainer` role
+ * instead (the first attempt) paired badly with the existing text colors on a dark
+ * theme (nick colors, mIRC colors, plain body text all assume a dark background; some
+ * dynamic-color palettes resolve `tertiaryContainer` to a *light* tone even in dark
+ * mode, which then read as low-contrast-to-illegible against them). A translucent wash
+ * over the correct background can't produce that mismatch, on either theme. */
+@Composable
+private fun mentionHighlight(isMention: Boolean): Modifier =
+    if (isMention) Modifier.background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.22f)) else Modifier
+
 /** Whether [message] is one that would have fired a notification — see
  * NotificationRouter.shouldNotify, which this deliberately mirrors (own messages never
  * count; a DM is skipped here rather than mirrored, since every message in an open DM
@@ -427,7 +449,7 @@ private fun MessageRow(
     coloredNicklist: Boolean,
     isMention: Boolean,
     onReply: (nick: String, body: String) -> Unit,
-    onLongPress: (String) -> Unit,
+    onLongPress: (nick: String, text: String) -> Unit,
 ) {
     val meta = remember(message.metaJson) {
         runCatching { AppJson.parseToJsonElement(message.metaJson).jsonObject }
@@ -451,7 +473,10 @@ private fun MessageRow(
             )
         }
         is FormattedEvent.Chat -> {
-            SwipeToReply(onReply = { onReply(message.sender, formatted.text) }, onLongPress = { onLongPress(message.sender) }) {
+            SwipeToReply(
+                onReply = { onReply(message.sender, formatted.text) },
+                onLongPress = { onLongPress(message.sender, formatted.text) },
+            ) {
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
                     IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention)
                 } else {
@@ -496,7 +521,7 @@ private fun BubbleRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isMention) Modifier.background(MaterialTheme.colorScheme.tertiaryContainer) else Modifier)
+            .then(mentionHighlight(isMention))
             .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
         if (formatted.isAction) {
@@ -549,7 +574,7 @@ private fun IrcLineRow(
         style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isMention) Modifier.background(MaterialTheme.colorScheme.tertiaryContainer) else Modifier)
+            .then(mentionHighlight(isMention))
             .padding(horizontal = 16.dp, vertical = 2.dp),
     )
 }
