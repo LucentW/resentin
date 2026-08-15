@@ -72,6 +72,7 @@ fun UserCardSheet(
             }
             whois.account?.let { Text(stringResource(R.string.whois_account_line, it)) }
             whois.awayMessage?.let { Text(stringResource(R.string.whois_away_line, it)) }
+            whois.channels?.takeIf { it.isNotEmpty() }?.let { Text(stringResource(R.string.whois_channels_line, it.joinToString(" "))) }
             if (whois.isOperator) {
                 Text(
                     text = "⚡ IRC Operator" + (whois.operText?.let { " — $it" } ?: ""),

@@ -253,7 +253,14 @@ fun ChatScreen(
                             Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.cd_refresh))
                         }
                     }
-                    if (!isQuery) {
+                    if (isQuery) {
+                        // In a query, `title` IS the partner's nick (see AppRoot's
+                        // ChatScreen call site) — the same nick onMessageLongPress
+                        // already knows how to resolve into a WHOIS lookup.
+                        IconButton(onClick = { viewModel.onMessageLongPress(title) }) {
+                            Icon(Icons.Default.Person, contentDescription = stringResource(R.string.cd_user_info))
+                        }
+                    } else {
                         IconButton(onClick = onMembersClick) {
                             Icon(Icons.Default.Person, contentDescription = stringResource(R.string.cd_members))
                         }

@@ -121,6 +121,7 @@
 
     <!-- Chat -->
     <string name="cd_members">Members</string>
+    <string name="cd_user_info">User info</string>
     <string name="cd_channel_settings">Channel settings</string>
     <string name="cd_attach_file">Attach file</string>
     <string name="chat_message_placeholder">Message</string>
@@ -227,12 +228,13 @@
     <string name="whois_server_line">Server: %1$s</string>
     <string name="whois_account_line">Account: %1$s</string>
     <string name="whois_away_line">Away: %1$s</string>
+    <string name="whois_channels_line">Channels: %1$s</string>
     <string name="whois_registered_nick">Registered nickname</string>
     <string name="whois_secure_connection">Secure connection (SSL/TLS)</string>
     <string name="whois_message_privately">Message privately</string>
     <string name="whois_channel_privileges">Channel privileges</string>
     <string name="whois_remove_privilege">Remove %1$s</string>
-    <string name="whois_copy_message">Copy</string>
+    <string name="whois_copy_message">Copy message</string>
     <string name="whois_copy_message_partial">Copy partial</string>
     <string name="whois_copy_message_partial_title">Select the text to copy</string>
 
