@@ -10,9 +10,13 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.IsupportEntity
@@ -23,7 +27,16 @@ import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
+import pm.antani.resentin.net.dto.ScrollbackMessageDto
 import pm.antani.resentin.net.dto.WhoisBundleDto
+
+/** Per-user channel-privilege mode letter -> sigil, matching the wire's own
+ * (`Grappa.Session.EventRouter.@user_mode_prefixes`) table — kept in sync with
+ * [pm.antani.resentin.ui.common.PRIVILEGE_MODES] rather than shared directly, since
+ * this is the domain layer and that lives in ui.common. */
+private val PRIVILEGE_SIGILS = mapOf('q' to '~', 'a' to '&', 'o' to '@', 'h' to '%', 'v' to '+')
+
+private const val EMPTY_MODES_JSON = "[]"
 
 class MembersRepository(
     private val connectionManager: ConnectionManager,
@@ -34,6 +47,7 @@ class MembersRepository(
             when (event) {
                 is WsEvent.IsupportChanged -> recordIsupport(event.isupport)
                 is WsEvent.MembersSeeded -> recordMembers(event.seeded)
+                is WsEvent.MessageReceived -> applyPresenceEvent(event.message)
                 else -> Unit
             }
         }.launchIn(scope)
@@ -52,6 +66,66 @@ class MembersRepository(
             dto.members.map { MemberEntity(dto.network, dto.channel, it.nick, AppJson.encodeToString(it.modes)) },
         )
     }
+
+    /** Keeps the member table live between `members_seeded` snapshots — without this,
+     * the list only ever reflects who was in the channel at join time, going stale as
+     * people join/part/quit/get kicked/change nick. The server fans QUIT and NICK
+     * out to one scrollback row per channel the nick was in (see grappa's
+     * EventRouter), so every kind here is already scoped to a single (network,
+     * channel) pair — no cross-channel fan-out needed on this side. Mirrors
+     * cicchetto's `applyPresenceEvent` (lib/members.ts). */
+    private suspend fun applyPresenceEvent(dto: ScrollbackMessageDto) {
+        when (dto.kind) {
+            "join" -> db.memberDao().insertIfAbsent(MemberEntity(dto.network, dto.channel, dto.sender, EMPTY_MODES_JSON))
+            "part", "quit" -> db.memberDao().delete(dto.network, dto.channel, dto.sender)
+            "kick" -> dto.meta.stringOrNull("target")?.let { target ->
+                db.memberDao().delete(dto.network, dto.channel, target)
+            }
+            "nick_change" -> dto.meta.stringOrNull("new_nick")?.let { newNick ->
+                db.memberDao().rename(dto.network, dto.channel, dto.sender, newNick)
+            }
+            "mode" -> applyModeString(dto)
+            else -> Unit
+        }
+    }
+
+    /** Mirrors cicchetto's `applyModeString` (lib/modeApply.ts): walks the mode string
+     * with a sign cursor + an args index, only (qahov) letters consume an arg — channel
+     * modes (n/t/m/k/l/b/...) are skipped without advancing the index, same simplification
+     * the reference client documents as fine in practice. */
+    private suspend fun applyModeString(dto: ScrollbackMessageDto) {
+        val modes = dto.meta.stringOrNull("modes") ?: return
+        val args = dto.meta["args"]?.jsonArray?.map { it.jsonPrimitive.contentOrNull.orEmpty() } ?: return
+        var sign = '+'
+        var argIndex = 0
+        for (ch in modes) {
+            when (ch) {
+                '+', '-' -> sign = ch
+                else -> {
+                    val sigil = PRIVILEGE_SIGILS[ch] ?: continue
+                    val target = args.getOrNull(argIndex) ?: continue
+                    argIndex++
+                    val member = db.memberDao().find(dto.network, dto.channel, target) ?: continue
+                    val current = runCatching {
+                        AppJson.decodeFromString(ListSerializer(String.serializer()), member.modesJson)
+                    }.getOrDefault(emptyList())
+                    val sigilStr = sigil.toString()
+                    val has = sigilStr in current
+                    if (sign == '+' && has) continue
+                    if (sign == '-' && !has) continue
+                    val updated = if (sign == '+') current + sigilStr else current - sigilStr
+                    db.memberDao().updateModes(
+                        dto.network,
+                        dto.channel,
+                        target,
+                        AppJson.encodeToString(ListSerializer(String.serializer()), updated),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
     fun observeMembers(networkSlug: String, channelName: String): Flow<List<MemberEntity>> =
         db.memberDao().observeMembers(networkSlug, channelName)
