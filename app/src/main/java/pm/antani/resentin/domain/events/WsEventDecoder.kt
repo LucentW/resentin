@@ -5,6 +5,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.net.dto.AutoAwayDebounceDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
@@ -60,6 +61,9 @@ object WsEventDecoder {
                 )
                 "web_session_severed" -> WsEvent.WebSessionSevered(
                     AppJson.decodeFromJsonElement(WebSessionSeveredDto.serializer(), raw),
+                )
+                "auto_away_debounce_changed" -> WsEvent.AutoAwayDebounceChanged(
+                    AppJson.decodeFromJsonElement(AutoAwayDebounceDto.serializer(), raw),
                 )
                 "query_windows_list" -> WsEvent.QueryWindowsListReceived(
                     AppJson.decodeFromJsonElement(QueryWindowsListDto.serializer(), raw),

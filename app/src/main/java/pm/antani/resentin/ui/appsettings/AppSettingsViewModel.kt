@@ -43,6 +43,9 @@ data class AppSettingsUiState(
     val isAdmin: Boolean = false,
     val replyCustomTemplate: String = "",
     val replyCustomTemplateSaved: Boolean = false,
+    val autoAwayCustomMode: Boolean = false,
+    val autoAwayCustomDraft: String = "",
+    val autoAwaySavingError: String? = null,
 )
 
 class AppSettingsViewModel(
@@ -137,6 +140,62 @@ class AppSettingsViewModel(
             _uiState.update { it.copy(replyCustomTemplate = saved) }
         }
         refreshVhostSettings()
+        refreshAutoAwayDebounce()
+    }
+
+    // #348 on grappa-irc — cached in the repository (not this ViewModel) so the live
+    // `auto_away_debounce_changed` push keeps it current even while this screen isn't
+    // composed; this StateFlow is just a passthrough.
+    val autoAwayDebounceSeconds: StateFlow<Int?> = userSettingsRepository.autoAwayDebounceSeconds
+
+    fun refreshAutoAwayDebounce() {
+        viewModelScope.launch {
+            userSettingsRepository.getAutoAwayDebounce()
+                .onFailure { error -> _uiState.update { it.copy(autoAwaySavingError = error.message) } }
+        }
+    }
+
+    /** A preset pick is an immediate save — [seconds] is `null` for "use site default"
+     * or `0` for "off", matching the wire's own sentinels. */
+    fun onAutoAwayPresetSelected(seconds: Int?) {
+        _uiState.update { it.copy(autoAwayCustomMode = false) }
+        saveAutoAwayDebounce(seconds)
+    }
+
+    /** Entering "custom" only opens the input, seeded from the current value — it is a
+     * MODE, not a value; nothing is persisted until [saveAutoAwayCustomDraft]. */
+    fun onAutoAwayCustomModeSelected() {
+        val current = autoAwayDebounceSeconds.value
+        _uiState.update {
+            it.copy(
+                autoAwayCustomMode = true,
+                autoAwayCustomDraft = if (current == null || current == 0) "" else current.toString(),
+            )
+        }
+    }
+
+    fun onAutoAwayCustomDraftChange(value: String) =
+        _uiState.update { it.copy(autoAwayCustomDraft = value, autoAwayCustomMode = true) }
+
+    /** [invalidInputMessage] is pre-resolved by the caller (a `stringResource`, same
+     * convention as [reportPushLinkFailed]'s caller) — this ViewModel has no Compose
+     * context of its own to localize it from. */
+    fun saveAutoAwayCustomDraft(invalidInputMessage: String) {
+        val raw = _uiState.value.autoAwayCustomDraft.trim()
+        val seconds = raw.toIntOrNull()
+        if (seconds == null) {
+            _uiState.update { it.copy(autoAwaySavingError = invalidInputMessage) }
+            return
+        }
+        saveAutoAwayDebounce(seconds)
+    }
+
+    private fun saveAutoAwayDebounce(seconds: Int?) {
+        viewModelScope.launch {
+            userSettingsRepository.updateAutoAwayDebounce(seconds)
+                .onSuccess { _uiState.update { it.copy(autoAwaySavingError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(autoAwaySavingError = error.message) } }
+        }
     }
 
     fun refreshVhostSettings() {

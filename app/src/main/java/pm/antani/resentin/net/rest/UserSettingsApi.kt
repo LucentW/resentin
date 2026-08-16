@@ -1,6 +1,8 @@
 package pm.antani.resentin.net.rest
 
+import kotlinx.serialization.json.JsonObject
 import pm.antani.resentin.net.dto.AliasesEnvelopeDto
+import pm.antani.resentin.net.dto.AutoAwayDebounceDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.VhostSelectionUpdateDto
 import pm.antani.resentin.net.dto.VhostSettingsDto
@@ -30,4 +32,16 @@ interface UserSettingsApi {
 
     @PUT("me/settings/vhost")
     suspend fun updateVhostSelection(@Body body: VhostSelectionUpdateDto): VhostSettingsDto
+
+    /** #348 — the auto-away grace period (`null` = site default, `0` = off, `N` = seconds). */
+    @GET("me/settings/auto-away-debounce-seconds")
+    suspend fun getAutoAwayDebounce(): AutoAwayDebounceDto
+
+    /** Body is a hand-built [JsonObject] (not [AutoAwayDebounceDto]) because `null` here
+     * is a real state — "clear to site default" — not "leave unchanged", and the shared
+     * `AppJson` config's `explicitNulls = false` would drop the key for a normal
+     * data-class body, silently turning that clear into a no-op PUT (same reasoning as
+     * [pm.antani.resentin.net.rest.AdminApi.updateNetwork]). */
+    @PUT("me/settings/auto-away-debounce-seconds")
+    suspend fun updateAutoAwayDebounce(@Body body: JsonObject): AutoAwayDebounceDto
 }

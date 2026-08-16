@@ -1,6 +1,7 @@
 package pm.antani.resentin.domain.events
 
 import kotlinx.serialization.json.JsonObject
+import pm.antani.resentin.net.dto.AutoAwayDebounceDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
@@ -25,6 +26,11 @@ sealed interface WsEvent {
      * push-if-cached timing) and again live on every `MODE` line for the channel. */
     data class ChannelModesChanged(val payload: ChannelModesChangedDto) : WsEvent
     data class WebSessionSevered(val severed: WebSessionSeveredDto) : WsEvent
+
+    /** #348 on grappa-irc — the subject's auto-away preference moved, including for a
+     * write this device just made (the server never lets a client originate this state,
+     * only mirror it — same push fires for every device on the subject's account). */
+    data class AutoAwayDebounceChanged(val debounce: AutoAwayDebounceDto) : WsEvent
     data class QueryWindowsListReceived(val windows: QueryWindowsListDto) : WsEvent
 
     /** `read_cursor_set` carries no network/channel in its payload — only in the topic

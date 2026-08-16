@@ -42,3 +42,15 @@ data class VhostSettingsDto(
 data class VhostSelectionUpdateDto(
     val selection: List<String>,
 )
+
+/** #348 on grappa-irc — the auto-away grace period. `null` = no preference (the
+ * server's own default applies), `0` = auto-away off, `N` = seconds. This shape is
+ * only used to DECODE (GET response and the `auto_away_debounce_changed` push) — a
+ * PUT body is hand-built as a [kotlinx.serialization.json.JsonObject] instead, since
+ * the app's shared `AppJson` config's `explicitNulls = false` would drop an explicit
+ * "clear to site default" `null` from a normal data-class body. See
+ * [pm.antani.resentin.net.rest.UserSettingsApi.updateAutoAwayDebounce]. */
+@Serializable
+data class AutoAwayDebounceDto(
+    val autoAwayDebounceSeconds: Int? = null,
+)

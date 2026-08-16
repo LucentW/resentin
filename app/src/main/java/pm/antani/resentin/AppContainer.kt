@@ -42,7 +42,7 @@ class AppContainer(private val context: Context) {
     val networksRepository = NetworksRepository(authRepository, database, connectionManager)
     val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
     val membersRepository = MembersRepository(connectionManager, database)
-    val userSettingsRepository = UserSettingsRepository(authRepository)
+    val userSettingsRepository = UserSettingsRepository(authRepository, connectionManager)
     val pushRepository = PushRepository(authRepository, appPreferences)
     val adminRepository = AdminRepository(authRepository)
     val openChatTracker = OpenChatTracker()
@@ -56,6 +56,7 @@ class AppContainer(private val context: Context) {
         chatRepository.startListening(connectionManager, appScope)
         membersRepository.startListening(appScope)
         networksRepository.startListening(connectionManager, appScope)
+        userSettingsRepository.startListening(appScope)
         notificationRouter.startListening(appScope)
 
         appScope.launch { chatRepository.pruneOldMessages() }

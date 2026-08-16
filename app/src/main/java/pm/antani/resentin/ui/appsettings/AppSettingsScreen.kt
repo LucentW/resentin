@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -46,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
@@ -60,11 +64,24 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-@OptIn(ExperimentalMaterial3Api::class)
+// #348 on grappa-irc — the auto-away ladder the control offers. Deliberately coarse:
+// these are the answers to "how long before my friends see me as away", anything
+// between the rungs is what the custom entry is for. Mirrors cic's SettingsDrawer.
+private val AUTO_AWAY_PRESETS = listOf(
+    60 to R.string.settings_auto_away_1min,
+    300 to R.string.settings_auto_away_5min,
+    600 to R.string.settings_auto_away_10min,
+    1800 to R.string.settings_auto_away_30min,
+    3600 to R.string.settings_auto_away_1h,
+)
+private val AUTO_AWAY_PRESET_SECONDS = AUTO_AWAY_PRESETS.map { it.first }.toSet()
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdminClick: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
+    val autoAwayDebounceSeconds by viewModel.autoAwayDebounceSeconds.collectAsState()
     val pushEnabled by viewModel.pushEnabled.collectAsState()
     val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
@@ -97,6 +114,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     }
 
     val noDistributorMessage = stringResource(R.string.settings_push_no_distributor)
+    val autoAwayInvalidInputMessage = stringResource(R.string.settings_auto_away_invalid_input)
 
     fun linkDistributorAndEnable() {
         // tryUseCurrentOrDefaultDistributor reuses the already-saved distributor without
@@ -318,6 +336,68 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         onClick = { setLanguage("en") },
                         label = { Text(stringResource(R.string.settings_language_english)) },
                     )
+                }
+                Spacer(Modifier.height(24.dp))
+                Text(stringResource(R.string.settings_auto_away_title), style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.settings_auto_away_label))
+                Spacer(Modifier.height(8.dp))
+                val autoAwayIsCustomValue = autoAwayDebounceSeconds != null &&
+                    autoAwayDebounceSeconds != 0 &&
+                    autoAwayDebounceSeconds !in AUTO_AWAY_PRESET_SECONDS
+                val autoAwayShowCustom = state.autoAwayCustomMode || autoAwayIsCustomValue
+                FlowRow {
+                    FilterChip(
+                        selected = !autoAwayShowCustom && autoAwayDebounceSeconds == null,
+                        onClick = { viewModel.onAutoAwayPresetSelected(null) },
+                        label = { Text(stringResource(R.string.settings_auto_away_site_default)) },
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                    )
+                    FilterChip(
+                        selected = !autoAwayShowCustom && autoAwayDebounceSeconds == 0,
+                        onClick = { viewModel.onAutoAwayPresetSelected(0) },
+                        label = { Text(stringResource(R.string.settings_auto_away_off)) },
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                    )
+                    AUTO_AWAY_PRESETS.forEach { (seconds, labelRes) ->
+                        FilterChip(
+                            selected = !autoAwayShowCustom && autoAwayDebounceSeconds == seconds,
+                            onClick = { viewModel.onAutoAwayPresetSelected(seconds) },
+                            label = { Text(stringResource(labelRes)) },
+                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                        )
+                    }
+                    FilterChip(
+                        selected = autoAwayShowCustom,
+                        onClick = { viewModel.onAutoAwayCustomModeSelected() },
+                        label = { Text(stringResource(R.string.settings_reply_style_custom)) },
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                    )
+                }
+                if (autoAwayShowCustom) {
+                    OutlinedTextField(
+                        value = if (state.autoAwayCustomMode) {
+                            state.autoAwayCustomDraft
+                        } else {
+                            autoAwayDebounceSeconds?.toString().orEmpty()
+                        },
+                        onValueChange = viewModel::onAutoAwayCustomDraftChange,
+                        label = { Text(stringResource(R.string.settings_auto_away_custom_seconds)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { viewModel.saveAutoAwayCustomDraft(autoAwayInvalidInputMessage) }) {
+                        Text(stringResource(R.string.network_settings_save))
+                    }
+                }
+                Text(
+                    stringResource(R.string.settings_auto_away_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                state.autoAwaySavingError?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 if (state.vhostOptions.isNotEmpty()) {
                     Spacer(Modifier.height(24.dp))
