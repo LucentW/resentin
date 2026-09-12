@@ -1,5 +1,7 @@
 package pm.antani.resentin.ui.login
 
+import pm.antani.resentin.ui.theme.ResentinSpacing
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,12 +16,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Language
@@ -29,12 +30,14 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.CircularProgressIndicator
-import pm.antani.resentin.ui.common.ResentinFilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +50,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import pm.antani.resentin.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(viewModel: LoginViewModel) {
     val state by viewModel.uiState.collectAsState()
@@ -58,13 +62,13 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 .padding(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
+                .padding(horizontal = ResentinSpacing.xLarge, vertical = ResentinSpacing.xLarge),
             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Surface(
                 modifier = Modifier.size(72.dp),
-                shape = RoundedCornerShape(22.dp),
+                shape = MaterialTheme.shapes.large,
                 color = androidx.compose.ui.graphics.Color(0xFF4E342E),
             ) {
                 androidx.compose.foundation.Image(
@@ -72,7 +76,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                         id = R.drawable.ic_launcher_foreground,
                     ),
                     contentDescription = null,
-                    modifier = Modifier.padding(9.dp),
+                    modifier = Modifier.padding(ResentinSpacing.small),
                 )
             }
             Spacer(Modifier.height(16.dp))
@@ -92,13 +96,12 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(ResentinSpacing.xLarge))
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -113,36 +116,33 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 },
                 singleLine = true,
                 enabled = !state.isLoading,
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier
                     .fillMaxWidth()
                     .onFocusChanged { focusState -> if (!focusState.isFocused) viewModel.onHostFieldBlur() },
             )
             Spacer(Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                ResentinFilterChip(
-                    selected = state.mode == LoginMode.TOKEN,
-                    onClick = { viewModel.onModeChange(LoginMode.TOKEN) },
-                    label = { Text(stringResource(R.string.login_mode_token)) },
-                    enabled = !state.isLoading,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                ResentinFilterChip(
-                    selected = state.mode == LoginMode.PASSWORD,
-                    onClick = { viewModel.onModeChange(LoginMode.PASSWORD) },
-                    label = { Text(stringResource(R.string.login_mode_password)) },
-                    enabled = !state.isLoading,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                ResentinFilterChip(
-                    selected = state.mode == LoginMode.VISITOR,
-                    onClick = { viewModel.onModeChange(LoginMode.VISITOR) },
-                    label = { Text(stringResource(R.string.login_mode_visitor)) },
-                    enabled = !state.isLoading,
-                    modifier = Modifier.weight(1f),
-                )
+            val loginModes = listOf(
+                LoginMode.VISITOR to R.string.login_mode_visitor,
+                LoginMode.PASSWORD to R.string.login_mode_password,
+                LoginMode.TOKEN to R.string.login_mode_token,
+            )
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                loginModes.forEachIndexed { index, (mode, labelRes) ->
+                    SegmentedButton(
+                        selected = state.mode == mode,
+                        onClick = { viewModel.onModeChange(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = loginModes.size),
+                        enabled = !state.isLoading,
+                        modifier = Modifier.weight(1f),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primary,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimary,
+                            activeBorderColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        label = { Text(stringResource(labelRes)) },
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
             when (state.mode) {
@@ -152,7 +152,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                     label = { Text(stringResource(R.string.login_token_label)) },
                     singleLine = true,
                     enabled = !state.isLoading,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.medium,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -163,7 +163,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                         label = { Text(stringResource(R.string.login_username_label)) },
                         singleLine = true,
                         enabled = !state.isLoading,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(12.dp))
@@ -173,7 +173,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                         label = { Text(stringResource(R.string.login_password_label)) },
                         singleLine = true,
                         enabled = !state.isLoading,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -185,7 +185,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
                         label = { Text(stringResource(R.string.login_visitor_nick_label)) },
                         singleLine = true,
                         enabled = !state.isLoading,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(8.dp))
@@ -221,7 +221,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
             Button(
                 onClick = viewModel::signIn,
                 enabled = !state.isLoading,
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (state.isLoading) {

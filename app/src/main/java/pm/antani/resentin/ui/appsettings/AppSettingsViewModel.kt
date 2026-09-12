@@ -110,6 +110,13 @@ class AppSettingsViewModel(
         viewModelScope.launch { appPreferences.setShowHostmaskInEvents(enabled) }
     }
 
+    val smartPresenceFilter: StateFlow<Boolean> = appPreferences.smartPresenceFilter
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setSmartPresenceFilter(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setSmartPresenceFilter(enabled) }
+    }
+
     val unreadFirst: StateFlow<Boolean> = appPreferences.unreadFirst
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -136,6 +143,13 @@ class AppSettingsViewModel(
 
     fun setFontFamily(fontFamily: AppFontFamily) {
         viewModelScope.launch { appPreferences.setFontFamily(fontFamily) }
+    }
+
+    val chatFontFamily: StateFlow<AppFontFamily> = appPreferences.chatFontFamily
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppFontFamily.SYSTEM)
+
+    fun setChatFontFamily(fontFamily: AppFontFamily) {
+        viewModelScope.launch { appPreferences.setChatFontFamily(fontFamily) }
     }
 
     val messageDensity: StateFlow<MessageDensity> = appPreferences.messageDensity

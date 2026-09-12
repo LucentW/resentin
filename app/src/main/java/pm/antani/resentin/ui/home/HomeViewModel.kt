@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -21,11 +22,14 @@ import pm.antani.resentin.data.db.ChannelEntity
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.channelKey
+import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
+import pm.antani.resentin.net.dto.AvailableNetworkDto
+import pm.antani.resentin.net.dto.FeaturedChannelDto
 
 class HomeViewModel(
     private val networksRepository: NetworksRepository,
@@ -65,6 +69,13 @@ class HomeViewModel(
     val pinnedChannels: StateFlow<Set<String>> = appPreferences.pinnedChannels
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    val dismissedFeaturedChannels: StateFlow<Set<String>> = appPreferences.dismissedFeaturedChannels
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    private val _optimisticallyJoinedFeaturedChannels = MutableStateFlow<Set<String>>(emptySet())
+    val optimisticallyJoinedFeaturedChannels: StateFlow<Set<String>> =
+        _optimisticallyJoinedFeaturedChannels.asStateFlow()
+
     /** Server mute keys (muted_targets) — unexpired only, so the mute icon never
      * outlives a snooze the server already dropped. */
     val mutedChannels: StateFlow<Set<String>> = userSettingsRepository.notificationPrefs
@@ -82,6 +93,16 @@ class HomeViewModel(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _availableNetworks = MutableStateFlow<List<AvailableNetworkDto>>(emptyList())
+    val availableNetworks: StateFlow<List<AvailableNetworkDto>> = _availableNetworks.asStateFlow()
+
+    private val _connectingNetworkSlug = MutableStateFlow<String?>(null)
+    val connectingNetworkSlug: StateFlow<String?> = _connectingNetworkSlug.asStateFlow()
+
+    private val _featuredChannels = MutableStateFlow<Map<String, List<FeaturedChannelDto>>>(emptyMap())
+    val featuredChannels: StateFlow<Map<String, List<FeaturedChannelDto>>> = _featuredChannels.asStateFlow()
+    private val featuredRequests = mutableSetOf<String>()
 
     /** Emits (networkSlug, targetNick) once a "message privately" from the new-chat
      * dialog has actually opened the query window server-side — the screen navigates
@@ -101,10 +122,87 @@ class HomeViewModel(
     fun refresh() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            networksRepository.refresh()
-                .onSuccess { _error.value = null }
-                .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
-            _isRefreshing.value = false
+            featuredRequests.clear()
+            try {
+                val networksRefresh = async { networksRepository.refresh() }
+                val homeRefresh = async { authRepository.getMe() }
+                val networksResult = networksRefresh.await()
+                val homeResult = homeRefresh.await()
+
+                networksResult.onFailure {
+                    _error.value = it.message ?: context.getString(R.string.home_unknown_error)
+                }
+                homeResult.onSuccess { me ->
+                    _availableNetworks.value = me.homeData?.availableNetworks.orEmpty()
+                }.onFailure {
+                    if (networksResult.isSuccess) {
+                        _error.value = it.message ?: context.getString(R.string.home_unknown_error)
+                    }
+                }
+                if (networksResult.isSuccess && homeResult.isSuccess) _error.value = null
+                loadFeaturedChannels(networks.value.map { it.network.slug })
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    /** Loads Grappa-curated channels for the networks currently shown on Home. */
+    fun loadFeaturedChannels(networkSlugs: List<String>) {
+        val requested = networkSlugs.distinct().filter { featuredRequests.add(it) }
+        if (requested.isEmpty()) return
+        viewModelScope.launch {
+            requested.forEach { slug ->
+                networksRepository.getFeaturedChannels(slug)
+                    .onSuccess { featured -> _featuredChannels.value = _featuredChannels.value + (slug to featured) }
+                    .onFailure { featuredRequests.remove(slug) }
+            }
+        }
+    }
+
+    /** Hides a curated channel from the Home suggestions; it remains available in Directory. */
+    fun dismissFeaturedChannel(networkSlug: String, channelName: String) {
+        viewModelScope.launch {
+            appPreferences.setFeaturedChannelDismissed(networkSlug, channelName, dismissed = true)
+        }
+    }
+
+    /** Attaches a Grappa-suggested network, then refreshes both the network list and Home suggestions. */
+    fun connectAvailableNetwork(slug: String) {
+        if (_connectingNetworkSlug.value != null) return
+        viewModelScope.launch {
+            _connectingNetworkSlug.value = slug
+            try {
+                networksRepository.addSessionNetwork(slug)
+                    .onSuccess {
+                        authRepository.getMe()
+                            .onSuccess { me ->
+                                _availableNetworks.value = me.homeData?.availableNetworks.orEmpty()
+                                _error.value = null
+                            }
+                            .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
+                    }
+                    .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
+            } finally {
+                _connectingNetworkSlug.value = null
+            }
+        }
+    }
+
+    /** Joins a featured channel when needed, then opens it. */
+    fun openFeaturedChannel(networkSlug: String, channelName: String) {
+        viewModelScope.launch {
+            val alreadyJoined = networks.value
+                .firstOrNull { it.network.slug == networkSlug }
+                ?.channels
+                ?.any { it.joined && canonicalTarget(it.name) == canonicalTarget(channelName) }
+                ?: false
+            val result = if (alreadyJoined) Result.success(Unit) else networksRepository.joinChannel(networkSlug, channelName)
+            result.onSuccess {
+                _optimisticallyJoinedFeaturedChannels.value =
+                    _optimisticallyJoinedFeaturedChannels.value + channelKey(networkSlug, channelName)
+                _navigateToChat.tryEmit(networkSlug to channelName)
+            }.onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
         }
     }
 
@@ -131,7 +229,12 @@ class HomeViewModel(
             } else {
                 networksRepository.partChannel(networkSlug, channel.name)
             }
-            result.onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
+            result.onSuccess {
+                if (channel.source != "query") {
+                    _optimisticallyJoinedFeaturedChannels.value =
+                        _optimisticallyJoinedFeaturedChannels.value - channelKey(networkSlug, channel.name)
+                }
+            }.onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
         }
     }
 
@@ -203,5 +306,21 @@ class HomeViewModel(
                     ) as T
                 }
             }
+    }
+}
+
+internal fun filterVisibleFeaturedChannels(
+    networkSlug: String,
+    featuredChannels: List<FeaturedChannelDto>,
+    joinedChannelNames: Set<String>,
+    dismissedChannelKeys: Set<String>,
+    optimisticallyJoinedChannelKeys: Set<String> = emptySet(),
+): List<FeaturedChannelDto> {
+    val joined = joinedChannelNames.map(::canonicalTarget).toSet()
+    return featuredChannels.filter { channel ->
+        val key = channelKey(networkSlug, channel.name)
+        canonicalTarget(channel.name) !in joined &&
+            key !in dismissedChannelKeys &&
+            key !in optimisticallyJoinedChannelKeys
     }
 }

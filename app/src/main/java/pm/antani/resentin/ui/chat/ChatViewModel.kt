@@ -152,6 +152,9 @@ class ChatViewModel(
     val showHostmaskInEvents: StateFlow<Boolean> = appPreferences.showHostmaskInEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val smartPresenceFilter: StateFlow<Boolean> = appPreferences.smartPresenceFilter
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     // Long-press-on-message user card: same whois/moderation logic as the member list,
     // scoped to this same (network, channel) — empty members/sigils for a query/$server,
     // which naturally hides the channel-only actions in the card.
@@ -180,11 +183,16 @@ class ChatViewModel(
         if (isQueryTarget(channelName)) true else presenceVisible(pin, currentMembers.size)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    // Keep the stored rows available for the Activity view even when the server's
+    // presence preference hides them from the main transcript.
+    val allMessages: StateFlow<List<MessageEntity>> = chatRepository.observeMessages(networkSlug, channelName)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     // The server filters historical pages for a hidden presence pin. Apply the same
     // rule locally to live WS rows, which the server still delivers for membership
     // and window-state bookkeeping. Raw rows remain in Room.
     val messages: StateFlow<List<MessageEntity>> = combine(
-        chatRepository.observeMessages(networkSlug, channelName),
+        allMessages,
         channelPresenceVisible,
         myNick,
     ) { rows, visible, ownNick ->

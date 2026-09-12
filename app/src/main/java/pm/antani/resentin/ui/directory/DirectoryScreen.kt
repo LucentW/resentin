@@ -1,5 +1,7 @@
 package pm.antani.resentin.ui.directory
 
+import pm.antani.resentin.ui.theme.ResentinSpacing
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,12 +17,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -32,7 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -61,6 +62,13 @@ import pm.antani.resentin.net.dto.DirectoryEntryDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.LocalDensityScale
+import pm.antani.resentin.ui.common.ResentinHeaderAction
+import pm.antani.resentin.ui.common.ResentinEmptyState
+import pm.antani.resentin.ui.common.ResentinErrorState
+import pm.antani.resentin.ui.common.ResentinInlineLoadingState
+import pm.antani.resentin.ui.common.ResentinLoadingState
+import pm.antani.resentin.ui.common.ResentinStateBanner
+import pm.antani.resentin.ui.common.ResentinStateTone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +79,10 @@ fun DirectoryScreen(
     onJoined: (channelName: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(networkSlug) {
+        viewModel.refresh()
+    }
 
     LaunchedEffect(state.joined) {
         state.joined?.let {
@@ -84,22 +96,20 @@ fun DirectoryScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.directory_title, networkSlug)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
+                    ResentinHeaderAction(
+                        onClick = onBack,
+                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.cd_back),
+                    )
                 },
                 actions = {
-                    IconButton(onClick = viewModel::refresh) {
-                        if (state.isRefreshing) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                Icons.Outlined.Refresh,
-                                contentDescription = stringResource(R.string.cd_refresh),
-                                tint = if (state.status == "stale") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
+                    ResentinHeaderAction(
+                        onClick = viewModel::refresh,
+                        icon = Icons.Outlined.Refresh,
+                        contentDescription = stringResource(R.string.cd_refresh),
+                        loading = state.isRefreshing,
+                        iconTint = if (state.status == "stale") MaterialTheme.colorScheme.error else null,
+                    )
                 },
             )
         },
@@ -109,7 +119,7 @@ fun DirectoryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(28.dp),
+                shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 border = BorderStroke(
                     1.dp,
@@ -127,7 +137,7 @@ fun DirectoryScreen(
                         modifier = Modifier.weight(1f),
                         placeholder = { Text(stringResource(R.string.directory_search_hint)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(20.dp),
+                        shape = MaterialTheme.shapes.medium,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                             unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -154,14 +164,39 @@ fun DirectoryScreen(
                     label = { Text(stringResource(R.string.directory_sort_name)) },
                 )
             }
-            StatusLine(status = state.status, capturedAt = state.capturedAt)
+            val hasContent = state.entries.isNotEmpty() || state.featured.isNotEmpty()
+            DirectoryStatusLine(
+                status = state.status,
+                capturedAt = state.capturedAt,
+                error = if (hasContent) state.error ?: state.featuredError else null,
+            )
             Box(Modifier.fillMaxSize()) {
+                val loadError = state.error ?: state.featuredError
                 when {
-                    state.isLoading && state.entries.isEmpty() && state.featured.isEmpty() && !state.isFeaturedLoading -> {
-                        CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    !hasContent && (state.isLoading || state.isFeaturedLoading || state.isRefreshing) -> {
+                        ResentinLoadingState(
+                            title = stringResource(R.string.directory_loading_title),
+                            description = stringResource(R.string.directory_loading_description),
+                            modifier = Modifier.align(Alignment.Center),
+                        )
                     }
-                    state.entries.isEmpty() && state.featured.isEmpty() && !state.isFeaturedLoading -> {
-                        Text(stringResource(R.string.directory_empty), modifier = Modifier.align(Alignment.Center))
+                    !hasContent && loadError != null -> {
+                        ResentinErrorState(
+                            icon = Icons.Outlined.WifiOff,
+                            title = stringResource(R.string.directory_error_title),
+                            description = loadError,
+                            actionLabel = stringResource(R.string.home_connection_retry),
+                            onRetry = viewModel::refresh,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                    }
+                    !hasContent -> {
+                        ResentinEmptyState(
+                            icon = Icons.Outlined.Search,
+                            title = stringResource(R.string.directory_empty),
+                            description = stringResource(R.string.directory_empty_description),
+                            modifier = Modifier.align(Alignment.Center),
+                        )
                     }
                     else -> {
                         DirectoryContent(
@@ -169,11 +204,6 @@ fun DirectoryScreen(
                             onChannelClick = viewModel::joinChannel,
                             onLoadMore = viewModel::loadMore,
                         )
-                    }
-                }
-                (state.error ?: state.featuredError)?.let { message ->
-                    Snackbar(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
-                        Text(message)
                     }
                 }
             }
@@ -202,14 +232,7 @@ fun DirectoryContent(
     ) {
         if (state.isFeaturedLoading && state.featured.isEmpty()) {
             item(key = "featured-loading") {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Text(stringResource(R.string.directory_featured_loading))
-                }
+                ResentinInlineLoadingState(stringResource(R.string.directory_featured_loading))
             }
         }
         if (state.featured.isNotEmpty()) {
@@ -269,10 +292,9 @@ private fun FeaturedChannelRow(
         ?: featured.description?.takeIf { it.isNotBlank() }
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -280,7 +302,7 @@ private fun FeaturedChannelRow(
         ) {
             Surface(
                 modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.extraSmall,
                 color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -315,7 +337,7 @@ private fun FeaturedChannelRow(
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = onClick,
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.testTag("directory-featured-action"),
             ) {
                 Text(stringResource(if (isJoined) R.string.directory_featured_open else R.string.directory_featured_join))
@@ -325,22 +347,38 @@ private fun FeaturedChannelRow(
 }
 
 @Composable
-private fun StatusLine(status: String, capturedAt: String?) {
-    val text = when {
-        status == "refreshing" -> stringResource(R.string.directory_refreshing)
-        capturedAt != null -> stringResource(R.string.directory_captured_at_label, formatIsoTimestamp(capturedAt))
-        else -> null
-    }
-    text?.let {
-        Text(
-            it,
+private fun DirectoryStatusLine(
+    status: String,
+    capturedAt: String?,
+    error: String?,
+) {
+    when {
+        error != null -> ResentinStateBanner(
+            icon = Icons.Outlined.WifiOff,
+            title = stringResource(R.string.ui_error_title),
+            description = error,
+            tone = ResentinStateTone.ERROR,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+        status == "stale" -> ResentinStateBanner(
+            icon = Icons.Outlined.WifiOff,
+            title = stringResource(R.string.directory_stale_title),
+            description = capturedAt?.let { stringResource(R.string.directory_stale_description, formatIsoTimestamp(it)) }
+                ?: stringResource(R.string.ui_show_saved_content_description),
+            tone = ResentinStateTone.OFFLINE,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+        status == "refreshing" -> ResentinInlineLoadingState(
+            title = stringResource(R.string.directory_refreshing),
+        )
+        capturedAt != null -> Text(
+            stringResource(R.string.directory_captured_at_label, formatIsoTimestamp(capturedAt)),
             style = MaterialTheme.typography.bodySmall,
-            color = if (status == "stale") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
     }
 }
-
 @Composable
 private fun DirectoryRow(entry: DirectoryEntryDto, onClick: () -> Unit) {
     Row(
@@ -352,7 +390,7 @@ private fun DirectoryRow(entry: DirectoryEntryDto, onClick: () -> Unit) {
     ) {
         Surface(
             modifier = Modifier.size(40.dp),
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -366,8 +404,18 @@ private fun DirectoryRow(entry: DirectoryEntryDto, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(entry.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    entry.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 if (entry.featured) {
                     Spacer(Modifier.width(4.dp))
                     Icon(
@@ -391,15 +439,14 @@ private fun DirectoryRow(entry: DirectoryEntryDto, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(8.dp))
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         ) {
             Text(
                 entry.userCount.toString(),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = ResentinSpacing.small, vertical = ResentinSpacing.xSmall),
             )
         }
     }

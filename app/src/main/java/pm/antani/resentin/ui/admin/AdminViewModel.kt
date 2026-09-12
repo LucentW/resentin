@@ -45,7 +45,7 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
 
     fun refreshAll() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             val networks = adminRepository.getNetworks()
             val vhosts = adminRepository.getVhosts()
             val users = adminRepository.getUsers()

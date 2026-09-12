@@ -7,6 +7,7 @@ import pm.antani.resentin.net.dto.DirectoryPageDto
 import pm.antani.resentin.net.dto.FeaturedChannelsResponseDto
 import pm.antani.resentin.net.dto.JoinChannelRequestDto
 import pm.antani.resentin.net.dto.NetworkDto
+import pm.antani.resentin.net.dto.SessionNetworkRequestDto
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -18,6 +19,10 @@ import retrofit2.http.Query
 interface NetworksApi {
     @GET("networks")
     suspend fun getNetworks(): List<NetworkDto>
+
+    /** Attach and start a self-serve network offered by `GET /me` home_data. */
+    @POST("session/networks")
+    suspend fun addSessionNetwork(@Body body: SessionNetworkRequestDto): Response<ResponseBody>
 
     @GET("networks/{slug}/channels")
     suspend fun getChannels(@Path("slug") slug: String): List<ChannelDto>

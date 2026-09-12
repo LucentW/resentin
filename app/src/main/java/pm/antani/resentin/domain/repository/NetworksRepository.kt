@@ -31,6 +31,7 @@ import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
 import pm.antani.resentin.net.dto.JoinChannelRequestDto
 import pm.antani.resentin.net.dto.NetworkDto
+import pm.antani.resentin.net.dto.SessionNetworkRequestDto
 import pm.antani.resentin.net.dto.NotifyRequestDto
 import pm.antani.resentin.net.dto.PerformDto
 import pm.antani.resentin.net.dto.PerformUpdateDto
@@ -380,6 +381,14 @@ class NetworksRepository(
         runCatching {
             authRepository.api(NetworksApi::class.java).getFeaturedChannels(slug).channels
         }
+
+    /** One-tap attach for a network offered in `/me.home_data.available_networks`. */
+    suspend fun addSessionNetwork(slug: String): Result<Unit> = runCatching {
+        val response = authRepository.api(NetworksApi::class.java)
+            .addSessionNetwork(SessionNetworkRequestDto(slug))
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        refresh().getOrThrow()
+    }
 
     suspend fun refreshDirectory(slug: String): Result<Unit> = runCatching {
         val api = authRepository.api(NetworksApi::class.java)

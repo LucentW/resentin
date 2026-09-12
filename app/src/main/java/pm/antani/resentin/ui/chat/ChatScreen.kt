@@ -1,5 +1,7 @@
 package pm.antani.resentin.ui.chat
 
+import pm.antani.resentin.ui.theme.ResentinSpacing
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
@@ -17,8 +19,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -26,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -35,6 +41,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -46,6 +53,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.MoreVert
@@ -62,12 +70,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -87,6 +95,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -104,6 +114,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import java.time.Instant
 import java.time.LocalDate
@@ -133,8 +144,12 @@ import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.rememberAvatarBitmap
 import pm.antani.resentin.ui.common.ResentinDropdownMenu
 import pm.antani.resentin.ui.common.ResentinDropdownMenuItem
+import pm.antani.resentin.ui.common.ResentinFilterChip
 import pm.antani.resentin.ui.common.ResentinHeaderAction
 import pm.antani.resentin.ui.common.ResentinEmptyState
+import pm.antani.resentin.ui.common.ResentinErrorState
+import pm.antani.resentin.ui.common.ResentinStateBanner
+import pm.antani.resentin.ui.common.ResentinStateTone
 import pm.antani.resentin.ui.common.ResentinLoadingState
 import pm.antani.resentin.ui.common.UserCardSheet
 import pm.antani.resentin.ui.common.colorForNick
@@ -143,6 +158,7 @@ import pm.antani.resentin.ui.common.linkStylesFor
 import pm.antani.resentin.ui.common.mircAnnotatedString
 import pm.antani.resentin.ui.common.sigilsOf
 import pm.antani.resentin.ui.common.withClickableLinks
+import pm.antani.resentin.ui.theme.LocalResentinChatFontFamily
 import pm.antani.resentin.ui.theme.LocalResentinCodeFontFamily
 
 /**
@@ -188,7 +204,7 @@ private fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
     return Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(formatter)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
@@ -206,6 +222,7 @@ fun ChatScreen(
     onOpenChannel: (networkSlug: String, channelName: String) -> Unit,
 ) {
     val messages by viewModel.messages.collectAsState()
+    val allMessages by viewModel.allMessages.collectAsState()
     val topic by viewModel.topic.collectAsState()
     val channelModes by viewModel.channelModes.collectAsState()
     val peerAvatarUrl by viewModel.peerAvatarUrl.collectAsState()
@@ -320,6 +337,7 @@ fun ChatScreen(
     val isLoadingOlder by viewModel.isLoadingOlder.collectAsState()
     val coloredNicklist by viewModel.coloredNicklist.collectAsState()
     val showHostmaskInEvents by viewModel.showHostmaskInEvents.collectAsState()
+    val smartPresenceFilter by viewModel.smartPresenceFilter.collectAsState()
     val myNick by viewModel.myNick.collectAsState()
     val awayState by viewModel.awayState.collectAsState()
     val highlightPatterns by viewModel.highlightPatterns.collectAsState()
@@ -339,6 +357,11 @@ fun ChatScreen(
     // The first LazyColumn is created with the final landing index already applied.
     var showTopicDialog by remember { mutableStateOf(false) }
     var showChannelMenu by remember { mutableStateOf(false) }
+    var expandedPresenceBursts by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var showActivitySheet by remember { mutableStateOf(false) }
+    var activityFilter by remember { mutableStateOf(ActivityFilter.ALL) }
+    var revealAllPresenceEvents by remember { mutableStateOf(false) }
+    var pendingActivityJumpId by remember { mutableStateOf<Long?>(null) }
     // The long-pressed row's plain text, threaded to UserCardSheet for its "Copia"/
     // "Copia parziale" actions — the sheet itself only knows the sender's nick (it opens
     // off a WHOIS reply, which arrives async), not which message triggered it.
@@ -362,7 +385,7 @@ fun ChatScreen(
         }
     }
 
-    // Position (within `messages`) of the first message past where the reader left off —
+    // Position (within the displayed timeline) of the first row past the read cursor —
     // also where the "Hai letto fino a qui" divider renders. During the first layout
     // use the frozen cursor so it remains a stable landing target. Once positioned,
     // switch to the live cursor so the divider disappears as soon as this chat is
@@ -370,21 +393,31 @@ fun ChatScreen(
     // Null when there's nothing to mark (cursor still loading, never read anything, or
     // everything is already read).
     val dividerCursor = if (positioned) readCursor ?: initialReadCursor else initialReadCursor
+    val smartFilterActive = smartPresenceFilter && !searchOpen && !revealAllPresenceEvents && !isQuery && !isServer
+    val timelineMessages = if (revealAllPresenceEvents) allMessages else messages
+    val timelineRows = remember(timelineMessages, dividerCursor, smartFilterActive, myNick) {
+        buildChatTimeline(
+            timelineMessages,
+            dividerCursor,
+            smartPresenceFilterEnabled = smartFilterActive,
+            alwaysVisibleSender = myNick,
+        )
+    }
     val dividerIndex = dividerCursor?.let { cursor ->
-        messages.indexOfFirst { it.id > cursor }.takeIf { it >= 0 }
+        timelineRows.indexOfFirst { row -> row.messages.any { it.id > cursor } }.takeIf { it >= 0 }
     }
 
     // List indices of the mention rows (own nick / /hilight match from another
     // sender — the SAME isMentionRow predicate the per-row highlight uses, the
     // way cicchetto's badge reads the rows the highlight marks). The unread
-    // divider shifts every message row after it by one. Precomputed so the
+    // divider shifts every displayed row after it by one. Precomputed so the
     // scroll-path decision stays a cheap filter.
-    val mentionRowIndices by remember(messages, dividerIndex, myNick, highlightPatterns, isQuery) {
+    val mentionRowIndices by remember(timelineRows, dividerIndex, myNick, highlightPatterns, isQuery) {
         derivedStateOf {
             val divider = dividerIndex
             val indices = mutableListOf<Int>()
-            messages.forEachIndexed { index, message ->
-                if (isMentionRow(message, myNick, isQuery, highlightPatterns)) {
+            timelineRows.forEachIndexed { index, row ->
+                if (row.messages.any { isMentionRow(it, myNick, isQuery, highlightPatterns) }) {
                     indices.add(index + if (divider != null && index >= divider) 1 else 0)
                 }
             }
@@ -392,21 +425,34 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(searchOpen, selectedSearchMessageId, messages.size, dividerIndex) {
+    LaunchedEffect(searchOpen, selectedSearchMessageId, timelineRows, dividerIndex) {
         if (!searchOpen || selectedSearchMessageId == null) return@LaunchedEffect
-        val messageIndex = messages.indexOfFirst { it.id == selectedSearchMessageId }
-        if (messageIndex < 0) return@LaunchedEffect
-        val listIndex = messageIndex + if (dividerIndex != null && messageIndex >= dividerIndex) 1 else 0
+        val rowIndex = timelineRows.indexOfFirst { row -> row.messages.any { it.id == selectedSearchMessageId } }
+        if (rowIndex < 0) return@LaunchedEffect
+        val listIndex = rowIndex + if (dividerIndex != null && rowIndex >= dividerIndex) 1 else 0
         listState.animateScrollToItem(listIndex)
+    }
+
+    LaunchedEffect(pendingActivityJumpId, timelineRows, dividerIndex) {
+        val targetId = pendingActivityJumpId ?: return@LaunchedEffect
+        val rowIndex = timelineRows.indexOfFirst { row -> row.messages.any { it.id == targetId } }
+        if (rowIndex < 0) return@LaunchedEffect
+        val row = timelineRows[rowIndex]
+        if (row is ChatTimelineRow.PresenceSummary) {
+            expandedPresenceBursts = expandedPresenceBursts + row.messages.first().id
+        }
+        val listIndex = rowIndex + if (dividerIndex != null && rowIndex >= dividerIndex) 1 else 0
+        listState.animateScrollToItem(listIndex)
+        pendingActivityJumpId = null
     }
 
     // Land on the first unread message (per the server's read-cursor), not always the
     // bottom — only once, and only once we actually know where that is (see
     // ChatViewModel.initialReadCursorReady: null is ambiguous between "not loaded yet"
     // and "never read anything").
-    LaunchedEffect(messages, initialReadCursorReady) {
+    LaunchedEffect(timelineRows, initialReadCursorReady) {
         if (initialListIndex != null || !initialReadCursorReady || messages.isEmpty()) return@LaunchedEffect
-        initialListIndex = dividerIndex ?: (messages.size - 1)
+        initialListIndex = dividerIndex ?: (timelineRows.size - 1)
     }
 
     // Keep the bottom status based on the actual last composed row. In this screen
@@ -459,7 +505,7 @@ fun ChatScreen(
     val density = LocalDensity.current
     LaunchedEffect(listState) {
         snapshotFlow {
-            val bottomIndex = messages.size + if (dividerIndex != null) 1 else 0
+            val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             Triple(
                 imeInsets.getBottom(density),
                 shouldScrollToBottomOnIme && positioned,
@@ -481,7 +527,7 @@ fun ChatScreen(
     // doesn't change `lastOrNull()?.id`, so this never fires for that case either.
     LaunchedEffect(messages.lastOrNull()?.id) {
         if (positioned && messages.isNotEmpty() && isAtBottom) {
-            val bottomIndex = messages.size + if (dividerIndex != null) 1 else 0
+            val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             // During the initial REST fill, follow the cache with a snap. Once the
             // history is ready, live messages can use the normal smooth follow.
             if (initialHistoryReady) {
@@ -514,7 +560,7 @@ fun ChatScreen(
                                 .focusRequester(searchFocusRequester),
                             placeholder = { Text(stringResource(R.string.chat_search_hint)) },
                             singleLine = true,
-                            shape = RoundedCornerShape(20.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -529,7 +575,7 @@ fun ChatScreen(
                                     bitmap = peerAvatarBitmap.asImageBitmap(),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)),
+                                    modifier = Modifier.size(36.dp).clip(MaterialTheme.shapes.extraSmall),
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
@@ -566,7 +612,7 @@ fun ChatScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                 border = BorderStroke(
                                     1.dp,
@@ -587,7 +633,7 @@ fun ChatScreen(
                             if (awayState == "away") {
                                 Spacer(Modifier.size(6.dp))
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = MaterialTheme.shapes.extraSmall,
                                     color = MaterialTheme.colorScheme.tertiaryContainer,
                                 ) {
                                     Text(
@@ -685,11 +731,24 @@ fun ChatScreen(
                             onClick = { showChannelMenu = true },
                             icon = Icons.Outlined.MoreVert,
                             contentDescription = stringResource(R.string.cd_channel_menu),
+                            stateDescription = stringResource(
+                                if (showChannelMenu) R.string.cd_menu_open else R.string.cd_menu_closed,
+                            ),
                         )
                         ResentinDropdownMenu(
                             expanded = showChannelMenu,
                             onDismissRequest = { showChannelMenu = false },
                         ) {
+                            if (!isServer) {
+                                ResentinDropdownMenuItem(
+                                    text = stringResource(R.string.chat_activity_action, allMessages.count { it.kind in SYSTEM_EVENT_KINDS }),
+                                    icon = Icons.Outlined.History,
+                                    onClick = {
+                                        showChannelMenu = false
+                                        showActivitySheet = true
+                                    },
+                                )
+                            }
                             ResentinDropdownMenuItem(
                                 text = stringResource(R.string.cd_search_chat),
                                 icon = Icons.Outlined.Search,
@@ -766,11 +825,13 @@ fun ChatScreen(
                         }
                     }
                 }
+                val canSendDraft = draftFieldValue.text.isNotBlank()
+                val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     border = BorderStroke(
                         1.dp,
@@ -779,66 +840,123 @@ fun ChatScreen(
                     tonalElevation = 0.dp,
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                IconButton(
-                    onClick = { filePicker.launch("*/*") },
-                    enabled = !isUploading,
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    if (isUploading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Outlined.AttachFile, contentDescription = stringResource(R.string.cd_attach_file))
-                    }
-                }
-                TextField(
-                    value = draftFieldValue,
-                    onValueChange = { newValue ->
-                        draftFieldValue = newValue
-                        viewModel.onDraftChange(newValue.text)
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(draftFocusRequester)
-                        .onFocusChanged { focusState ->
-                            shouldScrollToBottomOnIme = if (focusState.isFocused) {
-                                positioned && isAtBottom
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            onClick = { filePicker.launch("*/*") },
+                            enabled = !isUploading,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainer,
+                                    CircleShape,
+                                ),
+                        ) {
+                            if (isUploading) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                             } else {
-                                false
+                                Icon(
+                                    Icons.Outlined.AttachFile,
+                                    contentDescription = stringResource(R.string.cd_attach_file),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        },
-                    placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-                    shape = RoundedCornerShape(20.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                    ),
-                )
-                IconButton(
-                    onClick = viewModel::send,
-                    enabled = !isSending,
-                    modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
-                ) {
-                    if (isSending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                        }
+                        TextField(
+                            value = draftFieldValue,
+                            onValueChange = { newValue ->
+                                draftFieldValue = newValue
+                                viewModel.onDraftChange(newValue.text)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(max = 120.dp)
+                                .focusRequester(draftFocusRequester)
+                                .onFocusChanged { focusState ->
+                                    shouldScrollToBottomOnIme = if (focusState.isFocused) {
+                                        positioned && isAtBottom
+                                    } else {
+                                        false
+                                    }
+                                },
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.chat_message_placeholder),
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontFamily = LocalResentinChatFontFamily.current,
+                                    ),
+                                )
+                            },
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = LocalResentinChatFontFamily.current,
+                            ),
+                            minLines = 1,
+                            maxLines = 4,
+                            shape = MaterialTheme.shapes.medium,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                disabledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                            ),
                         )
-                    } else {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.Send,
-                            contentDescription = stringResource(R.string.cd_send),
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
+                        if (draftFieldValue.text.isEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    val commandStarter = TextFieldValue("/", TextRange(1))
+                                    draftFieldValue = commandStarter
+                                    viewModel.onDraftChange(commandStarter.text)
+                                    draftFocusRequester.requestFocus()
+                                },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainer,
+                                        CircleShape,
+                                    )
+                                    .semantics(mergeDescendants = true) {
+                                        contentDescription = slashCommandsLabel
+                                    },
+                            ) {
+                                Text(
+                                    "/",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = viewModel::send,
+                            enabled = !isSending && canSendDraft,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(
+                                    color = if (canSendDraft) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceContainer,
+                                    shape = CircleShape,
+                                ),
+                        ) {
+                            if (isSending) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.AutoMirrored.Outlined.Send,
+                                    contentDescription = stringResource(R.string.cd_send),
+                                    tint = if (canSendDraft) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -854,12 +972,12 @@ fun ChatScreen(
                     )
                 }
                 showHistoryError -> {
-                    ResentinEmptyState(
+                    ResentinErrorState(
                         icon = Icons.Outlined.WifiOff,
                         title = stringResource(R.string.chat_history_error_title),
                         description = stringResource(R.string.chat_history_error_description),
                         actionLabel = stringResource(R.string.chat_history_retry),
-                        onAction = viewModel::refresh,
+                        onRetry = viewModel::refresh,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -878,27 +996,22 @@ fun ChatScreen(
                 }
                 else -> {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                messages.forEachIndexed { index, message ->
+                timelineRows.forEachIndexed { index, row ->
                     if (index == dividerIndex) {
                         item(key = "unread-divider") { UnreadDivider(density = messageDensity) }
                     }
-                    item(key = message.id) {
-                        val previous = messages.getOrNull(index - 1)
-                        val tight = previous != null &&
-                            previous.sender.equals(message.sender, ignoreCase = true) &&
-                            previous.kind == message.kind
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (message.id == selectedSearchMessageId) {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
-                                    } else {
-                                        androidx.compose.ui.graphics.Color.Transparent
-                                    },
-                                ),
-                        ) {
-                            MessageRow(
+                    when (row) {
+                        is ChatTimelineRow.Message -> item(key = row.key) {
+                            val message = row.message
+                            val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
+                            val gapFromPrevious = previous?.let { message.serverTime - it.serverTime }
+                            val tight = previous != null &&
+                                index != dividerIndex &&
+                                gapFromPrevious != null && gapFromPrevious in 0..MESSAGE_GROUP_WINDOW_MS &&
+                                previous.kind !in SYSTEM_EVENT_KINDS &&
+                                message.kind !in SYSTEM_EVENT_KINDS &&
+                                previous.sender.equals(message.sender, ignoreCase = true)
+                            ChatTimelineMessageItem(
                                 message = message,
                                 members = members,
                                 displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
@@ -908,7 +1021,8 @@ fun ChatScreen(
                                 showHostmaskInEvents = showHostmaskInEvents,
                                 isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
                                 isQuery = isQuery,
-                                isMine = isQuery && (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
+                                isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
+                                isSelected = message.id == selectedSearchMessageId,
                                 onReply = viewModel::reply,
                                 onLongPress = { nick, text ->
                                     longPressedMessageText = text
@@ -916,6 +1030,58 @@ fun ChatScreen(
                                 },
                                 tight = tight,
                             )
+                        }
+                        is ChatTimelineRow.PresenceSummary -> item(key = row.key) {
+                            val burstKey = row.messages.first().id
+                            val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
+                            val expanded = selectedInBurst || burstKey in expandedPresenceBursts
+                            val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
+                            val senderLabel = row.sender ?: pluralStringResource(
+                                R.plurals.chat_activity_users,
+                                uniqueUsers,
+                                uniqueUsers,
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                PresenceBurstSummaryRow(
+                                    sender = senderLabel,
+                                    joins = row.joins,
+                                    leaves = row.leaves,
+                                    time = formatTime(row.messages.last().serverTime, showSeconds),
+                                    isIrcLine = isServer || displayMode == ChatDisplayMode.IRC_LINE,
+                                    expanded = expanded,
+                                    selected = selectedInBurst,
+                                    onToggle = {
+                                        expandedPresenceBursts = if (burstKey in expandedPresenceBursts) {
+                                            expandedPresenceBursts - burstKey
+                                        } else {
+                                            expandedPresenceBursts + burstKey
+                                        }
+                                    },
+                                )
+                                if (expanded) {
+                                    row.messages.forEach { event ->
+                                        ChatTimelineMessageItem(
+                                            message = event,
+                                            members = members,
+                                            displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
+                                            density = messageDensity,
+                                            showSeconds = showSeconds,
+                                            coloredNicklist = coloredNicklist,
+                                            showHostmaskInEvents = showHostmaskInEvents,
+                                            isMention = false,
+                                            isQuery = isQuery,
+                                            isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
+                                            isSelected = event.id == selectedSearchMessageId,
+                                            onReply = viewModel::reply,
+                                            onLongPress = { nick, text ->
+                                                longPressedMessageText = text
+                                                viewModel.onMessageLongPress(nick)
+                                            },
+                                            tight = false,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -930,12 +1096,12 @@ fun ChatScreen(
             if (isLoadingOlder) {
                 Surface(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 2.dp,
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = ResentinSpacing.large, vertical = ResentinSpacing.small),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         CircularProgressIndicator(
@@ -961,16 +1127,12 @@ fun ChatScreen(
             // giorno del primo messaggio visibile (Oggi / Ieri / 8 settembre).
             val topVisibleTime by remember {
                 derivedStateOf {
-                    if (messages.isEmpty()) {
+                    if (timelineRows.isEmpty()) {
                         null
                     } else {
                         val first = listState.firstVisibleItemIndex
-                        val messageIndex = if (dividerIndex != null && first > dividerIndex) {
-                            first - 1
-                        } else {
-                            first
-                        }
-                        messages.getOrNull(messageIndex.coerceIn(messages.indices))?.serverTime
+                        val rowIndex = if (dividerIndex != null && first > dividerIndex) first - 1 else first
+                        timelineRows.getOrNull(rowIndex.coerceIn(timelineRows.indices))?.messages?.firstOrNull()?.serverTime
                     }
                 }
             }
@@ -1065,6 +1227,107 @@ fun ChatScreen(
         }
     }
 
+    if (showActivitySheet) {
+        val activityMessages = remember(allMessages, activityFilter) {
+            allMessages.asReversed().filter { message ->
+                message.kind in SYSTEM_EVENT_KINDS && when (activityFilter) {
+                    ActivityFilter.ALL -> true
+                    ActivityFilter.PRESENCE -> message.kind in PRESENCE_EVENT_KINDS
+                    ActivityFilter.OTHER -> message.kind !in PRESENCE_EVENT_KINDS
+                }
+            }
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showActivitySheet = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.82f)
+                    .padding(horizontal = 16.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.chat_activity_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { showActivitySheet = false }) {
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chat_dialog_close))
+                    }
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ResentinFilterChip(
+                        selected = activityFilter == ActivityFilter.ALL,
+                        onClick = { activityFilter = ActivityFilter.ALL },
+                        label = { Text(stringResource(R.string.chat_activity_filter_all)) },
+                    )
+                    ResentinFilterChip(
+                        selected = activityFilter == ActivityFilter.PRESENCE,
+                        onClick = { activityFilter = ActivityFilter.PRESENCE },
+                        label = { Text(stringResource(R.string.chat_activity_filter_presence)) },
+                    )
+                    ResentinFilterChip(
+                        selected = activityFilter == ActivityFilter.OTHER,
+                        onClick = { activityFilter = ActivityFilter.OTHER },
+                        label = { Text(stringResource(R.string.chat_activity_filter_other)) },
+                    )
+                }
+                Spacer(Modifier.size(8.dp))
+                if (activityMessages.isEmpty()) {
+                    Text(
+                        stringResource(R.string.chat_activity_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp),
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(activityMessages, key = { it.id }) { event ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showActivitySheet = false
+                                        revealAllPresenceEvents = true
+                                        pendingActivityJumpId = event.id
+                                    },
+                            ) {
+                                Text(
+                                    formatTime(event.serverTime, showSeconds),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+                                )
+                                ChatTimelineMessageItem(
+                                    message = event,
+                                    members = members,
+                                    displayMode = ChatDisplayMode.IRC_LINE,
+                                    density = messageDensity,
+                                    showSeconds = showSeconds,
+                                    coloredNicklist = coloredNicklist,
+                                    showHostmaskInEvents = showHostmaskInEvents,
+                                    isMention = false,
+                                    isQuery = isQuery,
+                                    isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
+                                    isSelected = false,
+                                    onReply = viewModel::reply,
+                                    onLongPress = { nick, text ->
+                                        longPressedMessageText = text
+                                        viewModel.onMessageLongPress(nick)
+                                    },
+                                    tight = false,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     val whoisValue = whois
     if (whoisValue != null) {
         val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initial = false)
@@ -1095,7 +1358,7 @@ fun ChatScreen(
     if (showTopicDialog && topic != null) {
         AlertDialog(
             onDismissRequest = { showTopicDialog = false },
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -1120,7 +1383,7 @@ fun ChatScreen(
     if (whoReplyValue != null) {
         AlertDialog(
             onDismissRequest = viewModel::dismissWho,
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -1198,7 +1461,7 @@ fun ChatScreen(
         val messageCount = MessageLines.splitMessageLines(pendingSend).size
         AlertDialog(
             onDismissRequest = viewModel::dismissMultiLineSend,
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -1236,7 +1499,7 @@ private fun EphemeralResultCard(
 ) {
     Surface(
         modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         tonalElevation = 2.dp,
@@ -1401,9 +1664,13 @@ internal fun SlashArgumentSuggestions(
 
 @Composable
 internal fun ChatErrorSnackbar(message: String, modifier: Modifier = Modifier) {
-    Snackbar(modifier = modifier.testTag("chat-error-snackbar")) {
-        Text(message)
-    }
+    ResentinStateBanner(
+        icon = Icons.Outlined.WifiOff,
+        title = stringResource(R.string.ui_error_title),
+        description = message,
+        tone = ResentinStateTone.ERROR,
+        modifier = modifier.testTag("chat-error-snackbar"),
+    )
 }
 
 /** Fast, local-only search over the rows already loaded into Room for this chat.
@@ -1458,7 +1725,7 @@ private fun DateChip(timeMillis: Long, modifier: Modifier = Modifier) {
         }
     }
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = MaterialTheme.shapes.extraSmall,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         shadowElevation = 4.dp,
@@ -1484,7 +1751,7 @@ private fun UnreadDivider(density: MessageDensity) {
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
         )
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
             modifier = Modifier.padding(horizontal = 8.dp),
@@ -1531,7 +1798,7 @@ private fun MentionCountBadge(count: Int, modifier: Modifier = Modifier) {
         modifier = modifier
             .background(
                 color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.extraSmall,
             )
             .padding(horizontal = 6.dp, vertical = 2.dp),
     ) {
@@ -1600,6 +1867,112 @@ private fun systemEventText(event: FormattedEvent.System, showHostmask: Boolean)
 }
 
 @Composable
+private fun ChatTimelineMessageItem(
+    message: MessageEntity,
+    members: List<MemberEntity>,
+    displayMode: ChatDisplayMode,
+    density: MessageDensity,
+    showSeconds: Boolean,
+    coloredNicklist: Boolean,
+    showHostmaskInEvents: Boolean,
+    isMention: Boolean,
+    isQuery: Boolean,
+    isMine: Boolean,
+    isSelected: Boolean,
+    onReply: (nick: String, body: String) -> Unit,
+    onLongPress: (nick: String, text: String) -> Unit,
+    tight: Boolean,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+            ),
+    ) {
+        MessageRow(
+            message = message,
+            members = members,
+            displayMode = displayMode,
+            density = density,
+            showSeconds = showSeconds,
+            coloredNicklist = coloredNicklist,
+            showHostmaskInEvents = showHostmaskInEvents,
+            isMention = isMention,
+            isQuery = isQuery,
+            isMine = isMine,
+            onReply = onReply,
+            onLongPress = onLongPress,
+            tight = tight,
+        )
+    }
+}
+
+@Composable
+private fun PresenceBurstSummaryRow(
+    sender: String,
+    joins: Int,
+    leaves: Int,
+    time: String,
+    isIrcLine: Boolean,
+    expanded: Boolean,
+    selected: Boolean,
+    onToggle: () -> Unit,
+) {
+    val joinsLabel = pluralStringResource(R.plurals.chat_presence_joins, joins, joins)
+    val leavesLabel = pluralStringResource(R.plurals.chat_presence_leaves, leaves, leaves)
+    val summary = stringResource(R.string.chat_presence_burst_summary, sender, joinsLabel, leavesLabel)
+    val actionLabel = stringResource(
+        if (expanded) R.string.chat_presence_burst_collapse else R.string.chat_presence_burst_expand,
+    )
+
+    if (isIrcLine) {
+        MircText(
+            text = "[$time] -!- $summary · $actionLabel",
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = LocalResentinCodeFontFamily.current),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ResentinSpacing.xxLarge, vertical = ResentinSpacing.small),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+                else MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.clickable(onClick = onToggle),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MircText(
+                        text = "$summary · $time",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = LocalResentinChatFontFamily.current),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.widthIn(max = 300.dp),
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = actionLabel,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp).size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+@Composable
 private fun MessageRow(
     message: MessageEntity,
     members: List<MemberEntity>,
@@ -1646,11 +2019,11 @@ private fun MessageRow(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp, vertical = density.systemVertical()),
+                        .padding(horizontal = ResentinSpacing.xxLarge, vertical = density.systemVertical()),
                     contentAlignment = Alignment.Center,
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surfaceContainer,
                         border = BorderStroke(
                             1.dp,
@@ -1662,7 +2035,7 @@ private fun MessageRow(
                     ) {
                         MircText(
                             text = "$eventText · $time",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = LocalResentinChatFontFamily.current),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         )
@@ -1680,7 +2053,6 @@ private fun MessageRow(
                 } else {
                     BubbleRow(
                         message, formatted, prefix, time, coloredNicklist, isMention,
-                        isPrivate = isQuery,
                         isMine = isMine,
                         tight = tight,
                         density = density,
@@ -1714,6 +2086,11 @@ private fun buildNickLine(
     append(withClickableLinks(mircAnnotatedString(body, lightTheme), linkStylesFor(lightTheme)))
 }
 
+private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
+private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
+private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
+private enum class ActivityFilter { ALL, PRESENCE, OTHER }
+
 @Composable
 private fun BubbleRow(
     message: MessageEntity,
@@ -1722,88 +2099,170 @@ private fun BubbleRow(
     time: String,
     coloredNicklist: Boolean,
     isMention: Boolean,
-    isPrivate: Boolean,
     isMine: Boolean,
     tight: Boolean = false,
     density: MessageDensity = MessageDensity.NORMAL,
 ) {
-    val isOwnPrivate = isPrivate && isMine
+    // WhatsApp-style: i messaggi propri stanno a destra, gli altri a sinistra.
+    // isMention non scatta mai per i propri (vedi isMentionRow), ma resta primo
+    // per sicurezza.
+    val isOutgoing = isMine
+    val continuesGroup = tight && !isMention
     val bubbleColor = when {
         isMention -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-        isOwnPrivate -> MaterialTheme.colorScheme.primaryContainer
+        isOutgoing -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val bubbleBorder = when {
         isMention -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f))
-        isOwnPrivate -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+        isOutgoing -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
         else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = density.rowVertical(tight)),
-        // Query messages use the same left-aligned conversation flow as IRC chat.
-        // The sender is still differentiated by the bubble tint below, not by
-        // switching sides of the conversation.
-        horizontalArrangement = Arrangement.Start,
-        verticalAlignment = Alignment.Top,
-    ) {
-        if (isMention) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp, end = 6.dp)
-                    .size(width = 2.dp, height = 40.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-            )
+    val lightTheme = isLightTheme()
+    val timestampStyle = SpanStyle(
+        fontSize = 11.sp,
+        fontStyle = FontStyle.Normal,
+        fontFamily = LocalResentinChatFontFamily.current,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val bodyWithTime = remember(formatted.text, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle) {
+        buildAnnotatedString {
+            if (formatted.isNotice && continuesGroup) {
+                withStyle(timestampStyle) { append("(notice) ") }
+            }
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme)))
+            if (continuesGroup) {
+                append("  ")
+                withStyle(timestampStyle) { append(time) }
+            }
         }
-        Surface(
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(20.dp),
-            color = bubbleColor,
-            border = bubbleBorder,
-            tonalElevation = 0.dp,
+    }
+    val actionWithTime = remember(
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle,
+    ) {
+        buildAnnotatedString {
+            if (continuesGroup) {
+                append("* ")
+            } else {
+                append(
+                    buildNickLine(
+                        before = "* ",
+                        prefix = prefix,
+                        sender = message.sender,
+                        after = " ",
+                        body = "",
+                        coloredNicklist = coloredNicklist,
+                        lightTheme = lightTheme,
+                    ),
+                )
+                withStyle(timestampStyle) { append(time) }
+                append(" ")
+            }
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme)))
+            if (continuesGroup) {
+                append("  ")
+                withStyle(timestampStyle) { append(time) }
+            }
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val maxBubbleWidth = maxWidth * 0.88f
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = density.rowVertical(continuesGroup)),
+            // Stile WhatsApp/Telegram: outgoing a destra, incoming a sinistra.
+            // La larghezza segue comunque il contenuto fino al cap.
+            horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.Top,
         ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                if (formatted.isAction) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        val lightTheme = isLightTheme()
-                        val annotated = remember(prefix, message.sender, formatted.text, coloredNicklist, lightTheme) {
-                            buildNickLine("* ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme)
-                        }
-                        Text(
-                            text = annotated,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontStyle = FontStyle.Italic),
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = time,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
+            if (isMention) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp, end = 6.dp)
+                        .size(width = 2.dp, height = 40.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            }
+            Surface(
+                modifier = Modifier.widthIn(max = maxBubbleWidth),
+                shape = if (continuesGroup) {
+                    if (isOutgoing) {
+                        RoundedCornerShape(topStart = 20.dp, topEnd = 7.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+                    } else {
+                        RoundedCornerShape(topStart = 7.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
                     }
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (formatted.isNotice) {
-                                prefix + message.sender + " (notice)"
-                            } else {
-                                prefix + message.sender
-                            },
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (coloredNicklist) colorForNick(message.sender, isLightTheme()) else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = time,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
+                    MaterialTheme.shapes.medium
+                },
+                color = bubbleColor,
+                border = bubbleBorder,
+                tonalElevation = 0.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    if (!continuesGroup && !formatted.isAction && !isOutgoing) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (formatted.isNotice) {
+                                    "$prefix${message.sender} (notice)"
+                                } else {
+                                    prefix + message.sender
+                                },
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = LocalResentinChatFontFamily.current,
+                                ),
+                                color = if (coloredNicklist) {
+                                    colorForNick(message.sender, lightTheme)
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = time,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontFamily = LocalResentinChatFontFamily.current,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
                     }
-                    MircText(text = formatted.text, style = MaterialTheme.typography.bodyLarge)
+                    if (formatted.isAction) {
+                        Text(
+                            text = actionWithTime,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontStyle = FontStyle.Italic,
+                                fontFamily = LocalResentinChatFontFamily.current,
+                            ),
+                        )
+                    } else {
+                        Text(
+                            text = bodyWithTime,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = LocalResentinChatFontFamily.current),
+                        )
+                        // Sui propri l'header col nick è ridondante: ora in calce a destra,
+                        // come WhatsApp. Il marker (notice) va preservato in calce.
+                        if (isOutgoing && !continuesGroup) {
+                            Text(
+                                text = if (formatted.isNotice) "(notice) · $time" else time,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontFamily = LocalResentinChatFontFamily.current,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                                maxLines = 1,
+                            )
+                        }
+                    }
                 }
             }
         }

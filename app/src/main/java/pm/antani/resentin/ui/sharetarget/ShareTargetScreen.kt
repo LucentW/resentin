@@ -1,6 +1,7 @@
 package pm.antani.resentin.ui.sharetarget
 
-import androidx.compose.foundation.BorderStroke
+import pm.antani.resentin.ui.theme.ResentinSpacing
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,18 +16,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Tag
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -46,6 +45,12 @@ import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
 import pm.antani.resentin.data.db.NetworkEntity
 import pm.antani.resentin.ui.common.MircText
+import pm.antani.resentin.ui.common.ResentinEmptyState
+import pm.antani.resentin.ui.common.ResentinErrorState
+import pm.antani.resentin.ui.common.ResentinHeaderAction
+import pm.antani.resentin.ui.common.ResentinLoadingState
+import pm.antani.resentin.ui.common.ResentinStateBanner
+import pm.antani.resentin.ui.common.ResentinStateTone
 import pm.antani.resentin.ui.home.HomeViewModel
 
 /** "Condividi in..." — the landing screen when another app shares a file/photo into
@@ -60,43 +65,86 @@ fun ShareTargetScreen(
 ) {
     val networks by viewModel.networks.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val shareableNetworks = remember(networks) {
+        networks.filter { network -> network.channels.any { it.source != "server" } }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.share_target_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.cd_cancel))
-                    }
+                    ResentinHeaderAction(
+                        onClick = onCancel,
+                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.cd_cancel),
+                    )
                 },
             )
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            if (isRefreshing && networks.isEmpty()) {
-                CircularProgressIndicator(Modifier.align(Alignment.Center))
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(networks, key = { it.network.slug }) { networkWithChannels ->
-                        ShareNetworkGroupCard(
-                            network = networkWithChannels.network,
-                            channels = networkWithChannels.channels.filter { it.source != "server" },
-                            onChatSelected = { channel ->
-                                onChatSelected(networkWithChannels.network.slug, channel.name)
-                            },
-                        )
+            when {
+                isRefreshing && shareableNetworks.isEmpty() -> {
+                    ResentinLoadingState(
+                        title = stringResource(R.string.share_target_loading_title),
+                        description = stringResource(R.string.share_target_loading_description),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                error != null && shareableNetworks.isEmpty() -> {
+                    ResentinErrorState(
+                        icon = Icons.Outlined.WifiOff,
+                        title = stringResource(R.string.share_target_error_title),
+                        description = stringResource(R.string.share_target_error_description),
+                        actionLabel = stringResource(R.string.home_connection_retry),
+                        onRetry = viewModel::refresh,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                shareableNetworks.isEmpty() -> {
+                    ResentinEmptyState(
+                        icon = Icons.Outlined.ChatBubbleOutline,
+                        title = stringResource(R.string.share_target_empty_title),
+                        description = stringResource(R.string.share_target_empty_description),
+                        actionLabel = stringResource(R.string.cd_cancel),
+                        onAction = onCancel,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(shareableNetworks, key = { it.network.slug }) { networkWithChannels ->
+                            ShareNetworkGroupCard(
+                                network = networkWithChannels.network,
+                                channels = networkWithChannels.channels.filter { it.source != "server" },
+                                onChatSelected = { channel ->
+                                    onChatSelected(networkWithChannels.network.slug, channel.name)
+                                },
+                            )
+                        }
                     }
                 }
+            }
+            if (error != null && shareableNetworks.isNotEmpty()) {
+                ResentinStateBanner(
+                    icon = Icons.Outlined.WifiOff,
+                    title = stringResource(R.string.ui_error_title),
+                    description = error.orEmpty(),
+                    tone = ResentinStateTone.ERROR,
+                    actionLabel = stringResource(R.string.home_connection_retry),
+                    onAction = viewModel::refresh,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                )
             }
         }
     }
 }
-
 @Composable
 private fun ShareNetworkGroupCard(
     network: NetworkEntity,
@@ -107,10 +155,9 @@ private fun ShareNetworkGroupCard(
     // stable avatar tint per slug, dividers between rows.
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             ShareNetworkHeader(network = network, channelCount = channels.size)
@@ -147,7 +194,7 @@ private fun ShareNetworkHeader(network: NetworkEntity, channelCount: Int) {
     ) {
         Surface(
             modifier = Modifier.size(44.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.medium,
             color = avatarContainer,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -186,12 +233,12 @@ private fun ShareChannelRow(channel: ChannelEntity, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 16.dp, top = 9.dp, bottom = 9.dp),
+            .padding(start = ResentinSpacing.medium, end = ResentinSpacing.large, top = ResentinSpacing.small, bottom = ResentinSpacing.small),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
             modifier = Modifier.size(40.dp),
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = if (isQuery) {
                 MaterialTheme.colorScheme.tertiaryContainer
             } else {

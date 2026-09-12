@@ -11,6 +11,7 @@ import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.AppFontFamily
 
 val LocalResentinFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
+val LocalResentinChatFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
 val LocalResentinCodeFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Monospace }
 
 private val JetBrainsMono = FontFamily(Font(R.font.jetbrains_mono_regular, FontWeight.Normal))
@@ -69,4 +70,24 @@ fun typographyFor(fontFamily: FontFamily): Typography = Typography(
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp,
     ),
+).withFontFamily(fontFamily)
+
+/** Apply the selected UI face to every Material text role while retaining each
+ * role's size, weight, line height and tracking. */
+private fun Typography.withFontFamily(fontFamily: FontFamily): Typography = copy(
+    displayLarge = displayLarge.copy(fontFamily = fontFamily),
+    displayMedium = displayMedium.copy(fontFamily = fontFamily),
+    displaySmall = displaySmall.copy(fontFamily = fontFamily),
+    headlineLarge = headlineLarge.copy(fontFamily = fontFamily),
+    headlineMedium = headlineMedium.copy(fontFamily = fontFamily),
+    headlineSmall = headlineSmall.copy(fontFamily = fontFamily),
+    titleLarge = titleLarge.copy(fontFamily = fontFamily),
+    titleMedium = titleMedium.copy(fontFamily = fontFamily),
+    titleSmall = titleSmall.copy(fontFamily = fontFamily),
+    bodyLarge = bodyLarge.copy(fontFamily = fontFamily),
+    bodyMedium = bodyMedium.copy(fontFamily = fontFamily),
+    bodySmall = bodySmall.copy(fontFamily = fontFamily),
+    labelLarge = labelLarge.copy(fontFamily = fontFamily),
+    labelMedium = labelMedium.copy(fontFamily = fontFamily),
+    labelSmall = labelSmall.copy(fontFamily = fontFamily),
 )

@@ -15,11 +15,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
@@ -124,7 +122,7 @@ fun ChannelSettingsScreen(
                         value = state.topic,
                         onValueChange = viewModel::onTopicChange,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         minLines = 2,
                     )
                     state.error?.let { error ->
@@ -139,7 +137,7 @@ fun ChannelSettingsScreen(
                     Button(
                         onClick = viewModel::saveTopic,
                         enabled = !state.isSaving,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.channel_settings_update_topic))
@@ -173,14 +171,14 @@ fun ChannelSettingsScreen(
                             onValueChange = viewModel::onRawModeInputChange,
                             placeholder = { Text(stringResource(R.string.channel_settings_raw_mode_hint)) },
                             singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = viewModel::applyRawMode,
                             enabled = state.rawModeInput.isNotBlank(),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(stringResource(R.string.channel_settings_apply_mode))
@@ -348,14 +346,14 @@ fun ChannelSettingsScreen(
                                 onValueChange = viewModel::onNewMaskChange,
                                 placeholder = { Text(stringResource(R.string.channel_settings_new_mask_hint)) },
                                 singleLine = true,
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(8.dp))
                             Button(
                                 onClick = viewModel::addListModeEntry,
                                 enabled = state.newMaskInput.isNotBlank(),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.medium,
                             ) {
                                 Text(stringResource(R.string.channel_settings_add_mask))
                             }
@@ -373,7 +371,7 @@ fun ChannelSettingsScreen(
                     OutlinedButton(
                         onClick = viewModel::part,
                         enabled = !state.isSaving,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.channel_settings_part), color = MaterialTheme.colorScheme.error)
@@ -394,16 +392,15 @@ private fun ChannelSettingsSection(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     modifier = Modifier.size(40.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
                     color = if (danger) {
                         MaterialTheme.colorScheme.errorContainer
                     } else {

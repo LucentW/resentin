@@ -24,6 +24,11 @@ data class NetworkDto(
 )
 
 @Serializable
+data class SessionNetworkRequestDto(
+    val network: String,
+)
+
+@Serializable
 data class NetworkConnectionDto(
     val server: String? = null,
     val port: Int? = null,

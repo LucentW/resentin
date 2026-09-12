@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
             // theme override (Settings > Aspetto): SYSTEM keeps following the OS.
             val fontScale by container.appPreferences.fontScale.collectAsState(initial = 1f)
             val fontFamily by container.appPreferences.fontFamily.collectAsState(initial = AppFontFamily.SYSTEM)
+            val chatFontFamily by container.appPreferences.chatFontFamily.collectAsState(initial = AppFontFamily.SYSTEM)
             val lineHeightScale by container.appPreferences.lineHeightScale.collectAsState(initial = 1f)
             val messageDensity by container.appPreferences.messageDensity.collectAsState(initial = MessageDensity.NORMAL)
             val themeMode by container.appPreferences.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity() {
                 fontScale = fontScale,
                 lineHeightScale = lineHeightScale,
                 fontFamilyChoice = fontFamily,
+                chatFontFamilyChoice = chatFontFamily,
             ) {
                 CompositionLocalProvider(LocalDensityScale provides messageDensity.scale) {
                 AppRoot(

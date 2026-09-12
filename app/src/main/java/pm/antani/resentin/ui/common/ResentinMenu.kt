@@ -1,7 +1,6 @@
 package pm.antani.resentin.ui.common
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -12,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 
 /** Menu overflow stile Resentin — stessa lingua delle card rete della home:
  * le card 28dp usano surfaceContainerHigh + bordo outlineVariant, il menu lo
@@ -25,10 +25,11 @@ fun ResentinDropdownMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.medium,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
+        properties = PopupProperties(focusable = true),
     ) {
         content()
     }
