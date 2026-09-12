@@ -257,6 +257,10 @@ fun ChatScreen(
         selectedSearchIndex = 0
     }
 
+    LaunchedEffect(isServer) {
+        if (isServer) closeSearch()
+    }
+
     fun moveSearchResult(step: Int) {
         if (searchMatches.isEmpty()) return
         selectedSearchIndex = (selectedSearchIndex + step + searchMatches.size) % searchMatches.size
@@ -612,7 +616,9 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    if (searchOpen) {
+                    if (isServer) {
+                        // The server conversation has no channel-specific header actions.
+                    } else if (searchOpen) {
                         val counter = when {
                             searchQuery.isBlank() -> ""
                             searchMatches.isEmpty() -> stringResource(R.string.chat_search_no_results)
