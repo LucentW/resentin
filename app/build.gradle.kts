@@ -14,8 +14,8 @@ android {
         applicationId = "pm.antani.resentin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "0.3.10"
+        versionCode = 29
+        versionName = "0.3.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -94,6 +94,11 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.appcompat)
+    // Session-share QR scanning (login screen "scan QR code" — cicchetto's
+    // "open on another device"). A drop-in scanning Activity + ActivityResultContract,
+    // no Google Play Services/ML model download required, unlike ML Kit.
+    implementation(libs.zxing.embedded)
+
     implementation(libs.unifiedpush.connector) {
         // The connector pulls plain com.google.crypto.tink:tink (its own Web Push crypto
         // dep), which duplicate-class-conflicts with tink-android — already pulled in by

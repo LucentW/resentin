@@ -3,6 +3,7 @@ package pm.antani.resentin.net.rest
 import okhttp3.ResponseBody
 import pm.antani.resentin.net.dto.AuthLoginRequestDto
 import pm.antani.resentin.net.dto.AuthLoginResponseDto
+import pm.antani.resentin.net.dto.ShareConsumeRequestDto
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -17,4 +18,9 @@ interface AuthApi {
      * anon visitor gets a full teardown from this alone — see AuthRepository.detach. */
     @DELETE("auth/logout")
     suspend fun logout(): Response<ResponseBody>
+
+    /** Session-sharing redeem — unauthenticated, the token itself is the credential
+     * (cicchetto's QR/link "open on another device"). See AuthRepository.consumeShareToken. */
+    @POST("auth/share/consume")
+    suspend fun consumeShareToken(@Body body: ShareConsumeRequestDto): Response<AuthLoginResponseDto>
 }

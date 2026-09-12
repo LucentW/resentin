@@ -32,6 +32,10 @@
     <string name="login_error_server_unreachable">Server non raggiungibile: %1$s</string>
     <string name="login_error_protocol_too_old">Il server richiede un protocollo più recente (min %1$d): aggiorna l\'app</string>
     <string name="login_error_invalid_token">Token non valido o accesso negato</string>
+    <string name="login_scan_qr_button">Scansiona codice QR</string>
+    <string name="login_scan_qr_divider">oppure</string>
+    <string name="login_error_qr_invalid">Codice QR non riconosciuto: apri "accedi da un altro dispositivo" su cicchetto</string>
+    <string name="login_error_camera_permission">Permesso fotocamera negato</string>
 
 
     <!-- Home -->
@@ -543,6 +547,9 @@
     <string name="auth_error_not_authenticated">Non autenticato</string>
     <string name="auth_error_visitor_nick_taken">Questo nickname è già in uso da un\'altra sessione anonima: riprova tra poco o scegline un altro</string>
     <string name="auth_error_visitor_capacity">Il server ha raggiunto il limite di sessioni anonime contemporanee: riprova più tardi</string>
+    <string name="auth_error_share_invalid">Link di condivisione non valido</string>
+    <string name="auth_error_share_not_found">L\'identità condivisa non esiste più</string>
+    <string name="auth_error_share_expired">Link di condivisione scaduto o già usato</string>
 
     <!-- Upload errors -->
     <string name="upload_error_http">Upload fallito: HTTP %1$d</string>

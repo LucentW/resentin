@@ -2,6 +2,10 @@ package pm.antani.resentin.ui.login
 
 import pm.antani.resentin.ui.theme.ResentinSpacing
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,13 +30,16 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -43,17 +50,56 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import pm.antani.resentin.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(viewModel: LoginViewModel) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // cicchetto's session-sharing QR ("open on another device") — a drop-in
+    // scanning Activity (com.journeyapps:zxing-android-embedded), no manual
+    // CameraX/analyzer plumbing needed. On a scan, the raw contents (the
+    // `https://<host>/share#<token>` URL) go straight to the ViewModel, which
+    // parses it independently of whatever the fields above currently hold.
+    val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        result.contents?.let(viewModel::consumeShareLink)
+    }
+    val scanOptions = remember {
+        ScanOptions()
+            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            .setBeepEnabled(false)
+            .setOrientationLocked(false)
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            scanLauncher.launch(scanOptions)
+        } else {
+            viewModel.onCameraPermissionDenied()
+        }
+    }
+    val onScanQrClick: () -> Unit = {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            scanLauncher.launch(scanOptions)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.surface) { padding ->
         Column(
@@ -229,6 +275,31 @@ fun LoginScreen(viewModel: LoginViewModel) {
                 } else {
                     Text(stringResource(R.string.login_signin_button))
                 }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                HorizontalDivider(modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.login_scan_qr_divider),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onScanQrClick,
+                enabled = !state.isLoading,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.login_scan_qr_button))
             }
                 }
             }

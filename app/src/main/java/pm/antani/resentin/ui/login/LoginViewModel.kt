@@ -78,6 +78,10 @@ class LoginViewModel(
         _uiState.update { it.copy(visitorNick = nick, error = null) }
     }
 
+    fun onCameraPermissionDenied() {
+        _uiState.update { it.copy(error = context.getString(R.string.login_error_camera_permission)) }
+    }
+
     fun signIn() {
         val state = _uiState.value
         val host = state.host.trim().removePrefix("https://").removePrefix("http://").removeSuffix("/")
@@ -102,27 +106,8 @@ class LoginViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            val configResult = authRepository.fetchServerConfig(host)
-            val config = configResult.getOrNull()
-            if (config == null) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = context.getString(
-                            R.string.login_error_server_unreachable,
-                            configResult.exceptionOrNull()?.message,
-                        ),
-                    )
-                }
-                return@launch
-            }
-            if (config.minProtocolVersion > SUPPORTED_PROTOCOL_VERSION) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = context.getString(R.string.login_error_protocol_too_old, config.minProtocolVersion),
-                    )
-                }
+            serverConfigError(host)?.let { err ->
+                _uiState.update { it.copy(isLoading = false, error = err) }
                 return@launch
             }
 
@@ -137,19 +122,67 @@ class LoginViewModel(
                 return@launch
             }
 
-            val verifyResult = authRepository.verifyToken(host, token)
-            val me = verifyResult.getOrNull()
-            val username = me?.displayName
-            val wsSubject = me?.subject
-            val kind = me?.kind
-            if (username == null || wsSubject == null || kind == null) {
-                _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.login_error_invalid_token)) }
+            val error = verifyAndSignIn(host, token)
+            _uiState.update { it.copy(isLoading = false, error = error) }
+        }
+    }
+
+    /** cicchetto's session-sharing QR ("open on another device"): [rawText] is
+     * whatever the camera scanner (or a pasted link) produced. Redeems the share
+     * token against the host the QR itself names — independent of whatever the
+     * user has typed into the host/mode/token fields — then finishes exactly
+     * like the TOKEN mode. */
+    fun consumeShareLink(rawText: String) {
+        val (host, shareToken) = parseShareLink(rawText)
+            ?: run {
+                _uiState.update { it.copy(error = context.getString(R.string.login_error_qr_invalid)) }
+                return
+            }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, host = host) }
+
+            serverConfigError(host)?.let { err ->
+                _uiState.update { it.copy(isLoading = false, error = err) }
                 return@launch
             }
 
-            authRepository.signIn(host, token, username, wsSubject, kind)
-            _uiState.update { it.copy(isLoading = false) }
+            val consumeResult = authRepository.consumeShareToken(host, shareToken)
+            val token = consumeResult.getOrNull()
+            if (token == null) {
+                _uiState.update { it.copy(isLoading = false, error = consumeResult.exceptionOrNull()?.message) }
+                return@launch
+            }
+
+            val error = verifyAndSignIn(host, token)
+            _uiState.update { it.copy(isLoading = false, error = error) }
         }
+    }
+
+    private suspend fun serverConfigError(host: String): String? {
+        val configResult = authRepository.fetchServerConfig(host)
+        val config = configResult.getOrNull()
+            ?: return context.getString(
+                R.string.login_error_server_unreachable,
+                configResult.exceptionOrNull()?.message,
+            )
+        if (config.minProtocolVersion > SUPPORTED_PROTOCOL_VERSION) {
+            return context.getString(R.string.login_error_protocol_too_old, config.minProtocolVersion)
+        }
+        return null
+    }
+
+    private suspend fun verifyAndSignIn(host: String, token: String): String? {
+        val verifyResult = authRepository.verifyToken(host, token)
+        val me = verifyResult.getOrNull()
+        val username = me?.displayName
+        val wsSubject = me?.subject
+        val kind = me?.kind
+        if (username == null || wsSubject == null || kind == null) {
+            return context.getString(R.string.login_error_invalid_token)
+        }
+        authRepository.signIn(host, token, username, wsSubject, kind)
+        return null
     }
 
     companion object {

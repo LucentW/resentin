@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Login screen's "scan QR code" (cicchetto session-sharing). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".AppApplication"

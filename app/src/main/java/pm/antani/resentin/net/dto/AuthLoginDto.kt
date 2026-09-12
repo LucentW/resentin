@@ -16,3 +16,11 @@ data class AuthLoginRequestDto(
 data class AuthLoginResponseDto(
     val token: String? = null,
 )
+
+/** Body for `POST /auth/share/consume` — cicchetto's session-sharing QR/link
+ * redemption. The response rides the SAME `AuthLoginResponseDto` shape (grappa-irc's
+ * `GrappaWeb.AuthJSON.login/1` renders both), so no separate response DTO is needed. */
+@Serializable
+data class ShareConsumeRequestDto(
+    val token: String,
+)

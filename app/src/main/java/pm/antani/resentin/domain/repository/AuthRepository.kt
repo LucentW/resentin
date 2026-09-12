@@ -14,6 +14,7 @@ import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.dto.AuthLoginRequestDto
 import pm.antani.resentin.net.dto.ConfigDto
 import pm.antani.resentin.net.dto.MeDto
+import pm.antani.resentin.net.dto.ShareConsumeRequestDto
 import pm.antani.resentin.net.rest.AuthApi
 import pm.antani.resentin.net.rest.ConfigApi
 import pm.antani.resentin.net.rest.MeApi
@@ -45,6 +46,26 @@ class AuthRepository(
             200 -> checkNotNull(response.body()?.token) { context.getString(R.string.auth_error_invalid_response) }
             202 -> error(context.getString(R.string.auth_error_2fa_required))
             401 -> error(context.getString(R.string.auth_error_invalid_credentials))
+            429 -> error(context.getString(R.string.auth_error_too_many_attempts))
+            else -> error("HTTP ${response.code()}")
+        }
+    }
+
+    /** Redeems a grappa-irc session-share token — cicchetto's "open on another
+     * device" QR/link (`POST /me/share-token` on the source device, wrapped as
+     * `https://<host>/share#<token>`; scanned here and split by [pm.antani.resentin.ui.login.parseShareLink]).
+     * Unauthenticated by design: the token itself is the credential, single-use,
+     * short-TTL. Returns a bearer for the SAME identity that shared it, exactly
+     * like a regular login — the caller finishes through [verifyToken] + [signIn]
+     * just like the TOKEN mode. */
+    suspend fun consumeShareToken(host: String, shareToken: String): Result<String> = runCatching {
+        val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient())
+        val response = retrofit.create(AuthApi::class.java).consumeShareToken(ShareConsumeRequestDto(shareToken))
+        when (response.code()) {
+            200 -> checkNotNull(response.body()?.token) { context.getString(R.string.auth_error_invalid_response) }
+            401 -> error(context.getString(R.string.auth_error_share_invalid))
+            404 -> error(context.getString(R.string.auth_error_share_not_found))
+            410 -> error(context.getString(R.string.auth_error_share_expired))
             429 -> error(context.getString(R.string.auth_error_too_many_attempts))
             else -> error("HTTP ${response.code()}")
         }

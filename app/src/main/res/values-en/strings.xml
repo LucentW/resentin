@@ -32,6 +32,10 @@
     <string name="login_error_server_unreachable">Server unreachable: %1$s</string>
     <string name="login_error_protocol_too_old">The server requires a newer protocol (min %1$d): update the app</string>
     <string name="login_error_invalid_token">Invalid token or access denied</string>
+    <string name="login_scan_qr_button">Scan QR code</string>
+    <string name="login_scan_qr_divider">or</string>
+    <string name="login_error_qr_invalid">QR code not recognized: open "sign in on another device" on cicchetto</string>
+    <string name="login_error_camera_permission">Camera permission denied</string>
 
 
     <!-- Home -->
@@ -537,6 +541,9 @@
     <string name="auth_error_not_authenticated">Not authenticated</string>
     <string name="auth_error_visitor_nick_taken">This nickname is already in use by another anonymous session: try again shortly or pick another one</string>
     <string name="auth_error_visitor_capacity">The server has reached its concurrent anonymous-session limit: try again later</string>
+    <string name="auth_error_share_invalid">Invalid share link</string>
+    <string name="auth_error_share_not_found">The shared identity no longer exists</string>
+    <string name="auth_error_share_expired">Share link expired or already used</string>
 
     <!-- Upload errors -->
     <string name="upload_error_http">Upload failed: HTTP %1$d</string>
