@@ -6,13 +6,19 @@
     <string name="cd_back">Indietro</string>
     <string name="cd_remove">Rimuovi</string>
     <string name="cd_cancel">Annulla</string>
+    <string name="ui_dismiss">Chiudi</string>
+    <string name="ui_error_title">Qualcosa è andato storto</string>
+    <string name="ui_show_saved_content_description">Mostro i contenuti già salvati fino al prossimo aggiornamento.</string>
+    <string name="cd_loading">Caricamento in corso</string>
+    <string name="cd_menu_open">Menu aperto</string>
+    <string name="cd_menu_closed">Menu chiuso</string>
 
     <!-- Login -->
     <string name="login_title">Connetti a grappa</string>
     <string name="login_server_label">Server</string>
     <string name="login_mode_token">Token</string>
-    <string name="login_mode_password">Username e password</string>
-    <string name="login_mode_visitor">Visitor</string>
+    <string name="login_mode_password">Registrato</string>
+    <string name="login_mode_visitor">Visitatore</string>
     <string name="login_token_label">Token</string>
     <string name="login_username_label">Username</string>
     <string name="login_password_label">Password</string>
@@ -27,6 +33,7 @@
     <string name="login_error_protocol_too_old">Il server richiede un protocollo più recente (min %1$d): aggiorna l\'app</string>
     <string name="login_error_invalid_token">Token non valido o accesso negato</string>
 
+
     <!-- Home -->
     <string name="cd_refresh">Aggiorna</string>
     <string name="cd_app_settings">Impostazioni</string>
@@ -39,6 +46,13 @@
     <string name="home_no_networks">Nessuna rete</string>
     <string name="home_no_networks_title">Nessuna rete collegata</string>
     <string name="home_no_networks_description">Aggiungi una rete per iniziare a conversare.</string>
+    <string name="home_no_networks_available_description">Non hai reti collegate. Scegli una rete disponibile qui sotto per iniziare.</string>
+    <string name="home_available_networks_title">Reti disponibili</string>
+    <string name="home_available_networks_description">Connettiti a una rete proposta da Grappa e inizia a chattare.</string>
+    <string name="home_available_network_connect">Connetti</string>
+    <string name="home_available_network_connecting">Connessione…</string>
+    <string name="home_featured_channels_title">Canali in evidenza</string>
+    <string name="home_featured_channel_dismiss">Nascondi %1$s dalla Home</string>
     <string name="home_connection_error_title">Connessione non riuscita</string>
     <string name="home_connection_error_description">Non riesco a caricare le tue reti. Controlla la connessione e riprova.</string>
     <string name="home_connection_retry">Riprova</string>
@@ -51,7 +65,7 @@
     </plurals>
     <string name="channel_private_conversation">Conversazione privata</string>
     <string name="channel_no_topic">Nessun topic impostato</string>
-    <string name="cd_network_settings">Impostazioni rete</string>
+    <string name="cd_network_settings">Apri impostazioni rete</string>
     <string name="cd_direct_message">Messaggio privato</string>
     <string name="cd_chat_draft">Bozza salvata</string>
     <string name="home_unknown_error">Errore sconosciuto</string>
@@ -67,8 +81,30 @@
     <string name="home_new_chat_join">Entra nel canale</string>
     <string name="home_new_chat_dm">Messaggio privato</string>
     <string name="home_new_chat_browse">Sfoglia elenco canali</string>
+    <string name="home_connection_state_connecting">Connessione in corso</string>
+    <string name="home_connection_state_reconnecting">Riconnessione in corso</string>
+    <string name="home_connection_state_disconnecting">Disconnessione in corso</string>
+    <string name="home_connection_state_disconnected">Disconnesso</string>
+    <string name="home_connection_state_failed">Connessione non riuscita</string>
+    <string name="home_connection_state_unknown">Stato non disponibile</string>
+    <plurals name="home_unread_messages_accessibility">
+        <item quantity="one">%d messaggio non letto</item>
+        <item quantity="other">%d messaggi non letti</item>
+    </plurals>
+    <plurals name="home_unread_mentions_accessibility">
+        <item quantity="one">%d menzione</item>
+        <item quantity="other">%d menzioni</item>
+    </plurals>
     <string name="home_network_empty_title">Nessun canale ancora</string>
     <string name="home_network_empty_description">Questa rete non ha ancora conversazioni aperte.</string>
+
+    <string name="directory_loading_title">Caricamento canali</string>
+    <string name="directory_loading_description">Sto recuperando l’elenco e i canali in evidenza.</string>
+    <string name="directory_error_title">Impossibile caricare i canali</string>
+    <string name="directory_error_description">Controlla la connessione e riprova.</string>
+    <string name="directory_empty_description">Prova un’altra ricerca o un ordinamento diverso.</string>
+    <string name="directory_stale_title">Dati salvati non aggiornati</string>
+    <string name="directory_stale_description">Mostro l’elenco salvato. Ultimo aggiornamento: %1$s</string>
 
     <!-- Channel directory -->
     <string name="directory_title">Canali su %1$s</string>
@@ -87,6 +123,11 @@
     <string name="directory_featured_unavailable">Canali in evidenza non disponibili</string>
     <string name="directory_load_more">Carica altri</string>
 
+    <string name="admin_loading_title">Caricamento dati admin</string>
+    <string name="admin_loading_description">Sto recuperando reti, utenti e sessioni.</string>
+    <string name="admin_error_title">Impossibile caricare i dati admin</string>
+    <string name="admin_error_description">Controlla la connessione e riprova.</string>
+
     <!-- Admin -->
     <string name="settings_admin_panel">Pannello di amministrazione</string>
     <string name="settings_admin_panel_desc">Reti, vhost, utenti, sessioni e visitor</string>
@@ -99,6 +140,9 @@
     <string name="admin_tab_sessions">Sessioni</string>
     <string name="admin_tab_visitors">Visitor</string>
     <string name="admin_create">Crea</string>
+    <string name="admin_action_create_network">Crea rete</string>
+    <string name="admin_action_create_vhost">Crea vhost</string>
+    <string name="admin_action_create_user">Crea utente</string>
     <string name="admin_networks_empty">Nessuna rete</string>
     <string name="admin_network_caps">max utenti %1$d · max visitor %2$d (-1 = illimitato)</string>
     <string name="admin_network_visitors_label">Visitor</string>
@@ -176,6 +220,7 @@
     <string name="cd_channel_menu">Azioni canale</string>
     <string name="chat_channel_members_action">Lista utenti</string>
     <string name="cd_attach_file">Allega file</string>
+    <string name="cd_slash_commands">Comandi IRC</string>
     <string name="chat_message_placeholder">Messaggio</string>
     <string name="cd_send">Invia</string>
     <string name="cd_scroll_to_bottom">Vai al fondo</string>
@@ -233,6 +278,29 @@
     <string name="event_mode">%1$s ha impostato modalità %2$s%3$s</string>
     <string name="event_nick_change">%1$s è ora conosciuto come %2$s</string>
     <string name="event_topic_changed">%1$s ha cambiato il topic</string>
+    <string name="chat_presence_burst_summary">%1$s · %2$s, %3$s</string>
+    <string name="chat_presence_burst_expand">Mostra le singole righe</string>
+    <string name="chat_presence_burst_collapse">Nascondi le singole righe</string>
+    <string name="settings_smart_presence_filter">Filtro intelligente ingressi e uscite</string>
+    <string name="settings_smart_presence_filter_desc">Compatta JOIN, PART e QUIT degli utenti che non scrivono da 10 minuti. Puoi vedere tutti gli eventi da Attività.</string>
+    <string name="chat_activity_title">Attività del canale</string>
+    <string name="chat_activity_filter_all">Tutti</string>
+    <string name="chat_activity_filter_presence">Ingressi e uscite</string>
+    <string name="chat_activity_filter_other">Moderazione e canale</string>
+    <string name="chat_activity_empty">Nessun evento disponibile</string>
+    <string name="chat_activity_action">Attività (%1$d)</string>
+    <plurals name="chat_activity_users">
+        <item quantity="one">%d utente</item>
+        <item quantity="other">%d utenti</item>
+    </plurals>
+    <plurals name="chat_presence_joins">
+        <item quantity="one">%d ingresso</item>
+        <item quantity="other">%d ingressi</item>
+    </plurals>
+    <plurals name="chat_presence_leaves">
+        <item quantity="one">%d uscita</item>
+        <item quantity="other">%d uscite</item>
+    </plurals>
     <string name="paren_suffix">\ (%1$s)</string>
 
     <!-- App settings -->
@@ -256,6 +324,9 @@
     <string name="settings_theme_light">Chiaro</string>
     <string name="settings_theme_dark">Scuro</string>
     <string name="settings_font_family">Font dell’app</string>
+    <string name="settings_font_family_desc">Si applica a tutta l’interfaccia.</string>
+    <string name="settings_chat_font_family">Font della chat</string>
+    <string name="settings_chat_font_family_desc">Si applica ai messaggi e al testo che scrivi.</string>
     <string name="settings_font_family_system">Sistema</string>
     <string name="settings_font_family_jetbrains">JetBrains Mono</string>
     <string name="settings_font_family_fira">Fira Code</string>
@@ -371,6 +442,10 @@
     <string name="channel_settings_add_mask">Aggiungi</string>
 
     <!-- Network settings -->
+    <string name="network_settings_loading_title">Caricamento impostazioni rete</string>
+    <string name="network_settings_loading_description">Sto recuperando i dati salvati della rete.</string>
+    <string name="network_settings_missing_title">Rete non trovata</string>
+    <string name="network_settings_missing_description">La rete potrebbe essere stata rimossa. Torna indietro e scegline un’altra.</string>
     <string name="network_settings_connected">Connesso</string>
     <string name="network_settings_nick_label">Nick</string>
     <string name="network_settings_ident_label">Ident</string>
@@ -418,6 +493,13 @@
     <string name="chat_history_error_title">Impossibile caricare la conversazione</string>
     <string name="chat_history_error_description">Controlla la connessione e riprova.</string>
     <string name="chat_history_retry">Riprova</string>
+
+    <string name="share_target_loading_title">Caricamento conversazioni</string>
+    <string name="share_target_loading_description">Sto cercando i canali a cui hai partecipato.</string>
+    <string name="share_target_error_title">Impossibile caricare le conversazioni</string>
+    <string name="share_target_error_description">Controlla la connessione e riprova.</string>
+    <string name="share_target_empty_title">Nessuna conversazione disponibile</string>
+    <string name="share_target_empty_description">Entra prima in un canale: lo troverai qui.</string>
 
     <!-- Share target -->
     <string name="share_target_title">Condividi in...</string>

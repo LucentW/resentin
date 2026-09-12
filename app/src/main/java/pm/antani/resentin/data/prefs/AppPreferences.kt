@@ -69,6 +69,7 @@ class AppPreferences(private val context: Context) {
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
     private val keyShowHostmaskInEvents = booleanPreferencesKey("show_hostmask_in_events")
+    private val keySmartPresenceFilter = booleanPreferencesKey("smart_presence_filter")
     private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
     private val keyReplyStyle = stringPreferencesKey("reply_style")
     private val keyReplyCustomTemplate = stringPreferencesKey("reply_custom_template")
@@ -78,17 +79,24 @@ class AppPreferences(private val context: Context) {
     private val keyUnifiedPushSubscriptionId = stringPreferencesKey("unifiedpush_subscription_id")
     private val keyPushDecryptionFailureAt = longPreferencesKey("push_decryption_failure_at")
     private val keyPinnedChannels = stringSetPreferencesKey("pinned_channels")
+    private val keyDismissedFeaturedChannels = stringSetPreferencesKey("dismissed_featured_channels")
     private fun draftKey(networkSlug: String, channel: String) =
         stringPreferencesKey("draft_${channelKey(networkSlug, channel)}")
     private val keyUnreadFirst = booleanPreferencesKey("unread_first")
     private val keyFontScale = floatPreferencesKey("font_scale")
     private val keyThemeMode = stringPreferencesKey("theme_mode")
     private val keyFontFamily = stringPreferencesKey("font_family")
+    private val keyChatFontFamily = stringPreferencesKey("chat_font_family")
     private val keyMessageDensity = stringPreferencesKey("message_density")
     private val keyLineSpacing = stringPreferencesKey("line_spacing")
     private val keyLineHeightScale = floatPreferencesKey("line_height_scale")
 
     val pinnedChannels: Flow<Set<String>> = context.dataStore.data.map { it[keyPinnedChannels] ?: emptySet() }
+
+    /** Featured network channels hidden from Home on this device. */
+    val dismissedFeaturedChannels: Flow<Set<String>> = context.dataStore.data.map {
+        it[keyDismissedFeaturedChannels] ?: emptySet()
+    }
 
     /** Canonical network/target keys whose local draft is currently non-empty. */
     val chatDrafts: Flow<Set<String>> = context.dataStore.data.map { preferences ->
@@ -103,6 +111,15 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit {
             val current = it[keyPinnedChannels] ?: emptySet()
             it[keyPinnedChannels] = if (pinned) current + channelKey(networkSlug, channel) else current - channelKey(networkSlug, channel)
+        }
+    }
+
+    /** Hides or restores one curated channel suggestion on this device. */
+    suspend fun setFeaturedChannelDismissed(networkSlug: String, channel: String, dismissed: Boolean) {
+        context.dataStore.edit {
+            val current = it[keyDismissedFeaturedChannels] ?: emptySet()
+            val key = channelKey(networkSlug, channel)
+            it[keyDismissedFeaturedChannels] = if (dismissed) current + key else current - key
         }
     }
 
@@ -177,6 +194,18 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { it[keyFontFamily] = fontFamily.name }
     }
 
+    /** Font used by chat messages and the composer. Existing installs inherit their
+     * previous global font choice until the chat font is changed independently. The
+     * IRC-line view keeps the platform monospace face when SYSTEM is selected. */
+    val chatFontFamily: Flow<AppFontFamily> = context.dataStore.data.map { preferences ->
+        val saved = preferences[keyChatFontFamily] ?: preferences[keyFontFamily] ?: AppFontFamily.SYSTEM.name
+        runCatching { AppFontFamily.valueOf(saved) }.getOrDefault(AppFontFamily.SYSTEM)
+    }
+
+    suspend fun setChatFontFamily(fontFamily: AppFontFamily) {
+        context.dataStore.edit { it[keyChatFontFamily] = fontFamily.name }
+    }
+
     val stayConnected: Flow<Boolean> = context.dataStore.data.map { it[keyStayConnected] ?: false }
 
     suspend fun setStayConnected(value: Boolean) {
@@ -207,6 +236,13 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setShowHostmaskInEvents(value: Boolean) {
         context.dataStore.edit { it[keyShowHostmaskInEvents] = value }
+    }
+
+    /** Compress JOIN/PART/QUIT noise from users who have not spoken recently. */
+    val smartPresenceFilter: Flow<Boolean> = context.dataStore.data.map { it[keySmartPresenceFilter] ?: true }
+
+    suspend fun setSmartPresenceFilter(value: Boolean) {
+        context.dataStore.edit { it[keySmartPresenceFilter] = value }
     }
 
     /** Local, fast-reading mirror of the server-persisted `DisplayPrefsDto.coloredNicklist`

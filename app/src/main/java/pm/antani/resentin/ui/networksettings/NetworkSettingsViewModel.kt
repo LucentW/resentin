@@ -39,6 +39,7 @@ data class NetworkSettingsUiState(
     val avatarUploading: Boolean = false,
     val avatarError: String? = null,
     val isLoading: Boolean = true,
+    val networkFound: Boolean = false,
     val isSaving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
@@ -72,9 +73,12 @@ class NetworkSettingsViewModel(
                             avatarUrl = network.avatarUrl,
                             avatarBitmap = if (avatarChanged) null else it.avatarBitmap,
                             isLoading = false,
+                            networkFound = true,
                         )
                     }
                     if (avatarChanged) loadAvatarBitmap(network.avatarUrl)
+                } else {
+                    _uiState.update { it.copy(isLoading = false, networkFound = false) }
                 }
             }
         }

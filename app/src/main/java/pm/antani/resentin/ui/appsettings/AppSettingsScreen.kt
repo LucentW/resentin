@@ -1,5 +1,7 @@
 package pm.antani.resentin.ui.appsettings
 
+import pm.antani.resentin.ui.theme.ResentinSpacing
+
 import android.Manifest
 import android.app.LocaleManager
 import android.content.pm.PackageManager
@@ -12,6 +14,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,17 +27,17 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
@@ -49,6 +52,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import pm.antani.resentin.ui.common.ResentinFilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -75,9 +80,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
@@ -178,10 +185,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val showHostmaskInEvents by viewModel.showHostmaskInEvents.collectAsState()
+    val smartPresenceFilter by viewModel.smartPresenceFilter.collectAsState()
     val unreadFirst by viewModel.unreadFirst.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
+    val chatFontFamily by viewModel.chatFontFamily.collectAsState()
+    val fontFamilyOptions = appFontFamilyOptions()
     val messageDensity by viewModel.messageDensity.collectAsState()
     val lineHeightScale by viewModel.lineHeightScale.collectAsState()
     val replyStyle by viewModel.replyStyle.collectAsState()
@@ -302,7 +312,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 modifier = Modifier.size(40.dp),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = MaterialTheme.shapes.extraSmall,
                                 color = MaterialTheme.colorScheme.primaryContainer,
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -314,7 +324,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(ResentinSpacing.medium))
                             Column {
                                 Text(
                                     section.title(),
@@ -347,12 +357,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 8.dp,
-                bottom = 24.dp,
+                start = ResentinSpacing.large,
+                end = ResentinSpacing.large,
+                top = ResentinSpacing.small,
+                bottom = ResentinSpacing.xLarge,
             ),
-            verticalArrangement = Arrangement.spacedBy(12.dp * LocalDensityScale.current),
+            verticalArrangement = Arrangement.spacedBy(ResentinSpacing.medium * LocalDensityScale.current),
         ) {
             if (section == null) {
                 item {
@@ -377,83 +387,65 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         text = stringResource(R.string.settings_theme),
                         icon = Icons.Outlined.Palette,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        ResentinFilterChip(
-                            selected = themeMode == ThemeMode.SYSTEM,
-                            onClick = { viewModel.setThemeMode(ThemeMode.SYSTEM) },
-                            label = { Text(stringResource(R.string.settings_theme_system)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                        ResentinFilterChip(
-                            selected = themeMode == ThemeMode.LIGHT,
-                            onClick = { viewModel.setThemeMode(ThemeMode.LIGHT) },
-                            label = { Text(stringResource(R.string.settings_theme_light)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                        ResentinFilterChip(
-                            selected = themeMode == ThemeMode.DARK,
-                            onClick = { viewModel.setThemeMode(ThemeMode.DARK) },
-                            label = { Text(stringResource(R.string.settings_theme_dark)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                    }
-                    SettingsRowDivider()
-                    SettingsBlockLabel(
-                        text = stringResource(R.string.settings_font_family),
-                        icon = Icons.Outlined.TextFields,
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsDropdown(
+                        selected = themeMode,
+                        options = listOf(
+                            SettingsDropdownOption(ThemeMode.SYSTEM, stringResource(R.string.settings_theme_system)),
+                            SettingsDropdownOption(ThemeMode.LIGHT, stringResource(R.string.settings_theme_light)),
+                            SettingsDropdownOption(ThemeMode.DARK, stringResource(R.string.settings_theme_dark)),
+                        ),
+                        onSelected = viewModel::setThemeMode,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        AppFontFamily.entries.forEach { choice ->
-                            ResentinFilterChip(
-                                selected = fontFamily == choice,
-                                onClick = { viewModel.setFontFamily(choice) },
-                                label = {
-                                    Text(
-                                        text = when (choice) {
-                                            AppFontFamily.SYSTEM -> stringResource(R.string.settings_font_family_system)
-                                            AppFontFamily.JETBRAINS_MONO -> stringResource(R.string.settings_font_family_jetbrains)
-                                            AppFontFamily.FIRA_CODE -> stringResource(R.string.settings_font_family_fira)
-                                            AppFontFamily.SOURCE_CODE_PRO -> stringResource(R.string.settings_font_family_source_code)
-                                            AppFontFamily.IBM_PLEX_MONO -> stringResource(R.string.settings_font_family_ibm_plex)
-                                            AppFontFamily.CASCADIA_CODE -> stringResource(R.string.settings_font_family_cascadia)
-                                            AppFontFamily.HACK -> stringResource(R.string.settings_font_family_hack)
-                                        },
-                                        fontFamily = choice.toComposeFontFamily(),
-                                    )
-                                },
-                                modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                            )
-                        }
-                    }
                     SettingsRowDivider()
                     SettingsBlockLabel(
                         text = stringResource(R.string.settings_language),
                         icon = Icons.Outlined.Language,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        ResentinFilterChip(
-                            selected = currentLanguageTag == null,
-                            onClick = { setLanguage(null) },
-                            label = { Text(stringResource(R.string.settings_language_system)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                        ResentinFilterChip(
-                            selected = currentLanguageTag == "it",
-                            onClick = { setLanguage("it") },
-                            label = { Text(stringResource(R.string.settings_language_italian)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                        ResentinFilterChip(
-                            selected = currentLanguageTag == "en",
-                            onClick = { setLanguage("en") },
-                            label = { Text(stringResource(R.string.settings_language_english)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                        )
-                    }
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsDropdown(
+                        selected = currentLanguageTag,
+                        options = listOf(
+                            SettingsDropdownOption(null, stringResource(R.string.settings_language_system)),
+                            SettingsDropdownOption("it", stringResource(R.string.settings_language_italian)),
+                            SettingsDropdownOption("en", stringResource(R.string.settings_language_english)),
+                        ),
+                        onSelected = ::setLanguage,
+                    )
                     SettingsRowDivider()
+                    SettingsBlockLabel(
+                        text = stringResource(R.string.settings_font_family),
+                        icon = Icons.Outlined.TextFields,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_font_family_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsDropdown(
+                        selected = fontFamily,
+                        options = fontFamilyOptions,
+                        onSelected = viewModel::setFontFamily,
+                    )
+                    SettingsRowDivider()
+                    SettingsBlockLabel(
+                        text = stringResource(R.string.settings_chat_font_family),
+                        icon = Icons.Outlined.ChatBubbleOutline,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_chat_font_family_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsDropdown(
+                        selected = chatFontFamily,
+                        options = fontFamilyOptions,
+                        onSelected = viewModel::setChatFontFamily,
+                    )
+                    SettingsRowDivider()
+
                     // Fixed seven-stop slider (XXS–XXL): discrete writes, live theme preview.
                     // The live value sits in the header and only the two end labels are
                     // shown below: a full 7-label strip can never align with the stops,
@@ -486,7 +478,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         Text("XXS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("XXL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(ResentinSpacing.xSmall))
                     Text("AaBbCc 123", style = MaterialTheme.typography.displaySmall)
                     Text(
                         stringResource(R.string.settings_font_size_preview),
@@ -512,7 +504,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     // Discrete seven-stop slider (70%–150%): same interaction as
                     // the font-size slider above, live theme preview below.
                     val lineIndex = LINE_HEIGHT_SCALES.indices.minByOrNull {
@@ -529,7 +521,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         Text("70%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("150%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(ResentinSpacing.xSmall))
                     Text(
                         stringResource(R.string.settings_line_spacing_preview),
                         style = MaterialTheme.typography.bodyMedium,
@@ -537,25 +529,25 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     )
                     SettingsRowDivider()
                     SettingsBlockLabel(text = stringResource(R.string.settings_density))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     FlowRow(modifier = Modifier.fillMaxWidth()) {
                         ResentinFilterChip(
                             selected = messageDensity == MessageDensity.COMPACT,
                             onClick = { viewModel.setMessageDensity(MessageDensity.COMPACT) },
                             label = { Text(stringResource(R.string.settings_density_compact)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = messageDensity == MessageDensity.NORMAL,
                             onClick = { viewModel.setMessageDensity(MessageDensity.NORMAL) },
                             label = { Text(stringResource(R.string.settings_density_normal)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = messageDensity == MessageDensity.COMFORTABLE,
                             onClick = { viewModel.setMessageDensity(MessageDensity.COMFORTABLE) },
                             label = { Text(stringResource(R.string.settings_density_comfortable)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                     }
                 }
@@ -570,19 +562,19 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     description = stringResource(R.string.settings_group_chat_desc),
                 ) {
                     SettingsBlockLabel(text = stringResource(R.string.settings_chat_display))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     FlowRow(modifier = Modifier.fillMaxWidth()) {
                         ResentinFilterChip(
                             selected = chatDisplayMode == ChatDisplayMode.BUBBLES,
                             onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.BUBBLES) },
                             label = { Text(stringResource(R.string.settings_display_bubbles)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = chatDisplayMode == ChatDisplayMode.IRC_LINE,
                             onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.IRC_LINE) },
                             label = { Text(stringResource(R.string.settings_display_irc_line)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                     }
                     Text(
@@ -592,35 +584,35 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     )
                     SettingsRowDivider()
                     SettingsBlockLabel(text = stringResource(R.string.settings_reply_style_title))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     FlowRow(modifier = Modifier.fillMaxWidth()) {
                         ResentinFilterChip(
                             selected = replyStyle == ReplyStyle.NICK,
                             onClick = { viewModel.setReplyStyle(ReplyStyle.NICK) },
                             label = { Text(stringResource(R.string.settings_reply_style_nick)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = replyStyle == ReplyStyle.QUOTE,
                             onClick = { viewModel.setReplyStyle(ReplyStyle.QUOTE) },
                             label = { Text(stringResource(R.string.settings_reply_style_quote)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = replyStyle == ReplyStyle.CUSTOM,
                             onClick = { viewModel.setReplyStyle(ReplyStyle.CUSTOM) },
                             label = { Text(stringResource(R.string.settings_reply_style_custom)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                     }
                     if (replyStyle == ReplyStyle.CUSTOM) {
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ResentinSpacing.small))
                         OutlinedTextField(
                             value = state.replyCustomTemplate,
                             onValueChange = viewModel::onReplyCustomTemplateChange,
                             placeholder = { Text(stringResource(R.string.settings_reply_custom_hint)) },
                             singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
@@ -628,16 +620,16 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ResentinSpacing.small))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = viewModel::saveReplyCustomTemplate,
-                                shape = RoundedCornerShape(16.dp),
+                                shape = MaterialTheme.shapes.medium,
                             ) {
                                 Text(stringResource(R.string.network_settings_save))
                             }
                             if (state.replyCustomTemplateSaved) {
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(ResentinSpacing.small))
                                 Text(stringResource(R.string.settings_reply_custom_saved), color = MaterialTheme.colorScheme.primary)
                             }
                         }
@@ -655,6 +647,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         description = stringResource(R.string.settings_show_hostmask_desc),
                         checked = showHostmaskInEvents,
                         onCheckedChange = viewModel::setShowHostmaskInEvents,
+                    )
+                    SettingsRowDivider()
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_smart_presence_filter),
+                        description = stringResource(R.string.settings_smart_presence_filter_desc),
+                        checked = smartPresenceFilter,
+                        onCheckedChange = viewModel::setSmartPresenceFilter,
                     )
                     SettingsRowDivider()
                     SettingsSwitchRow(
@@ -695,11 +694,11 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         onCheckedChange = ::onPushEnabledChange,
                     )
                     state.pushError?.let { error ->
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(ResentinSpacing.xSmall))
                         Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                     pushDecryptionFailureAt?.let { epochMillis ->
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(ResentinSpacing.xSmall))
                         Text(
                             stringResource(R.string.settings_push_decryption_failure, formatEpochMillis(epochMillis)),
                             style = MaterialTheme.typography.bodySmall,
@@ -707,12 +706,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         )
                     }
                     if (state.pushSubscriptions.isNotEmpty()) {
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(ResentinSpacing.large))
                         Text(
                             stringResource(R.string.settings_push_devices),
                             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(ResentinSpacing.xSmall))
                     }
                 }
             }
@@ -735,13 +734,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     description = stringResource(R.string.settings_group_presence_desc),
                 ) {
                     SettingsBlockLabel(text = stringResource(R.string.settings_auto_away_title))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(ResentinSpacing.xSmall))
                     Text(
                         stringResource(R.string.settings_auto_away_label),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     val autoAwayIsCustomValue = autoAwayDebounceSeconds != null &&
                         autoAwayDebounceSeconds != 0 &&
                         autoAwayDebounceSeconds !in AUTO_AWAY_PRESET_SECONDS
@@ -751,27 +750,27 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                             selected = !autoAwayShowCustom && autoAwayDebounceSeconds == null,
                             onClick = { viewModel.onAutoAwayPresetSelected(null) },
                             label = { Text(stringResource(R.string.settings_auto_away_site_default)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         ResentinFilterChip(
                             selected = !autoAwayShowCustom && autoAwayDebounceSeconds == 0,
                             onClick = { viewModel.onAutoAwayPresetSelected(0) },
                             label = { Text(stringResource(R.string.settings_auto_away_off)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                         AUTO_AWAY_PRESETS.forEach { (seconds, labelRes) ->
                             ResentinFilterChip(
                                 selected = !autoAwayShowCustom && autoAwayDebounceSeconds == seconds,
                                 onClick = { viewModel.onAutoAwayPresetSelected(seconds) },
                                 label = { Text(stringResource(labelRes)) },
-                                modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                                modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                             )
                         }
                         ResentinFilterChip(
                             selected = autoAwayShowCustom,
                             onClick = { viewModel.onAutoAwayCustomModeSelected() },
                             label = { Text(stringResource(R.string.settings_reply_style_custom)) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
                         )
                     }
                     if (autoAwayShowCustom) {
@@ -785,13 +784,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                             label = { Text(stringResource(R.string.settings_auto_away_custom_seconds)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ResentinSpacing.small))
                         Button(
                             onClick = { viewModel.saveAutoAwayCustomDraft(autoAwayInvalidInputMessage) },
-                            shape = RoundedCornerShape(16.dp),
+                            shape = MaterialTheme.shapes.medium,
                         ) {
                             Text(stringResource(R.string.network_settings_save))
                         }
@@ -814,7 +813,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     description = stringResource(R.string.settings_peer_profiles_desc),
                 ) {
                     SettingsBlockLabel(text = stringResource(R.string.settings_peer_profiles_title))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(ResentinSpacing.xSmall))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -830,7 +829,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                             onCheckedChange = { viewModel.toggleShowPeerProfiles() },
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     Text(
                         stringResource(R.string.settings_peer_profiles_desc),
                         style = MaterialTheme.typography.bodySmall,
@@ -881,7 +880,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     description = stringResource(R.string.settings_group_commands_desc),
                 ) {
                     SettingsBlockLabel(text = stringResource(R.string.settings_aliases))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     state.aliases.entries.forEachIndexed { index, (name, expansion) ->
                         if (index > 0) SettingsRowDivider()
                         Row(
@@ -907,39 +906,39 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         onValueChange = viewModel::onNewAliasNameChange,
                         label = { Text(stringResource(R.string.settings_alias_name_label)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     OutlinedTextField(
                         value = state.newAliasExpansion,
                         onValueChange = viewModel::onNewAliasExpansionChange,
                         label = { Text(stringResource(R.string.settings_alias_expansion_label)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     Button(
                         onClick = viewModel::addAlias,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.settings_add_alias))
                     }
                     state.error?.let { error ->
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ResentinSpacing.small))
                         Text(error, color = MaterialTheme.colorScheme.error)
                     }
                     val highlights by viewModel.highlightPatterns.collectAsState()
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(ResentinSpacing.large))
                     SettingsBlockLabel(text = stringResource(R.string.settings_highlights))
                     Text(
                         stringResource(R.string.settings_highlight_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     highlights?.forEachIndexed { index, pattern ->
                         if (index > 0) SettingsRowDivider()
                         Row(
@@ -962,19 +961,19 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         onValueChange = viewModel::onNewHighlightChange,
                         label = { Text(stringResource(R.string.settings_highlight_label)) },
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(ResentinSpacing.small))
                     Button(
                         onClick = viewModel::addHighlight,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.settings_add_highlight))
                     }
                     state.highlightError?.let { error ->
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(ResentinSpacing.small))
                         Text(error, color = MaterialTheme.colorScheme.error)
                     }
                 }
@@ -990,7 +989,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 ) {
                     OutlinedButton(
                         onClick = { showClearMessagesConfirm = true },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.settings_clear_messages, formatByteSize(messageDbSizeBytes)))
@@ -1008,7 +1007,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     if (showClearMessagesConfirm) {
         AlertDialog(
             onDismissRequest = { showClearMessagesConfirm = false },
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -1038,9 +1037,94 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     }
 }
 
+private data class SettingsDropdownOption<T>(
+    val value: T,
+    val label: String,
+    val fontFamily: FontFamily? = null,
+)
+
+@Composable
+private fun <T> SettingsDropdown(
+    selected: T,
+    options: List<SettingsDropdownOption<T>>,
+    onSelected: (T) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedOption = options.firstOrNull { it.value == selected } ?: options.first()
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = ResentinSpacing.large, vertical = ResentinSpacing.medium),
+        ) {
+            Text(
+                text = selectedOption.label,
+                modifier = Modifier.weight(1f),
+                fontFamily = selectedOption.fontFamily,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.width(maxWidth),
+            properties = PopupProperties(focusable = true),
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label, fontFamily = option.fontFamily) },
+                    onClick = {
+                        onSelected(option.value)
+                        expanded = false
+                    },
+                    trailingIcon = if (option.value == selected) {
+                        {
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun appFontFamilyOptions(): List<SettingsDropdownOption<AppFontFamily>> =
+    AppFontFamily.entries.map { choice ->
+        SettingsDropdownOption(
+            value = choice,
+            label = when (choice) {
+                AppFontFamily.SYSTEM -> stringResource(R.string.settings_font_family_system)
+                AppFontFamily.JETBRAINS_MONO -> stringResource(R.string.settings_font_family_jetbrains)
+                AppFontFamily.FIRA_CODE -> stringResource(R.string.settings_font_family_fira)
+                AppFontFamily.SOURCE_CODE_PRO -> stringResource(R.string.settings_font_family_source_code)
+                AppFontFamily.IBM_PLEX_MONO -> stringResource(R.string.settings_font_family_ibm_plex)
+                AppFontFamily.CASCADIA_CODE -> stringResource(R.string.settings_font_family_cascadia)
+                AppFontFamily.HACK -> stringResource(R.string.settings_font_family_hack)
+            },
+            fontFamily = choice.toComposeFontFamily(),
+        )
+    }
+
 /** The hub menu: one row per group, same row language as the home's channel rows
  * (40dp icon avatar, title + subtitle, chevron). Groups without content available
  * right now (e.g. Identità with no vhost options) are hidden, not disabled. */
+
 @Composable
 private fun SettingsHubCard(
     showIdentity: Boolean,
@@ -1051,10 +1135,9 @@ private fun SettingsHubCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
             val sections = buildList {
@@ -1131,7 +1214,7 @@ private fun SettingsHubRow(
     ) {
         Surface(
             modifier = Modifier.size(40.dp),
-            shape = RoundedCornerShape(14.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = MaterialTheme.colorScheme.primaryContainer,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -1143,7 +1226,7 @@ private fun SettingsHubRow(
                 )
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(ResentinSpacing.medium))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -1179,17 +1262,16 @@ private fun SettingsGroupCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             if (showHeader) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(
                     start = 12.dp,
-                    end = 16.dp,
+                    end = ResentinSpacing.large,
                     top = 12.dp * LocalDensityScale.current,
                     bottom = 12.dp * LocalDensityScale.current,
                 ),
@@ -1197,7 +1279,7 @@ private fun SettingsGroupCard(
             ) {
                 Surface(
                     modifier = Modifier.size(40.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -1209,7 +1291,7 @@ private fun SettingsGroupCard(
                         )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(ResentinSpacing.medium))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = title,
@@ -1248,7 +1330,7 @@ private fun SettingsBlockLabel(text: String, icon: ImageVector? = null, modifier
                 modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(ResentinSpacing.small))
         }
         Text(
             text = text,
@@ -1303,10 +1385,9 @@ private fun PushSubscriptionRow(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),

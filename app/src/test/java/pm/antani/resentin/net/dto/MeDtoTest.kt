@@ -30,4 +30,20 @@ class MeDtoTest {
         assertEquals(1, counts.mentions)
         assertEquals("mention", counts.severity)
     }
+    @Test
+    fun decodesAvailableNetworksInHomeEnvelope() {
+        val me = AppJson.decodeFromString<MeDto>(
+            """
+            {
+              "kind": "visitor",
+              "home_data": {
+                "networks": [],
+                "available_networks": [{"slug": "libera"}]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf(AvailableNetworkDto("libera")), me.homeData?.availableNetworks)
+    }
 }

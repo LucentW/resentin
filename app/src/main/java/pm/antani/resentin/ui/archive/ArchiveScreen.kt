@@ -1,6 +1,5 @@
 package pm.antani.resentin.ui.archive
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -24,15 +22,12 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,7 +50,11 @@ import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.ArchiveEntryDto
 import pm.antani.resentin.ui.common.ResentinHeaderAction
 import pm.antani.resentin.ui.common.LocalDensityScale
+import pm.antani.resentin.ui.theme.ResentinSpacing
 import pm.antani.resentin.ui.common.ResentinEmptyState
+import pm.antani.resentin.ui.common.ResentinErrorState
+import pm.antani.resentin.ui.common.ResentinStateBanner
+import pm.antani.resentin.ui.common.ResentinStateTone
 import pm.antani.resentin.ui.common.ResentinLoadingState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,12 +115,12 @@ fun ArchiveScreen(
                     )
                 }
                 state.entries.isEmpty() && state.error != null -> {
-                    ResentinEmptyState(
+                    ResentinErrorState(
                         icon = Icons.Outlined.WifiOff,
                         title = stringResource(R.string.home_connection_error_title),
                         description = stringResource(R.string.archive_error_description),
                         actionLabel = stringResource(R.string.home_connection_retry),
-                        onAction = viewModel::load,
+                        onRetry = viewModel::load,
                         modifier = Modifier.align(Alignment.Center),
                     )
                 }
@@ -136,8 +135,8 @@ fun ArchiveScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp * LocalDensityScale.current),
+                        contentPadding = PaddingValues(start = ResentinSpacing.large, end = ResentinSpacing.large, top = ResentinSpacing.small, bottom = ResentinSpacing.xLarge),
+                        verticalArrangement = Arrangement.spacedBy(ResentinSpacing.xSmall * LocalDensityScale.current),
                     ) {
                         items(state.entries, key = { it.target }) { entry ->
                             ArchiveRow(
@@ -150,10 +149,13 @@ fun ArchiveScreen(
                 }
             }
             if (state.error != null && state.entries.isNotEmpty()) {
-                val message = state.error!!
-                Snackbar(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
-                    Text(message)
-                }
+                ResentinStateBanner(
+                    icon = Icons.Outlined.WifiOff,
+                    title = stringResource(R.string.ui_error_title),
+                    description = state.error.orEmpty(),
+                    tone = ResentinStateTone.ERROR,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                )
             }
         }
     }
@@ -161,7 +163,7 @@ fun ArchiveScreen(
     state.pendingDelete?.let { entry ->
         AlertDialog(
             onDismissRequest = viewModel::cancelDelete,
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -192,23 +194,17 @@ fun ArchiveScreen(
 @Composable
 private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: () -> Unit) {
     val isQuery = entry.kind == "query"
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 12.dp * LocalDensityScale.current),
+                .padding(horizontal = ResentinSpacing.medium, vertical = ResentinSpacing.medium * LocalDensityScale.current),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
                 modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.extraSmall,
                 color = if (isQuery) {
                     MaterialTheme.colorScheme.tertiaryContainer
                 } else {
@@ -232,7 +228,7 @@ private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: ()
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(ResentinSpacing.medium))
             Column(Modifier.weight(1f)) {
                 Text(
                     entry.target,

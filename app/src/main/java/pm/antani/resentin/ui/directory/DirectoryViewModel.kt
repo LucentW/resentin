@@ -51,8 +51,6 @@ class DirectoryViewModel(
     private var featuredRequestId = 0
 
     init {
-        load()
-        loadFeatured()
         viewModelScope.launch {
             networksRepository.networksWithChannels.collect { networks ->
                 val joined = networks.firstOrNull { it.network.slug == networkSlug }
@@ -131,20 +129,63 @@ class DirectoryViewModel(
      * so this is the pragmatic client-side wait. Stops early once the status is no
      * longer "refreshing". */
     fun refresh() {
+        if (_uiState.value.isRefreshing) return
+        _uiState.update {
+            it.copy(
+                isLoading = it.entries.isEmpty() && it.featured.isEmpty(),
+                isRefreshing = true,
+                error = null,
+            )
+        }
         loadFeatured()
         viewModelScope.launch {
-            _uiState.update { it.copy(isRefreshing = true, error = null) }
-            networksRepository.refreshDirectory(networkSlug).onFailure {
-                _uiState.update { state -> state.copy(isRefreshing = false, error = it.message ?: context.getString(R.string.home_unknown_error)) }
+            fetchPage(cursor = null)
+                .onSuccess { page ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            entries = page.entries,
+                            nextCursor = page.nextCursor,
+                            status = page.status,
+                            capturedAt = page.capturedAt,
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _uiState.update {
+                        it.copy(isLoading = false, error = failure.message ?: context.getString(R.string.home_unknown_error))
+                    }
+                }
+
+            networksRepository.refreshDirectory(networkSlug).onFailure { failure ->
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = failure.message ?: context.getString(R.string.home_unknown_error),
+                    )
+                }
                 return@launch
             }
             repeat(REFRESH_POLL_MAX_ATTEMPTS) {
                 delay(REFRESH_POLL_INTERVAL_MS)
                 val page = fetchPage(cursor = null).getOrNull() ?: return@repeat
-                _uiState.update { it.copy(entries = page.entries, nextCursor = page.nextCursor, status = page.status, capturedAt = page.capturedAt) }
-                if (page.status != "refreshing") return@launch
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        entries = page.entries,
+                        nextCursor = page.nextCursor,
+                        status = page.status,
+                        capturedAt = page.capturedAt,
+                        error = null,
+                    )
+                }
+                if (page.status != "refreshing") {
+                    _uiState.update { it.copy(isRefreshing = false) }
+                    return@launch
+                }
             }
-            _uiState.update { it.copy(isRefreshing = false) }
+            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
         }
     }
 

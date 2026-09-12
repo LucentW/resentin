@@ -49,9 +49,16 @@ data class UnreadCountDto(
 @Serializable
 data class MeHomeDataDto(
     val networks: List<MeHomeNetworkDto> = emptyList(),
+    val availableNetworks: List<AvailableNetworkDto> = emptyList(),
 )
 
 @Serializable
 data class MeHomeNetworkDto(
     val nick: String? = null,
+)
+
+/** A self-serve network exposed by Grappa for one-tap attachment from Home. */
+@Serializable
+data class AvailableNetworkDto(
+    val slug: String,
 )

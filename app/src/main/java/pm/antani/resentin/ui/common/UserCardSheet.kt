@@ -1,7 +1,6 @@
 package pm.antani.resentin.ui.common
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -118,13 +116,13 @@ fun UserCardSheet(
                     Image(
                         bitmap = avatar.asImageBitmap(),
                         contentDescription = null,
-                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(20.dp)),
+                        modifier = Modifier.size(56.dp).clip(MaterialTheme.shapes.medium),
                     )
                 } else {
                     Box(
                         modifier = Modifier
                             .size(56.dp)
-                            .background(nickColor.copy(alpha = 0.18f), RoundedCornerShape(20.dp)),
+                            .background(nickColor.copy(alpha = 0.18f), MaterialTheme.shapes.medium),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -168,12 +166,12 @@ fun UserCardSheet(
                         .fillMaxWidth()
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerHighest,
-                            RoundedCornerShape(16.dp),
+                            MaterialTheme.shapes.medium,
                         )
                         .border(
                             1.dp,
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                            RoundedCornerShape(16.dp),
+                            MaterialTheme.shapes.medium,
                         )
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
@@ -236,14 +234,14 @@ fun UserCardSheet(
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = { onContactPrivately(target) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
                     ) {
                         Text(stringResource(R.string.whois_message_privately))
                     }
                     OutlinedButton(
                         onClick = { if (isIgnored) onUnignore(target) else onIgnore(target) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(stringResource(if (isIgnored) R.string.whois_unignore else R.string.whois_ignore))
@@ -255,14 +253,14 @@ fun UserCardSheet(
                 Row(modifier = Modifier.padding(top = 8.dp)) {
                     OutlinedButton(
                         onClick = { clipboardManager.setText(AnnotatedString(stripMircCodes(messageText))) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         Text(stringResource(R.string.whois_copy_message))
                     }
                     OutlinedButton(
                         onClick = { showPartialCopyDialog = true },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                     ) {
                         Text(stringResource(R.string.whois_copy_message_partial))
                     }
@@ -278,14 +276,14 @@ fun UserCardSheet(
                 Row(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = { onKick(target) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
                     ) {
                         Text(stringResource(R.string.irc_action_kick))
                     }
                     Button(
                         onClick = { onBan(target) },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -322,7 +320,7 @@ fun UserCardSheet(
     if (showPartialCopyDialog && messageText != null) {
         AlertDialog(
             onDismissRequest = { showPartialCopyDialog = false },
-            shape = RoundedCornerShape(28.dp),
+            shape = MaterialTheme.shapes.large,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 0.dp,
             title = {
@@ -337,7 +335,7 @@ fun UserCardSheet(
                     value = stripMircCodes(messageText),
                     onValueChange = {},
                     readOnly = true,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth(),
                 )
             },

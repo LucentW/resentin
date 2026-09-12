@@ -92,10 +92,10 @@ private val LightColorScheme = lightColorScheme(
 
 private val ResentinShapes = Shapes(
     extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
     medium = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
     large = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
 )
 
 @Composable
@@ -105,6 +105,7 @@ fun ResentinTheme(
     fontScale: Float = 1f,
     lineHeightScale: Float = 1f,
     fontFamilyChoice: AppFontFamily = AppFontFamily.SYSTEM,
+    chatFontFamilyChoice: AppFontFamily = AppFontFamily.SYSTEM,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = when {
@@ -113,9 +114,11 @@ fun ResentinTheme(
     }
 
     val fontFamily = fontFamilyChoice.toComposeFontFamily()
-    val codeFontFamily = fontFamilyChoice.toComposeCodeFontFamily()
+    val chatFontFamily = chatFontFamilyChoice.toComposeFontFamily()
+    val codeFontFamily = chatFontFamilyChoice.toComposeCodeFontFamily()
     CompositionLocalProvider(
         LocalResentinFontFamily provides fontFamily,
+        LocalResentinChatFontFamily provides chatFontFamily,
         LocalResentinCodeFontFamily provides codeFontFamily,
     ) {
         MaterialTheme(
