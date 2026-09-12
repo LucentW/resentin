@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
+import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.db.NetworkEntity
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
@@ -123,6 +124,7 @@ fun HomeScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val error by viewModel.error.collectAsState()
     val draftChannels by viewModel.draftChannels.collectAsState()
+    val latestMessages by viewModel.latestMessages.collectAsState()
     val pinnedChannels by viewModel.pinnedChannels.collectAsState()
     val dismissedFeaturedChannels by viewModel.dismissedFeaturedChannels.collectAsState()
     val optimisticallyJoinedFeaturedChannels by viewModel.optimisticallyJoinedFeaturedChannels.collectAsState()
@@ -297,6 +299,7 @@ fun HomeScreen(
                                     optimisticallyJoinedChannelKeys = optimisticallyJoinedFeaturedChannels,
                                     pinMutedOf = pinMutedOf,
                                     draftChannels = draftChannels,
+                                    latestMessages = latestMessages,
                                     fetchAvatarBytes = viewModel::fetchAvatarBytes,
                                     canRegisterNick = canRegister,
                                     onRegisterNickClick = {
@@ -748,6 +751,7 @@ private fun NetworkGroupCard(
     optimisticallyJoinedChannelKeys: Set<String>,
     pinMutedOf: (networkSlug: String, channel: ChannelEntity) -> Pair<Boolean, Boolean>,
     draftChannels: Set<String>,
+    latestMessages: Map<String, MessageEntity>,
     fetchAvatarBytes: suspend (String) -> ByteArray?,
     canRegisterNick: Boolean = false,
     onRegisterNickClick: () -> Unit = {},
@@ -817,6 +821,7 @@ private fun NetworkGroupCard(
                     pinned = pinned,
                     muted = muted,
                     hasDraft = hasDraft,
+                    lastMessage = latestMessages[channelKey(network.slug, channel.name)],
                     fetchAvatarBytes = fetchAvatarBytes,
                     onClick = { onChannelClick(channel) },
                     onLongClick = { onChannelLongClick(channel) },
@@ -1023,6 +1028,7 @@ private fun ChannelRow(
     pinned: Boolean,
     muted: Boolean,
     hasDraft: Boolean,
+    lastMessage: MessageEntity?,
     fetchAvatarBytes: suspend (String) -> ByteArray?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -1034,7 +1040,10 @@ private fun ChannelRow(
     val topic = channel.topic?.takeIf { it.isNotBlank() }
     // Resentin: nasconde il segnaposto rumoroso "nessun topic" — titolo su una
     // sola riga centrato verticalmente quando non c'è altro da mostrare.
-    val showSubtitle = hasDraft || topic != null || isQuery
+    // La preview dell'ultimo messaggio vale solo per i canali: nelle conversazioni
+    // private resta l'etichetta "Conversazione privata".
+    val preview = lastMessage?.takeIf { !isQuery }
+    val showSubtitle = hasDraft || preview != null || topic != null || isQuery
 
     Row(
         modifier = Modifier
@@ -1099,6 +1108,15 @@ private fun ChannelRow(
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                } else if (preview != null) {
+                    MircText(
+                        text = stringResource(R.string.home_last_message_preview, preview.sender, preview.body.orEmpty()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        enableLinks = false,
                     )
                 } else {
                     MircText(

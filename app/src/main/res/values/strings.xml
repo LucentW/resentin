@@ -68,6 +68,7 @@
         <item quantity="other">%d reti</item>
     </plurals>
     <string name="channel_private_conversation">Conversazione privata</string>
+    <string name="home_last_message_preview">%1$s: %2$s</string>
     <string name="channel_no_topic">Nessun topic impostato</string>
     <string name="cd_network_settings">Apri impostazioni rete</string>
     <string name="cd_direct_message">Messaggio privato</string>
