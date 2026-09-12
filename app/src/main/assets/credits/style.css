@@ -109,17 +109,6 @@ html, body {
   text-align: center;
   text-shadow: 0 0 0.5rem var(--accent);
   font-size: 1.15em;
-  animation: credits-roll 36s linear infinite;
-}
-
-.credits-roll.held {
-  animation-play-state: paused;
-}
-
-@keyframes credits-roll {
-  0% { transform: translateY(100dvh); }
-  91% { transform: translateY(calc(-1 * var(--credits-roll-h, 100%))); }
-  100% { transform: translateY(calc(-1 * var(--credits-roll-h, 100%))); }
 }
 
 .credits-block {
