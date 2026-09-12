@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.HowToReg
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.WifiOff
@@ -126,6 +127,8 @@ fun HomeScreen(
     val dismissedFeaturedChannels by viewModel.dismissedFeaturedChannels.collectAsState()
     val optimisticallyJoinedFeaturedChannels by viewModel.optimisticallyJoinedFeaturedChannels.collectAsState()
     val mutedChannels by viewModel.mutedChannels.collectAsState()
+    val identifiedNetworkIds by viewModel.identifiedNetworkIds.collectAsState()
+    val registrationWizard by viewModel.registrationWizard.collectAsState()
     // NavHost removes Home from the composition while a chat is open. Keep the same
     // scroll position when it comes back instead of rebuilding from the top.
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -273,6 +276,17 @@ fun HomeScreen(
                                 networks,
                                 key = { it.network.slug },
                             ) { networkWithChannels ->
+                                // Guided NickServ registration (cicchetto #349 parity): one
+                                // launcher per network, gated on a registerable
+                                // services_flavor AND not already identified — both
+                                // reactive, so the button auto-hides the instant
+                                // registration completes. Unseeded identity reads as
+                                // not identified (offer, don't hide).
+                                val network = networkWithChannels.network
+                                val canRegister =
+                                    network.connectionState.equals("connected", ignoreCase = true) &&
+                                        registerableFlavor(network.servicesFlavor) &&
+                                        network.id !in identifiedNetworkIds
                                 NetworkGroupCard(
                                     network = networkWithChannels.network,
                                     channels = networkWithChannels.channels
@@ -284,6 +298,17 @@ fun HomeScreen(
                                     pinMutedOf = pinMutedOf,
                                     draftChannels = draftChannels,
                                     fetchAvatarBytes = viewModel::fetchAvatarBytes,
+                                    canRegisterNick = canRegister,
+                                    onRegisterNickClick = {
+                                        val template = templateForFlavor(network.servicesFlavor)
+                                        if (template != null) {
+                                            viewModel.openRegistrationWizard(
+                                                network.slug,
+                                                network.id,
+                                                template.servicesNick,
+                                            )
+                                        }
+                                    },
                                     onServerClick = { onServerClick(networkWithChannels.network.slug) },
                                     onNetworkSettingsClick = { onNetworkSettingsClick(networkWithChannels.network.slug) },
                                     onAddClick = { newChatNetwork = networkWithChannels.network.slug },
@@ -423,6 +448,13 @@ fun HomeScreen(
                     Text(stringResource(R.string.home_dialog_cancel))
                 }
             },
+        )
+    }
+
+    if (registrationWizard != null) {
+        RegistrationWizardDialog(
+            viewModel = viewModel,
+            onDismiss = viewModel::closeRegistrationWizard,
         )
     }
 
@@ -717,6 +749,8 @@ private fun NetworkGroupCard(
     pinMutedOf: (networkSlug: String, channel: ChannelEntity) -> Pair<Boolean, Boolean>,
     draftChannels: Set<String>,
     fetchAvatarBytes: suspend (String) -> ByteArray?,
+    canRegisterNick: Boolean = false,
+    onRegisterNickClick: () -> Unit = {},
     onServerClick: () -> Unit,
     onNetworkSettingsClick: () -> Unit,
     onAddClick: () -> Unit,
@@ -742,6 +776,9 @@ private fun NetworkGroupCard(
                 onAddClick = onAddClick,
                 onBrowseDirectory = onBrowseDirectory,
             )
+            if (canRegisterNick) {
+                RegisterNickButton(onClick = onRegisterNickClick)
+            }
             val visibleFeaturedChannels = filterVisibleFeaturedChannels(
                 networkSlug = network.slug,
                 featuredChannels = featuredChannels,
@@ -864,9 +901,38 @@ private fun FeaturedChannelsSection(
     }
 }
 
+// Guided NickServ registration entry — same weight as Browse channels in
+// cicchetto (one button row); here it sits under the network header and
+// auto-hides once the server reports the session identified.
 @Composable
-private fun networkAvatarColor(): Pair<Color, Color> {
-    val scheme = MaterialTheme.colorScheme
+private fun RegisterNickButton(onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        TextButton(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = ResentinSpacing.medium, vertical = 2.dp),
+        ) {
+            Icon(
+                Icons.Outlined.HowToReg,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(ResentinSpacing.small))
+            Text(
+                text = stringResource(R.string.home_register_nick),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun networkAvatarColor(): Pair<Color, Color> {    val scheme = MaterialTheme.colorScheme
     return remember(scheme) {
         scheme.primaryContainer to scheme.onPrimaryContainer
     }

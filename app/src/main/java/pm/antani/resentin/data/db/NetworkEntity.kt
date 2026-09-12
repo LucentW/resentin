@@ -23,4 +23,7 @@ data class NetworkEntity(
     val profileLanguages: String?,
     val profileCustom: String?,
     val avatarUrl: String?,
+    // Mirrors NetworkDto.servicesFlavor — the wizard's per-network REGISTER /
+    // verify template key. Persisted so the Home launcher gates without a refetch.
+    val servicesFlavor: String? = null,
 )

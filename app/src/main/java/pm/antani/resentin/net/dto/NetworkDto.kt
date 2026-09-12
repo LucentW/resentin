@@ -14,6 +14,11 @@ data class NetworkDto(
     val connectionStateReason: String? = null,
     val connectionStateChangedAt: String? = null,
     val connection: NetworkConnectionDto? = null,
+    // Operator-set services dialect (Azzurra, atheme, ...) — drives the
+    // NickServ registration wizard template (cicchetto #349 parity). Null /
+    // unknown hides the wizard: either nothing to register against, or grappa
+    // can't observe the registration completing.
+    val servicesFlavor: String? = null,
     // KVIrc-style CTCP USERINFO profile (M3a/M3b on the server) — per (subject, network).
     val age: String? = null,
     val gender: String? = null,
