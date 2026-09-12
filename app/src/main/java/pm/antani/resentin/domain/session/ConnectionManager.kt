@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.events.WsEventDecoder
 import pm.antani.resentin.net.HttpClients
@@ -135,6 +137,18 @@ class ConnectionManager(private val tokenStore: TokenStore) {
     suspend fun sendVerb(topic: String, event: String, payload: JsonObject) {
         val channel = checkNotNull(channels[topic]) { "Canale $topic non joinato" }
         channel.channel.push(event, payload)
+    }
+
+    /** #182 on grappa-irc — foreground push-suppression: reports whether this client is
+     * genuinely on-screen right now, over the user-level channel (mirrors cicchetto's
+     * `reportVisibility`/`visibilityHeartbeat.ts`). The server (WSPresence) trusts a
+     * `visible: true` report only while FRESH and otherwise sends a push for every
+     * notifiable message regardless of a live socket — without this call Resentin never
+     * reports at all, so every message double-notifies (once live over the socket, once
+     * again via push) whenever the WS happens to be connected. Fire-and-forget, no-op
+     * before the user topic is joined (same posture as cic's). */
+    suspend fun reportVisibility(subject: String, visible: Boolean) {
+        sendVerb("grappa:user:$subject", "visibility", buildJsonObject { put("visible", visible) })
     }
 
     /** Same as [sendVerb] but awaits the `phx_reply` — for verbs whose result comes

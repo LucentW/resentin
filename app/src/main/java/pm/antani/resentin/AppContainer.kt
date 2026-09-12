@@ -6,12 +6,14 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.db.AppDatabase
@@ -140,12 +142,50 @@ class AppContainer(private val context: Context) {
                             networksRepository.applyJoinResponse(topic, response)
                         }
                     }
+                    // #182 on grappa-irc — a fresh socket starts with no visibility report
+                    // at all, so tell it right away: otherwise the server assumes nobody's
+                    // looking and pushes for every notifiable message regardless, doubling
+                    // up with the live delivery this same socket is about to receive.
+                    runCatching {
+                        val visible = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+                        connectionManager.reportVisibility(session.wsSubject, visible)
+                    }
                     networks.forEach { nwc ->
                         nwc.channels.filter { it.joined }.forEach { channel ->
                             runCatching { chatRepository.backfill(nwc.network.slug, channel.name) }
                         }
                     }
                 }
+        }
+
+        // Re-reports on every actual foreground/background flip — the join-time report
+        // above only covers a FRESH socket, not a `stayConnected` socket that stays open
+        // while the app is backgrounded (the exact case #182's push-suppression exists
+        // for: connected but not on-screen).
+        appScope.launch {
+            combine(
+                tokenStore.session.filterNotNull(),
+                ProcessLifecycleOwner.get().lifecycle.currentStateFlow
+                    .map { it.isAtLeast(Lifecycle.State.STARTED) }
+                    .distinctUntilChanged(),
+            ) { session, visible -> session to visible }
+                .collect { (session, visible) ->
+                    runCatching { connectionManager.reportVisibility(session.wsSubject, visible) }
+                }
+        }
+
+        // Heartbeat: re-report while genuinely foreground so a long-open chat never goes
+        // stale server-side (WSPresence downgrades an un-refreshed `:visible` pid after
+        // its own staleness window) and silently starts double-notifying again. Mirrors
+        // cicchetto's visibilityHeartbeat.ts cadence (30s, half the server's default
+        // 60s staleness window).
+        appScope.launch {
+            while (true) {
+                delay(30_000)
+                val session = tokenStore.session.value ?: continue
+                if (!ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) continue
+                runCatching { connectionManager.reportVisibility(session.wsSubject, true) }
+            }
         }
 
         appScope.launch {
