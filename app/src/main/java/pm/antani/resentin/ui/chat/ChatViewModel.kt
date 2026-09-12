@@ -268,6 +268,11 @@ class ChatViewModel(
 
     private val _commandEffects = MutableSharedFlow<ChatCommandEffect>(extraBufferCapacity = 1)
     val commandEffects: SharedFlow<ChatCommandEffect> = _commandEffects.asSharedFlow()
+
+    // Tell the visible chat to follow the tail after a message has been accepted.
+    // Incoming-message auto-follow stays put while the reader browses older history.
+    private val _scrollToLatestAfterSend = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollToLatestAfterSend: SharedFlow<Unit> = _scrollToLatestAfterSend.asSharedFlow()
     private val channelReady = CompletableDeferred<Unit>()
 
     init {
@@ -454,6 +459,7 @@ class ChatViewModel(
                     channelReady.await()
                     chatRepository.sendMessage(networkSlug, channelName, text).getOrThrow()
                 }.onSuccess {
+                    _scrollToLatestAfterSend.tryEmit(Unit)
                     if (_draft.value.trim() == text) setDraft("")
                 }.onFailure { postError(it.message) }
             } finally {
@@ -501,6 +507,7 @@ class ChatViewModel(
                     }
                     if (result.isSuccess) sent += 1
                 }
+                if (sent > 0) _scrollToLatestAfterSend.tryEmit(Unit)
                 val residue = lines.drop(sent)
                 if (residue.isNotEmpty()) {
                     setDraft(residue.joinToString("\n"))
