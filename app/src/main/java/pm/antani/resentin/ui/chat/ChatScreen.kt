@@ -1015,7 +1015,7 @@ fun ChatScreen(
                                 showHostmaskInEvents = showHostmaskInEvents,
                                 isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
                                 isQuery = isQuery,
-                                isMine = isQuery && (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
+                                isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
                                 isSelected = message.id == selectedSearchMessageId,
                                 onReply = viewModel::reply,
                                 onLongPress = { nick, text ->
@@ -1064,7 +1064,7 @@ fun ChatScreen(
                                             showHostmaskInEvents = showHostmaskInEvents,
                                             isMention = false,
                                             isQuery = isQuery,
-                                            isMine = isQuery && (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
+                                            isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
                                             isSelected = event.id == selectedSearchMessageId,
                                             onReply = viewModel::reply,
                                             onLongPress = { nick, text ->
@@ -1305,7 +1305,7 @@ fun ChatScreen(
                                     showHostmaskInEvents = showHostmaskInEvents,
                                     isMention = false,
                                     isQuery = isQuery,
-                                    isMine = isQuery && (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
+                                    isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
                                     isSelected = false,
                                     onReply = viewModel::reply,
                                     onLongPress = { nick, text ->
@@ -2047,7 +2047,6 @@ private fun MessageRow(
                 } else {
                     BubbleRow(
                         message, formatted, prefix, time, coloredNicklist, isMention,
-                        isPrivate = isQuery,
                         isMine = isMine,
                         tight = tight,
                         density = density,
@@ -2094,21 +2093,23 @@ private fun BubbleRow(
     time: String,
     coloredNicklist: Boolean,
     isMention: Boolean,
-    isPrivate: Boolean,
     isMine: Boolean,
     tight: Boolean = false,
     density: MessageDensity = MessageDensity.NORMAL,
 ) {
-    val isOwnPrivate = isPrivate && isMine
+    // WhatsApp-style: i messaggi propri stanno a destra, gli altri a sinistra.
+    // isMention non scatta mai per i propri (vedi isMentionRow), ma resta primo
+    // per sicurezza.
+    val isOutgoing = isMine
     val continuesGroup = tight && !isMention
     val bubbleColor = when {
         isMention -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-        isOwnPrivate -> MaterialTheme.colorScheme.primaryContainer
+        isOutgoing -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val bubbleBorder = when {
         isMention -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.65f))
-        isOwnPrivate -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
+        isOutgoing -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f))
         else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     }
     val lightTheme = isLightTheme()
@@ -2165,9 +2166,9 @@ private fun BubbleRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = density.rowVertical(continuesGroup)),
-            // IRC conversations stay left-aligned; width now follows the content,
-            // with a generous cap so longer lines wrap naturally.
-            horizontalArrangement = Arrangement.Start,
+            // Stile WhatsApp/Telegram: outgoing a destra, incoming a sinistra.
+            // La larghezza segue comunque il contenuto fino al cap.
+            horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
             verticalAlignment = Alignment.Top,
         ) {
             if (isMention) {
@@ -2181,7 +2182,11 @@ private fun BubbleRow(
             Surface(
                 modifier = Modifier.widthIn(max = maxBubbleWidth),
                 shape = if (continuesGroup) {
-                    RoundedCornerShape(topStart = 7.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+                    if (isOutgoing) {
+                        RoundedCornerShape(topStart = 20.dp, topEnd = 7.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+                    } else {
+                        RoundedCornerShape(topStart = 7.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
+                    }
                 } else {
                     MaterialTheme.shapes.medium
                 },
@@ -2192,7 +2197,7 @@ private fun BubbleRow(
                 Column(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    if (!continuesGroup && !formatted.isAction) {
+                    if (!continuesGroup && !formatted.isAction && !isOutgoing) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = if (formatted.isNotice) {
@@ -2237,6 +2242,20 @@ private fun BubbleRow(
                             text = bodyWithTime,
                             style = MaterialTheme.typography.bodyLarge.copy(fontFamily = LocalResentinChatFontFamily.current),
                         )
+                        // Sui propri l'header col nick è ridondante: ora in calce a destra,
+                        // come WhatsApp. Il marker (notice) va preservato in calce.
+                        if (isOutgoing && !continuesGroup) {
+                            Text(
+                                text = if (formatted.isNotice) "(notice) · $time" else time,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontFamily = LocalResentinChatFontFamily.current,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
