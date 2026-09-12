@@ -5,6 +5,7 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -14,6 +15,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.MessageEntity
+import pm.antani.resentin.data.prefs.channelKey
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.net.AppJson
@@ -59,6 +61,16 @@ class ChatRepository(
 
     fun observeMessages(networkSlug: String, channelName: String): Flow<List<MessageEntity>> =
         db.messageDao().observeMessages(networkSlug, canonicalTarget(channelName))
+
+    /** Latest chat message per channel, keyed by lower-cased "network/channel" (same
+     * scheme as [pm.antani.resentin.data.prefs.channelKey]) — the Home row preview. */
+    fun observeLatestPerChannel(): Flow<Map<String, MessageEntity>> =
+        db.messageDao().observeLatestPerChannel()
+            .map { rows ->
+                rows.associateBy { row ->
+                    channelKey(row.networkSlug, canonicalTarget(row.channelName))
+                }
+            }
 
     /** Startup maintenance (see AppContainer.init) — drops cached messages older than
      * [MESSAGE_RETENTION_DAYS] across every channel, so the local cache doesn't grow

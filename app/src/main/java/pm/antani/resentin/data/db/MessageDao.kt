@@ -36,6 +36,21 @@ interface MessageDao {
     )
     suspend fun messagesAfter(networkSlug: String, channelName: String, afterId: Long): List<MessageEntity>
 
+    /** Latest chat message per channel — the Home row preview: for each (networkSlug,
+     * channelName) the most recent real conversation row (privmsg/action/notice; joins,
+     * parts, mode changes and the like aren't "messages sent"). Only channels that have
+     * at least one such row appear in the result. */
+    @Query(
+        "SELECT * FROM messages msg " +
+            "WHERE msg.kind IN ('privmsg', 'action', 'notice') " +
+            "AND msg.id = (SELECT MAX(m2.id) FROM messages m2 " +
+            "WHERE m2.networkSlug = msg.networkSlug " +
+            "AND m2.channelName = msg.channelName " +
+            "AND m2.kind IN ('privmsg', 'action', 'notice')) " +
+            "ORDER BY msg.serverTime ASC",
+    )
+    fun observeLatestPerChannel(): Flow<List<MessageEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(message: MessageEntity)
 

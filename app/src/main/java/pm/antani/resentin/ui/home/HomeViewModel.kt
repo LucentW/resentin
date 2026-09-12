@@ -72,6 +72,12 @@ class HomeViewModel(
     val draftChannels: StateFlow<Set<String>> = appPreferences.chatDrafts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    /** Latest chat message per channel, keyed by lower-cased "network/channel" — the
+     * Home row preview. Only channels that have a locally-cached conversation message
+     * appear (a channel never opened has no rows yet, so its topic stays on display). */
+    val latestMessages: StateFlow<Map<String, MessageEntity>> = chatRepository.observeLatestPerChannel()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val pinnedChannels: StateFlow<Set<String>> = appPreferences.pinnedChannels
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 

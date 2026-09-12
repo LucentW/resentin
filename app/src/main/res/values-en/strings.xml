@@ -61,6 +61,7 @@
         <item quantity="other">%d networks</item>
     </plurals>
     <string name="channel_private_conversation">Private conversation</string>
+    <string name="home_last_message_preview">%1$s: %2$s</string>
     <string name="channel_no_topic">No topic set</string>
     <string name="cd_network_settings">Open network settings</string>
     <string name="cd_direct_message">Direct message</string>
