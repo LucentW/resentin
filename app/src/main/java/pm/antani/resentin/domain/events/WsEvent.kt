@@ -72,5 +72,17 @@ sealed interface WsEvent {
         val severity: String,
     ) : WsEvent
 
+    /** The server's NORMALIZED services-identity verdict for one network
+     * (cicchetto #388 parity): folds bahamut's `+r` umode, OFTC's `+R`, IRCv3
+     * `account-notify` and numeric 330 into one `identified` boolean. Both the
+     * live edge and the cold user-topic snapshot ride this event, so a reload
+     * mid-session re-learns the verdict. `account` is display-only — never
+     * infer identity from it (or from any umode letter), ask [identified]. */
+    data class SessionIdentityChanged(
+        val networkId: Int,
+        val identified: Boolean,
+        val account: String?,
+    ) : WsEvent
+
     data class Unknown(val kind: String?, val raw: JsonObject) : WsEvent
 }

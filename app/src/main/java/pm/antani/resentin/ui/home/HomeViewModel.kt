@@ -13,12 +13,18 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
+import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.channelKey
@@ -110,8 +116,55 @@ class HomeViewModel(
     private val _navigateToChat = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 1)
     val navigateToChat: SharedFlow<Pair<String, String>> = _navigateToChat.asSharedFlow()
 
+    /** Server-normalized services-identity verdicts (passthrough of
+     * [NetworksRepository.identifiedNetworkIds]) — the register-nick launcher
+     * gate + wizard step-6 auto-complete signal. */
+    val identifiedNetworkIds: StateFlow<Set<Int>> = networksRepository.identifiedNetworkIds
+
+    // Guided NickServ registration wizard state (null = closed). Email + password
+    // live here for the dialog's lifetime ONLY — close drops the whole state.
+    private val _registrationWizard = MutableStateFlow<RegistrationWizardState?>(null)
+    val registrationWizard: StateFlow<RegistrationWizardState?> = _registrationWizard.asStateFlow()
+
+    /** Raw NickServ NOTICE mirror for the wizard's send-steps: this network's rows
+     * from wherever the server routes the service's replies — `$server`, or the
+     * service's own query window when one is open (cicchetto #400/#661). The dialog
+     * filters `id > stepSinceId` + sender + notice-kind itself: a structural (id)
+     * bound only, zero content parsing. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val wizardMirror: StateFlow<List<MessageEntity>> = registrationWizard
+        .flatMapLatest { wiz ->
+            if (wiz == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    chatRepository.observeMessages(wiz.networkSlug, "\$server"),
+                    chatRepository.observeMessages(wiz.networkSlug, wiz.servicesNick),
+                ) { server, query -> (server + query).sortedBy { it.id } }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private var wizardTimeoutJob: Job? = null
+
     init {
         refresh()
+        // Step-6 auto-complete: the ONLY success terminator is the server's
+        // normalized identity verdict — no NickServ text parse, no optimistic
+        // success. The launcher hides on this same signal.
+        viewModelScope.launch {
+            networksRepository.identifiedNetworkIds.collect { ids ->
+                val wiz = _registrationWizard.value
+                if (wiz != null && wiz.step == WizardStep.VERIFY && !wiz.succeeded &&
+                    wiz.networkId != null && wiz.networkId in ids
+                ) {
+                    cancelWizardTimeout()
+                    _registrationWizard.value = wiz.copy(succeeded = true, pending = false)
+                    delay(WIZARD_SUCCESS_CLOSE_MS)
+                    if (_registrationWizard.value?.succeeded == true) _registrationWizard.value = null
+                }
+            }
+        }
     }
 
     /** Own/peer avatar bytes for a URL surfaced on a [NetworkEntity]/[ChannelEntity] row
@@ -275,6 +328,134 @@ class HomeViewModel(
                 networks.value.forEach { nwc -> networksRepository.updateConnectionState(nwc.network.slug, connected = false) }
             }
             authRepository.detach()
+        }
+    }
+
+    // -- Guided NickServ registration wizard (cicchetto #349 parity) ----------
+
+    private inline fun patchWizard(fn: (RegistrationWizardState) -> RegistrationWizardState) {
+        _registrationWizard.value?.let { _registrationWizard.value = fn(it) }
+    }
+
+    private fun cancelWizardTimeout() {
+        wizardTimeoutJob?.cancel()
+        wizardTimeoutJob = null
+    }
+
+    fun openRegistrationWizard(networkSlug: String, networkId: Int, servicesNick: String) {
+        cancelWizardTimeout()
+        _registrationWizard.value = RegistrationWizardState(
+            networkSlug = networkSlug,
+            networkId = networkId,
+            servicesNick = servicesNick,
+        )
+    }
+
+    fun closeRegistrationWizard() {
+        cancelWizardTimeout()
+        // Drops email + password + code with the state — secrets never outlive the dialog.
+        _registrationWizard.value = null
+    }
+
+    fun setWizardEmail(email: String) = patchWizard { it.copy(email = email, error = null) }
+
+    fun setWizardPassword(password: String) = patchWizard { it.copy(password = password, error = null) }
+
+    fun setWizardCode(code: String) = patchWizard { it.copy(code = code, error = null) }
+
+    fun wizardNext() {
+        val wiz = _registrationWizard.value ?: return
+        val error = when (wiz.step) {
+            WizardStep.EMAIL ->
+                if (!isValidWizardEmail(wiz.email)) context.getString(R.string.registration_wizard_error_email)
+                else null
+            WizardStep.PASSWORD ->
+                if (!isValidWizardPassword(wiz.password)) {
+                    context.getString(
+                        R.string.registration_wizard_error_password,
+                        WIZARD_MIN_PASSWORD,
+                        WIZARD_MAX_PASSWORD,
+                    )
+                } else {
+                    null
+                }
+            WizardStep.CODE ->
+                if (wiz.code.trim().isEmpty()) context.getString(R.string.registration_wizard_error_code)
+                else null
+            else -> null
+        }
+        if (error != null) {
+            patchWizard { it.copy(error = error) }
+            return
+        }
+        val next = when (wiz.step) {
+            WizardStep.INTRO -> WizardStep.EMAIL
+            WizardStep.EMAIL -> WizardStep.PASSWORD
+            WizardStep.PASSWORD -> WizardStep.REGISTER
+            WizardStep.REGISTER -> WizardStep.CODE
+            WizardStep.CODE -> WizardStep.VERIFY
+            WizardStep.VERIFY -> WizardStep.VERIFY
+        }
+        _registrationWizard.value = wiz.copy(step = next, error = null, timedOut = false)
+        if (next == WizardStep.REGISTER || next == WizardStep.VERIFY) runWizardSendStep()
+    }
+
+    fun wizardBack() {
+        val wiz = _registrationWizard.value ?: return
+        val prev = when (wiz.step) {
+            WizardStep.INTRO -> WizardStep.INTRO
+            WizardStep.EMAIL -> WizardStep.INTRO
+            WizardStep.PASSWORD -> WizardStep.EMAIL
+            WizardStep.REGISTER -> WizardStep.PASSWORD
+            WizardStep.CODE -> WizardStep.REGISTER
+            WizardStep.VERIFY -> WizardStep.CODE
+        }
+        _registrationWizard.value = wiz.copy(step = prev, error = null, timedOut = false)
+    }
+
+    fun retryWizardSend() = runWizardSendStep()
+
+    /** Fires the current step's services command (REGISTER on step 4, verify on
+     * step 6). Captures a fresh stepSinceId BEFORE the send so the mirror shows
+     * only THIS attempt's replies, then arms the timeout guard once the POST
+     * resolves. Wire-only: the reply is never echoed into scrollback by the
+     * services-target path. */
+    private fun runWizardSendStep() {
+        val wiz = _registrationWizard.value ?: return
+        if (wiz.step != WizardStep.REGISTER && wiz.step != WizardStep.VERIFY) return
+        val network = networks.value.firstOrNull { it.network.slug == wiz.networkSlug }?.network
+        val template = templateForFlavor(network?.servicesFlavor)
+        if (template == null) {
+            patchWizard {
+                it.copy(pending = false, error = context.getString(R.string.registration_wizard_error_no_template))
+            }
+            return
+        }
+        val body = if (wiz.step == WizardStep.VERIFY) {
+            template.buildVerify(network?.nick.orEmpty(), wiz.code.trim())
+        } else {
+            template.buildRegister(wiz.password, wiz.email.trim())
+        }
+        val sinceId = wizardMirror.value.maxOfOrNull { it.id } ?: 0L
+        _registrationWizard.value = wiz.copy(stepSinceId = sinceId, pending = true, timedOut = false, error = null)
+        cancelWizardTimeout()
+        viewModelScope.launch {
+            chatRepository.sendServiceMessage(wiz.networkSlug, template.servicesNick, body)
+                .onSuccess {
+                    patchWizard { it.copy(pending = false) }
+                    wizardTimeoutJob = launch {
+                        delay(WIZARD_STEP_TIMEOUT_MS)
+                        patchWizard { st -> if (st.succeeded) st else st.copy(timedOut = true) }
+                    }
+                }
+                .onFailure { failure ->
+                    patchWizard {
+                        it.copy(
+                            pending = false,
+                            error = failure.message ?: context.getString(R.string.home_unknown_error),
+                        )
+                    }
+                }
         }
     }
 

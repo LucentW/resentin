@@ -2,10 +2,14 @@ package pm.antani.resentin.domain.repository
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -55,6 +59,22 @@ class NetworksRepository(
     private val unreadSyncMutex = Mutex()
 
     val networksWithChannels: Flow<List<NetworkWithChannels>> = db.networkDao().observeNetworksWithChannels()
+
+    /** Per-network services-identity verdicts (cicchetto #388 parity): the set of
+     * network ids this session is identified to NickServ on. Seeded by the
+     * `session_identity_changed` user-topic event — live edge + cold snapshot both
+     * flow through it, last-write-wins. Unseeded (absent) reads as NOT identified,
+     * so the register-nick affordance shows rather than hides pre-snapshot. */
+    private val _identifiedNetworkIds = MutableStateFlow<Set<Int>>(emptySet())
+    val identifiedNetworkIds: StateFlow<Set<Int>> = _identifiedNetworkIds.asStateFlow()
+
+    /** Last query_windows_list snapshot. Re-applied at the end of every REST
+     * refresh: the snapshot can win the race against refresh() repopulating the
+     * networks table (fresh install / post-migration wipe → slugForId misses and
+     * the rows are dropped), and REST has no query endpoint to converge with
+     * otherwise — without this the DMs stay missing until the next reconnect. */
+    @Volatile
+    private var lastQueryWindows: QueryWindowsListDto? = null
 
     fun observeNetwork(slug: String): Flow<NetworkEntity?> = db.networkDao().observeNetwork(slug)
 
@@ -127,7 +147,10 @@ class NetworksRepository(
         // Home list / chat navigation as real channels.
         connectionManager.events
             .filterIsInstance<WsEvent.QueryWindowsListReceived>()
-            .onEach { applyQueryWindows(it.windows) }
+            .onEach {
+                lastQueryWindows = it.windows
+                applyQueryWindows(it.windows)
+            }
             .launchIn(scope)
 
         // Cross-device sync: another client (e.g. cicchetto on the web) advancing the
@@ -137,6 +160,17 @@ class NetworksRepository(
             .onEach { event ->
                 val (slug, channel) = parseChannelTopic(event.topic) ?: return@onEach
                 db.channelDao().advanceLastReadMessageId(slug, channel, event.lastReadMessageId)
+            }
+            .launchIn(scope)
+
+        // Normalized services-identity verdict (see identifiedNetworkIds) — the
+        // registration wizard's launcher gate + step-6 auto-complete signal.
+        connectionManager.events
+            .filterIsInstance<WsEvent.SessionIdentityChanged>()
+            .onEach { event ->
+                _identifiedNetworkIds.update { current ->
+                    if (event.identified) current + event.networkId else current - event.networkId
+                }
             }
             .launchIn(scope)
 
@@ -228,6 +262,9 @@ class NetworksRepository(
 
         // /me carries the server-authoritative seed for windows that already have a
         // read cursor. REST endpoints for networks/channels intentionally do not.
+        // Re-apply the last query snapshot too (see lastQueryWindows): refresh()
+        // may have just re-created the networks the snapshot previously missed.
+        lastQueryWindows?.let { applyQueryWindows(it) }
         syncUnreadCountsFromMe()
     }
 
@@ -425,6 +462,7 @@ private fun NetworkDto.toEntity() = NetworkEntity(
     profileLanguages = languages,
     profileCustom = custom,
     avatarUrl = avatarUrl,
+    servicesFlavor = servicesFlavor,
 )
 
 private fun ChannelDto.toEntity(networkSlug: String) = ChannelEntity(

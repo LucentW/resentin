@@ -1,6 +1,7 @@
 package pm.antani.resentin.domain.events
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -87,6 +88,11 @@ object WsEventDecoder {
                 )
                 "lusers_bundle" -> WsEvent.LusersBundle(
                     AppJson.decodeFromJsonElement(LusersBundleDto.serializer(), raw),
+                )
+                "session_identity_changed" -> WsEvent.SessionIdentityChanged(
+                    networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),
+                    identified = raw.getValue("identified").jsonPrimitive.boolean,
+                    account = raw["account"]?.jsonPrimitive?.contentOrNull,
                 )
                 else -> WsEvent.Unknown(kind, raw)
             }
