@@ -1,5 +1,6 @@
 package pm.antani.resentin.ui.home
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -73,6 +74,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -82,6 +84,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Date
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.ChannelEntity
 import pm.antani.resentin.data.db.MessageEntity
@@ -1043,6 +1046,10 @@ private fun ChannelRow(
     // La preview dell'ultimo messaggio vale solo per i canali: nelle conversazioni
     // private resta l'etichetta "Conversazione privata".
     val preview = lastMessage?.takeIf { !isQuery }
+    val context = LocalContext.current
+    val lastMessageTime = remember(context, lastMessage?.serverTime) {
+        lastMessage?.let { DateFormat.getTimeFormat(context).format(Date(it.serverTime)) }
+    }
     val showSubtitle = hasDraft || preview != null || topic != null || isQuery
 
     Row(
@@ -1088,15 +1095,27 @@ private fun ChannelRow(
         }
         Spacer(Modifier.width(ResentinSpacing.medium))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = channel.name,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = if (hasUnread || hasMentions) FontWeight.Bold else FontWeight.Medium,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = channel.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = if (hasUnread || hasMentions) FontWeight.Bold else FontWeight.Medium,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (lastMessageTime != null) {
+                    Spacer(Modifier.width(ResentinSpacing.small))
+                    Text(
+                        text = lastMessageTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
             if (showSubtitle) {
                 if (hasDraft) {
                     Text(
