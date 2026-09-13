@@ -33,6 +33,7 @@ import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
@@ -126,6 +127,10 @@ class HomeViewModel(
      * [NetworksRepository.identifiedNetworkIds]) — the register-nick launcher
      * gate + wizard step-6 auto-complete signal. */
     val identifiedNetworkIds: StateFlow<Set<Int>> = networksRepository.identifiedNetworkIds
+
+    /** Inbound INVITEs awaiting Join/Decline (passthrough of
+     * [NetworksRepository.pendingInvites]) — rendered as a dismissible banner. */
+    val pendingInvites: StateFlow<List<PendingInvite>> = networksRepository.pendingInvites
 
     // Guided NickServ registration wizard state (null = closed). Email + password
     // live here for the dialog's lifetime ONLY — close drops the whole state.
@@ -294,6 +299,23 @@ class HomeViewModel(
                         _optimisticallyJoinedFeaturedChannels.value - channelKey(networkSlug, channel.name)
                 }
             }.onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
+        }
+    }
+
+    /** Invite banner action: JOINs the inviting channel and navigates to it. */
+    fun acceptInvite(invite: PendingInvite) {
+        viewModelScope.launch {
+            networksRepository.acceptInvite(invite.networkSlug, invite.channel)
+                .onSuccess { _navigateToChat.tryEmit(invite.networkSlug to invite.channel) }
+                .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
+        }
+    }
+
+    /** Invite banner action: refuses the invite, dropping its banner on every device. */
+    fun declineInvite(invite: PendingInvite) {
+        viewModelScope.launch {
+            networksRepository.declineInvite(invite.networkSlug, invite.channel)
+                .onFailure { _error.value = it.message ?: context.getString(R.string.home_unknown_error) }
         }
     }
 

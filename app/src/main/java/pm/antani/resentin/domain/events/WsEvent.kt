@@ -16,6 +16,8 @@ import pm.antani.resentin.net.dto.WebSessionSeveredDto
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
+import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
+import pm.antani.resentin.net.dto.WindowInvitedDto
 
 sealed interface WsEvent {
     data class MessageReceived(val message: ScrollbackMessageDto) : WsEvent
@@ -83,6 +85,13 @@ sealed interface WsEvent {
         val identified: Boolean,
         val account: String?,
     ) : WsEvent
+
+    /** Inbound IRC INVITE not yet acted on — pushed live and re-sent as a cold-subscribe
+     * snapshot on the per-user topic for every still-`:invited` channel. */
+    data class WindowInvited(val invite: WindowInvitedDto) : WsEvent
+
+    /** The invite for a channel was declined (this device or another one) — drop its banner. */
+    data class WindowInviteDeclined(val declined: WindowInviteDeclinedDto) : WsEvent
 
     data class Unknown(val kind: String?, val raw: JsonObject) : WsEvent
 }

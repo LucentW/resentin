@@ -21,6 +21,8 @@ import pm.antani.resentin.net.dto.WebSessionSeveredDto
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
+import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
+import pm.antani.resentin.net.dto.WindowInvitedDto
 
 /**
  * Decodes a raw event-frame payload into a typed [WsEvent], per the additive-only
@@ -88,6 +90,12 @@ object WsEventDecoder {
                 )
                 "lusers_bundle" -> WsEvent.LusersBundle(
                     AppJson.decodeFromJsonElement(LusersBundleDto.serializer(), raw),
+                )
+                "window_invited" -> WsEvent.WindowInvited(
+                    AppJson.decodeFromJsonElement(WindowInvitedDto.serializer(), raw),
+                )
+                "window_invite_declined" -> WsEvent.WindowInviteDeclined(
+                    AppJson.decodeFromJsonElement(WindowInviteDeclinedDto.serializer(), raw),
                 )
                 "session_identity_changed" -> WsEvent.SessionIdentityChanged(
                     networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),

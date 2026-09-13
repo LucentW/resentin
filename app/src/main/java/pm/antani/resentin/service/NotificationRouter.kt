@@ -33,6 +33,8 @@ import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
+import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.OpenChat
@@ -81,6 +83,7 @@ class NotificationRouter(
     private val userSettingsRepository: UserSettingsRepository,
     private val tokenStore: TokenStore,
     private val authRepository: AuthRepository,
+    private val networksRepository: NetworksRepository,
 ) {
     // Guards notifyFromUndecryptablePush against overlapping runs — live-observed: a
     // sequential 27-channel sweep took long enough (~10s) that the distributor (ntfy)
@@ -96,6 +99,12 @@ class NotificationRouter(
         connectionManager.events
             .filterIsInstance<WsEvent.MessageReceived>()
             .onEach { handle(it.message) }
+            .launchIn(scope)
+
+        // "avviso" for an inbound INVITE (#976 client parity) — see
+        // NetworksRepository.newInvites for the reconnect-dedup this relies on.
+        networksRepository.newInvites
+            .onEach { postInviteNotification(it) }
             .launchIn(scope)
     }
 
@@ -336,6 +345,37 @@ class NotificationRouter(
         NotificationManagerCompat.from(context).notify(conversationId, notification)
     }
 
+    /** Plain (non-conversation) notification for an inbound INVITE — tapping just opens
+     * the app, where the Home banner (Join/Decline) is waiting; no inline actions here,
+     * unlike [postNotification], since accepting is a full JOIN round-trip better done
+     * from the app's own loading/error affordances than a fire-and-forget broadcast. */
+    private fun postInviteNotification(invite: PendingInvite) {
+        ensureInviteChannel()
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val notificationId = "invite/${invite.networkSlug}/${invite.channel}".hashCode()
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(context, INVITE_CHANNEL_ID)
+            .setContentTitle(context.getString(R.string.notif_invite_title))
+            .setContentText(context.getString(R.string.notif_invite_body, invite.inviter, invite.channel))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
+
     private fun conversationNotificationId(networkSlug: String, bucket: String): Int =
         "$networkSlug/$bucket".hashCode()
 
@@ -404,8 +444,19 @@ class NotificationRouter(
             .createNotificationChannel(channel)
     }
 
+    private fun ensureInviteChannel() {
+        val channel = NotificationChannel(
+            INVITE_CHANNEL_ID,
+            context.getString(R.string.notif_invite_title),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        )
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .createNotificationChannel(channel)
+    }
+
     companion object {
         const val CHANNEL_ID = "messages"
+        const val INVITE_CHANNEL_ID = "invites"
         const val EXTRA_NETWORK_SLUG = "network_slug"
         const val EXTRA_CHANNEL_NAME = "channel_name"
         private const val TAG = "NotificationRouter"

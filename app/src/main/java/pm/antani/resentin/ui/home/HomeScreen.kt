@@ -92,6 +92,7 @@ import pm.antani.resentin.data.db.NetworkEntity
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.data.prefs.channelKey
+import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.serverChannelKey
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.LocalDensityScale
@@ -134,6 +135,7 @@ fun HomeScreen(
     val mutedChannels by viewModel.mutedChannels.collectAsState()
     val identifiedNetworkIds by viewModel.identifiedNetworkIds.collectAsState()
     val registrationWizard by viewModel.registrationWizard.collectAsState()
+    val pendingInvites by viewModel.pendingInvites.collectAsState()
     // NavHost removes Home from the composition while a chat is open. Keep the same
     // scroll position when it comes back instead of rebuilding from the top.
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -265,6 +267,18 @@ fun HomeScreen(
                         contentPadding = PaddingValues(start = ResentinSpacing.large, end = ResentinSpacing.large, top = ResentinSpacing.small, bottom = ResentinSpacing.xLarge),
                         verticalArrangement = Arrangement.spacedBy(ResentinSpacing.medium * LocalDensityScale.current),
                     ) {
+                        if (pendingInvites.isNotEmpty()) {
+                            items(
+                                pendingInvites,
+                                key = { "invite-${it.networkSlug}-${it.channel}" },
+                            ) { invite ->
+                                PendingInviteCard(
+                                    invite = invite,
+                                    onAccept = { viewModel.acceptInvite(invite) },
+                                    onDecline = { viewModel.declineInvite(invite) },
+                                )
+                            }
+                        }
                         if (networks.isEmpty()) {
                             item(key = "home-no-connected-networks") {
                                 ResentinEmptyState(
@@ -647,6 +661,53 @@ private fun SheetActionRow(
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = textColor,
         )
+    }
+}
+
+/** #976-parity banner for an inbound INVITE not yet joined or declined (`window_invited`
+ * on the per-user topic — see NetworksRepository.pendingInvites). One card per invite,
+ * shown above the network list so it can't be missed on the very screen that lists
+ * every other channel. */
+@Composable
+private fun PendingInviteCard(
+    invite: PendingInvite,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.HowToReg,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(ResentinSpacing.small))
+                Text(
+                    text = stringResource(R.string.home_invite_banner, invite.inviter, invite.channel),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDecline) {
+                    Text(stringResource(R.string.home_invite_decline))
+                }
+                TextButton(onClick = onAccept) {
+                    Text(stringResource(R.string.home_invite_accept), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 }
 

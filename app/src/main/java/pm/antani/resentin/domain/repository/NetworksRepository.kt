@@ -2,8 +2,11 @@ package pm.antani.resentin.domain.repository
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
@@ -24,6 +27,7 @@ import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.channelTopic
 import pm.antani.resentin.domain.session.ConnectionManager
+import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.irc.formatChannelModes
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.ArchiveEntryDto
@@ -51,6 +55,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 private const val SERVER_PSEUDO_CHANNEL = "\$server"
 
+/** An inbound IRC INVITE not yet joined or declined — see `window_invited` in
+ * [pm.antani.resentin.domain.events.WsEvent]. */
+data class PendingInvite(val networkSlug: String, val channel: String, val inviter: String)
+
 class NetworksRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
@@ -67,6 +75,22 @@ class NetworksRepository(
      * so the register-nick affordance shows rather than hides pre-snapshot. */
     private val _identifiedNetworkIds = MutableStateFlow<Set<Int>>(emptySet())
     val identifiedNetworkIds: StateFlow<Set<Int>> = _identifiedNetworkIds.asStateFlow()
+
+    /** Invites awaiting a Join/Decline, seeded by `window_invited`'s cold-subscribe
+     * snapshot (pushed on the per-user topic, joined unconditionally at connect —
+     * no REST endpoint lists these) and kept live by the same event plus
+     * `window_invite_declined`. Session-local server-side, so there's nothing to
+     * persist to the DB across reconnects: a fresh connect always re-snapshots it. */
+    private val _pendingInvites = MutableStateFlow<List<PendingInvite>>(emptyList())
+    val pendingInvites: StateFlow<List<PendingInvite>> = _pendingInvites.asStateFlow()
+
+    /** Fires only for a GENUINELY new invite (not yet in [pendingInvites]) — the
+     * cold-subscribe snapshot re-sends `window_invited` for every still-pending invite
+     * on every reconnect (foreground resume, `stayConnected` cycling, ...), and a
+     * system notification firing on every one of those would spam the user for an
+     * invite they simply haven't acted on yet. [NotificationRouter] posts from this. */
+    private val _newInvites = MutableSharedFlow<PendingInvite>(extraBufferCapacity = 8)
+    val newInvites: SharedFlow<PendingInvite> = _newInvites.asSharedFlow()
 
     /** Last query_windows_list snapshot. Re-applied at the end of every REST
      * refresh: the snapshot can win the race against refresh() repopulating the
@@ -191,6 +215,29 @@ class NetworksRepository(
                 }
             }
             .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.WindowInvited>()
+            .map { it.invite }
+            .onEach { invite ->
+                val isNew = _pendingInvites.value.none { it.networkSlug == invite.network && it.channel == invite.channel }
+                _pendingInvites.update { current ->
+                    current.filterNot { it.networkSlug == invite.network && it.channel == invite.channel } +
+                        PendingInvite(invite.network, invite.channel, invite.inviter)
+                }
+                if (isNew) _newInvites.tryEmit(PendingInvite(invite.network, invite.channel, invite.inviter))
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.WindowInviteDeclined>()
+            .map { it.declined }
+            .onEach { declined ->
+                _pendingInvites.update { current ->
+                    current.filterNot { it.networkSlug == declined.network && it.channel == declined.channel }
+                }
+            }
+            .launchIn(scope)
     }
 
     /** Records a read-cursor value we already know is current (e.g. from a channel
@@ -274,6 +321,16 @@ class NetworksRepository(
     private suspend fun syncMembership(networkSlug: String, channels: List<ChannelEntity>) {
         db.channelDao().insertMissing(channels)
         channels.forEach { db.channelDao().updateMembership(networkSlug, it.name, it.source, it.joined) }
+
+        // A channel joined through some OTHER route (e.g. Directory) while its invite
+        // banner was still up leaves no server-side :invited state to re-snapshot on
+        // the next reconnect — nothing would otherwise clear the stale banner.
+        val joinedNow = channels.filter { it.joined }.map { canonicalTarget(it.name) }.toSet()
+        if (joinedNow.isNotEmpty()) {
+            _pendingInvites.update { current ->
+                current.filterNot { it.networkSlug == networkSlug && canonicalTarget(it.channel) in joinedNow }
+            }
+        }
     }
 
     /** Applies the server-authoritative /me unread envelope to rows already known
@@ -407,6 +464,22 @@ class NetworksRepository(
         val response = api.joinChannel(slug, JoinChannelRequestDto(name, key))
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         refresh().getOrThrow()
+    }
+
+    /** Accepts a pending invite: a plain JOIN (the server has no separate "accept"
+     * verb — see `InvitesController`'s moduledoc). Drops the local banner optimistically
+     * since the server only clears its own `:invited` state as a side effect of the
+     * JOIN, with no dedicated event to react to. */
+    suspend fun acceptInvite(slug: String, channel: String): Result<Unit> =
+        joinChannel(slug, channel).onSuccess {
+            _pendingInvites.update { current -> current.filterNot { it.networkSlug == slug && it.channel == channel } }
+        }
+
+    suspend fun declineInvite(slug: String, channel: String): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.declineInvite(slug, channel)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        _pendingInvites.update { current -> current.filterNot { it.networkSlug == slug && it.channel == channel } }
     }
 
     suspend fun getDirectory(slug: String, sort: String, q: String? = null, cursor: String? = null): Result<DirectoryPageDto> =

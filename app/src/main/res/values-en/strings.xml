@@ -526,6 +526,13 @@
     <string name="whois_copy_message_partial">Copy partial</string>
     <string name="whois_copy_message_partial_title">Select the text to copy</string>
 
+    <!-- Invites -->
+    <string name="home_invite_banner">%1$s invited you to %2$s</string>
+    <string name="home_invite_accept">Join</string>
+    <string name="home_invite_decline">Dismiss</string>
+    <string name="notif_invite_title">Channel invite</string>
+    <string name="notif_invite_body">%1$s invited you to %2$s</string>
+
     <!-- Notifications -->
     <string name="notif_action_reply">Reply</string>
     <string name="notif_action_mark_read">Mark as read</string>

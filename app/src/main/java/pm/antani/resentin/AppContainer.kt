@@ -63,6 +63,7 @@ class AppContainer(private val context: Context) {
             userSettingsRepository,
             tokenStore,
             authRepository,
+            networksRepository,
         )
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

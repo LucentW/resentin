@@ -34,6 +34,12 @@ interface NetworksApi {
     @POST("networks/{slug}/channels")
     suspend fun joinChannel(@Path("slug") slug: String, @Body body: JoinChannelRequestDto): Response<ResponseBody>
 
+    /** Refuses an inbound INVITE (#976 on grappa-irc): drops the local `:invited`
+     * window and fans `window_invite_declined` out to every device on the account.
+     * Nothing is sent upstream — IRC has no DECLINE verb. */
+    @DELETE("networks/{slug}/invites/{channel}")
+    suspend fun declineInvite(@Path("slug") slug: String, @Path("channel") channel: String): Response<ResponseBody>
+
     @GET("networks/{slug}/directory")
     suspend fun getDirectory(
         @Path("slug") slug: String,
