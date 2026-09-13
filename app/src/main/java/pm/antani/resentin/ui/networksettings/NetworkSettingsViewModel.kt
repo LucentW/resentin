@@ -10,11 +10,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import pm.antani.resentin.domain.repository.IgnoresRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
 import pm.antani.resentin.ui.chat.readUploadFile
 
@@ -43,10 +47,22 @@ data class NetworkSettingsUiState(
     val isSaving: Boolean = false,
     val error: String? = null,
     val saved: Boolean = false,
+    // Ignore list (#162) — draft/error for the add-mask field. The masks themselves
+    // live in [NetworkSettingsViewModel.ignoredMasks], not here: that's a passthrough
+    // of the shared [IgnoresRepository] cache, not screen-local state.
+    val newIgnoreMask: String = "",
+    val ignoreError: String? = null,
+    // Notify / presence watch list (GH #247) — fetched on open, no live broadcast to
+    // mirror (see [NetworksRepository.getNotifyList]), so it's plain screen state.
+    val notifyList: List<String> = emptyList(),
+    val notifyLoading: Boolean = true,
+    val newNotifyNick: String = "",
+    val notifyError: String? = null,
 )
 
 class NetworkSettingsViewModel(
     private val networksRepository: NetworksRepository,
+    private val ignoresRepository: IgnoresRepository,
     private val appContext: Context,
     private val networkSlug: String,
 ) : ViewModel() {
@@ -54,7 +70,18 @@ class NetworkSettingsViewModel(
     private val _uiState = MutableStateFlow(NetworkSettingsUiState(slug = networkSlug))
     val uiState: StateFlow<NetworkSettingsUiState> = _uiState.asStateFlow()
 
+    /** Ignored masks for this network — passthrough of the shared [IgnoresRepository]
+     * cache (same list `/ignore` and `/unignore` mutate), refreshed on open below. */
+    val ignoredMasks: StateFlow<List<String>> = ignoresRepository.ignores
+        .map { it[networkSlug].orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     init {
+        viewModelScope.launch {
+            ignoresRepository.refresh(networkSlug)
+                .onFailure { error -> _uiState.update { it.copy(ignoreError = error.message) } }
+        }
+        refreshNotifyList()
         viewModelScope.launch {
             networksRepository.observeNetwork(networkSlug).collect { network ->
                 if (network != null) {
@@ -166,16 +193,72 @@ class NetworkSettingsViewModel(
         }
     }
 
+    // -- Ignore list (#162) --------------------------------------------------
+
+    fun onNewIgnoreMaskChange(value: String) = _uiState.update { it.copy(newIgnoreMask = value, ignoreError = null) }
+
+    fun addIgnoreMask() {
+        val mask = _uiState.value.newIgnoreMask.trim()
+        if (mask.isEmpty()) return
+        viewModelScope.launch {
+            ignoresRepository.addIgnore(networkSlug, mask)
+                .onSuccess { _uiState.update { it.copy(newIgnoreMask = "", ignoreError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(ignoreError = error.message) } }
+        }
+    }
+
+    fun removeIgnoreMask(mask: String) {
+        viewModelScope.launch {
+            ignoresRepository.removeIgnore(networkSlug, mask)
+                .onFailure { error -> _uiState.update { it.copy(ignoreError = error.message) } }
+        }
+    }
+
+    // -- Notify / presence watch list (GH #247) -------------------------------
+
+    fun refreshNotifyList() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(notifyLoading = true) }
+            networksRepository.getNotifyList(networkSlug)
+                .onSuccess { list -> _uiState.update { it.copy(notifyList = list, notifyLoading = false, notifyError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(notifyLoading = false, notifyError = error.message) } }
+        }
+    }
+
+    fun onNewNotifyNickChange(value: String) = _uiState.update { it.copy(newNotifyNick = value, notifyError = null) }
+
+    fun addNotifyNick() {
+        val nick = _uiState.value.newNotifyNick.trim()
+        if (nick.isEmpty()) return
+        viewModelScope.launch {
+            networksRepository.addNotify(networkSlug, listOf(nick))
+                .onSuccess {
+                    _uiState.update { it.copy(newNotifyNick = "") }
+                    refreshNotifyList()
+                }
+                .onFailure { error -> _uiState.update { it.copy(notifyError = error.message) } }
+        }
+    }
+
+    fun removeNotifyNick(nick: String) {
+        viewModelScope.launch {
+            networksRepository.removeNotify(networkSlug, nick)
+                .onSuccess { refreshNotifyList() }
+                .onFailure { error -> _uiState.update { it.copy(notifyError = error.message) } }
+        }
+    }
+
     companion object {
         fun factory(
             networksRepository: NetworksRepository,
+            ignoresRepository: IgnoresRepository,
             appContext: Context,
             networkSlug: String,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return NetworkSettingsViewModel(networksRepository, appContext, networkSlug) as T
+                    return NetworkSettingsViewModel(networksRepository, ignoresRepository, appContext, networkSlug) as T
                 }
             }
     }

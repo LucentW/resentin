@@ -467,6 +467,16 @@
     <string name="network_settings_saved">Salvato</string>
     <string name="network_settings_save">Salva</string>
     <string name="network_settings_archive">Conversazioni archiviate</string>
+    <string name="network_settings_ignores_label">Maschere ignorate</string>
+    <string name="network_settings_ignores_hint">I messaggi da queste maschere vengono scartati prima di arrivare: niente scrollback, niente badge, niente notifica. Un nick da solo equivale a nick!*@*; * e ? sono wildcard. Lista per rete, la stessa di /ignore.</string>
+    <string name="network_settings_ignores_empty">Nessuna maschera ignorata su questa rete.</string>
+    <string name="network_settings_ignores_hint_input">nick o maschera</string>
+    <string name="network_settings_ignores_add">Aggiungi</string>
+    <string name="network_settings_notify_label">Notifiche (watchlist)</string>
+    <string name="network_settings_notify_hint">Elenco per rete dei nick da tenere d’occhio, lo stesso di /notify.</string>
+    <string name="network_settings_notify_empty">Nessun nick in osservazione su questa rete.</string>
+    <string name="network_settings_notify_hint_input">nick da osservare</string>
+    <string name="network_settings_notify_add">Aggiungi</string>
     <string name="network_settings_profile_label">Profilo</string>
     <string name="network_settings_profile_age_label">Età</string>
     <string name="network_settings_profile_gender_label">Genere</string>
@@ -586,6 +596,8 @@
     <string name="chat_slash_syntax_ban">/ban &lt;nick-o-mask&gt;</string>
     <string name="chat_slash_syntax_unban">/unban &lt;mask&gt;</string>
     <string name="chat_slash_syntax_banlist">/banlist</string>
+    <string name="chat_slash_syntax_ignore">/ignore &lt;nick-o-mask&gt;</string>
+    <string name="chat_slash_syntax_unignore">/unignore &lt;nick-o-mask&gt;</string>
     <string name="chat_slash_syntax_invite">/invite &lt;nick&gt; [#canale]</string>
     <string name="chat_slash_syntax_umode">/umode [modes]</string>
     <string name="chat_slash_syntax_mode">/mode [#canale] &lt;modes&gt; [argomenti]</string>
@@ -616,6 +628,8 @@
     <string name="chat_slash_description_ban">Banna un nick o una maschera</string>
     <string name="chat_slash_description_unban">Rimuove un ban</string>
     <string name="chat_slash_description_banlist">Mostra la lista ban del canale</string>
+    <string name="chat_slash_description_ignore">Ignora un nick o una maschera (per rete)</string>
+    <string name="chat_slash_description_unignore">Rimuove un\'ignore</string>
     <string name="chat_slash_description_invite">Invita un nick nel canale</string>
     <string name="chat_slash_description_umode">Imposta i mode del tuo nick</string>
     <string name="chat_slash_description_mode">Imposta i mode del canale</string>

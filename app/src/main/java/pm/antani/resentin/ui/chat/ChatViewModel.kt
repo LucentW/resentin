@@ -62,7 +62,7 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val networksRepository: NetworksRepository,
     private val membersRepository: MembersRepository,
-    ignoresRepository: IgnoresRepository,
+    private val ignoresRepository: IgnoresRepository,
     private val authRepository: AuthRepository,
     private val userSettingsRepository: UserSettingsRepository,
     private val appPreferences: AppPreferences,
@@ -684,6 +684,14 @@ class ChatViewModel(
             }
             "banlist" -> {
                 _commandEffects.emit(ChatCommandEffect.OpenChannelSettings)
+                setDraft("")
+            }
+            "ignore" -> {
+                ignoresRepository.addIgnore(networkSlug, requireNotNull(argument)).getOrThrow()
+                setDraft("")
+            }
+            "unignore" -> {
+                ignoresRepository.removeIgnore(networkSlug, requireNotNull(argument)).getOrThrow()
                 setDraft("")
             }
             "invite" -> {

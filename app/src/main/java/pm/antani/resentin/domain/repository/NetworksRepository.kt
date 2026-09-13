@@ -446,6 +446,14 @@ class NetworksRepository(
         refresh().getOrThrow()
     }
 
+    /** The `/notify` presence watch list for this network (GH #247) — nicks only, no
+     * online/offline state (that rides a separate live `presence` field this client
+     * doesn't track yet). Fetched on demand, like [IgnoresRepository]'s list: no
+     * broadcast to mirror, so a settings screen just refreshes on open. */
+    suspend fun getNotifyList(slug: String): Result<List<String>> = runCatching {
+        authRepository.api(NotifyApi::class.java).list(slug).entries.map { it.nick }
+    }
+
     suspend fun addNotify(slug: String, nicks: List<String>): Result<Unit> = runCatching {
         val response = authRepository.api(NotifyApi::class.java).add(slug, NotifyRequestDto(nicks))
         check(response.isSuccessful) { "HTTP ${response.code()}" }

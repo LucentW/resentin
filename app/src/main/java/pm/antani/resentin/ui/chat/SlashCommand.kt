@@ -4,7 +4,7 @@ import pm.antani.resentin.R
 
 enum class SlashArgumentKind { NONE, TEXT, CHANNEL, NICK, NICKS, NETWORK, MODES, MASK, COMMAND, ALIAS }
 enum class SlashCommandAvailability { SUPPORTED, RECOGNIZED_UNSUPPORTED }
-enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
+enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, IGNORE, UNIGNORE, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
 
 data class SlashCommandSpec(
     val name: String,
@@ -69,6 +69,8 @@ val slashCommandCatalog: List<SlashCommandSpec> = listOf(
     supported("ban", R.string.chat_slash_syntax_ban, R.string.chat_slash_description_ban, argumentKind = SlashArgumentKind.MASK, minArguments = 1, handler = SlashCommandHandler.BAN),
     supported("unban", R.string.chat_slash_syntax_unban, R.string.chat_slash_description_unban, argumentKind = SlashArgumentKind.MASK, minArguments = 1, handler = SlashCommandHandler.UNBAN),
     supported("banlist", R.string.chat_slash_syntax_banlist, R.string.chat_slash_description_banlist, handler = SlashCommandHandler.BANLIST),
+    supported("ignore", R.string.chat_slash_syntax_ignore, R.string.chat_slash_description_ignore, argumentKind = SlashArgumentKind.MASK, minArguments = 1, handler = SlashCommandHandler.IGNORE),
+    supported("unignore", R.string.chat_slash_syntax_unignore, R.string.chat_slash_description_unignore, argumentKind = SlashArgumentKind.MASK, minArguments = 1, handler = SlashCommandHandler.UNIGNORE),
     supported("invite", R.string.chat_slash_syntax_invite, R.string.chat_slash_description_invite, argumentKind = SlashArgumentKind.NICK, minArguments = 1, handler = SlashCommandHandler.INVITE),
     supported("umode", R.string.chat_slash_syntax_umode, R.string.chat_slash_description_umode, argumentKind = SlashArgumentKind.MODES, handler = SlashCommandHandler.USER_MODE),
     supported("mode", R.string.chat_slash_syntax_mode, R.string.chat_slash_description_mode, argumentKind = SlashArgumentKind.CHANNEL, handler = SlashCommandHandler.CHANNEL_MODE),

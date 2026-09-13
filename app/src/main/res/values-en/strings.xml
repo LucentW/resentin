@@ -461,6 +461,16 @@
     <string name="network_settings_saved">Saved</string>
     <string name="network_settings_save">Save</string>
     <string name="network_settings_archive">Archived conversations</string>
+    <string name="network_settings_ignores_label">Ignored masks</string>
+    <string name="network_settings_ignores_hint">Messages from these are dropped before they reach you: no scrollback, no badge, no push. A bare nick means nick!*@*; * and ? are wildcards. Per-network list, same as /ignore.</string>
+    <string name="network_settings_ignores_empty">Nothing ignored on this network.</string>
+    <string name="network_settings_ignores_hint_input">nick or mask</string>
+    <string name="network_settings_ignores_add">Add</string>
+    <string name="network_settings_notify_label">Notifications (watchlist)</string>
+    <string name="network_settings_notify_hint">Per-network list of nicks to watch, same as /notify.</string>
+    <string name="network_settings_notify_empty">No nicks watched on this network.</string>
+    <string name="network_settings_notify_hint_input">nick to watch</string>
+    <string name="network_settings_notify_add">Add</string>
     <string name="network_settings_profile_label">Profile</string>
     <string name="network_settings_profile_age_label">Age</string>
     <string name="network_settings_profile_gender_label">Gender</string>
@@ -580,6 +590,8 @@
     <string name="chat_slash_syntax_ban">/ban &lt;nick-or-mask&gt;</string>
     <string name="chat_slash_syntax_unban">/unban &lt;mask&gt;</string>
     <string name="chat_slash_syntax_banlist">/banlist</string>
+    <string name="chat_slash_syntax_ignore">/ignore &lt;nick-or-mask&gt;</string>
+    <string name="chat_slash_syntax_unignore">/unignore &lt;nick-or-mask&gt;</string>
     <string name="chat_slash_syntax_invite">/invite &lt;nick&gt; [#channel]</string>
     <string name="chat_slash_syntax_umode">/umode [modes]</string>
     <string name="chat_slash_syntax_mode">/mode [#channel] &lt;modes&gt; [arguments]</string>
@@ -610,6 +622,8 @@
     <string name="chat_slash_description_ban">Ban a nickname or mask</string>
     <string name="chat_slash_description_unban">Remove a ban</string>
     <string name="chat_slash_description_banlist">Show the channel ban list</string>
+    <string name="chat_slash_description_ignore">Ignore a nickname or mask (per network)</string>
+    <string name="chat_slash_description_unignore">Remove an ignore</string>
     <string name="chat_slash_description_invite">Invite a nickname to the channel</string>
     <string name="chat_slash_description_umode">Set your nickname modes</string>
     <string name="chat_slash_description_mode">Set channel modes</string>

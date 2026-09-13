@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.Button
@@ -27,7 +28,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,6 +61,7 @@ import pm.antani.resentin.ui.common.ResentinStateTone
 @Composable
 fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Unit, onArchiveClick: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
+    val ignoredMasks by viewModel.ignoredMasks.collectAsState()
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::uploadAvatar)
     }
@@ -300,6 +304,33 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                             minLines = 4,
                         )
                     }
+                    MaskListSection(
+                        title = stringResource(R.string.network_settings_ignores_label),
+                        hint = stringResource(R.string.network_settings_ignores_hint),
+                        items = ignoredMasks,
+                        emptyText = stringResource(R.string.network_settings_ignores_empty),
+                        draft = state.newIgnoreMask,
+                        onDraftChange = viewModel::onNewIgnoreMaskChange,
+                        onAdd = viewModel::addIgnoreMask,
+                        onRemove = viewModel::removeIgnoreMask,
+                        addLabel = stringResource(R.string.network_settings_ignores_add),
+                        inputHint = stringResource(R.string.network_settings_ignores_hint_input),
+                        error = state.ignoreError,
+                    )
+                    MaskListSection(
+                        title = stringResource(R.string.network_settings_notify_label),
+                        hint = stringResource(R.string.network_settings_notify_hint),
+                        items = state.notifyList,
+                        emptyText = stringResource(R.string.network_settings_notify_empty),
+                        draft = state.newNotifyNick,
+                        onDraftChange = viewModel::onNewNotifyNickChange,
+                        onAdd = viewModel::addNotifyNick,
+                        onRemove = viewModel::removeNotifyNick,
+                        addLabel = stringResource(R.string.network_settings_notify_add),
+                        inputHint = stringResource(R.string.network_settings_notify_hint_input),
+                        error = state.notifyError,
+                        loading = state.notifyLoading,
+                    )
                     state.error?.let { error ->
                         ResentinStateBanner(
                             icon = Icons.Outlined.WifiOff,
@@ -328,6 +359,75 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                     }
                 }
             }
+        }
+    }
+}
+
+/** Shared shape for a per-network mask/nick list with add + remove — the ignore list
+ * (#162) and the `/notify` presence watchlist (GH #247) render identically, just like
+ * cicchetto's IgnoresSettings/WatchlistsSettings ("shaped after WatchlistsSettings on
+ * purpose, down to the list classes"). */
+@Composable
+private fun MaskListSection(
+    title: String,
+    hint: String,
+    items: List<String>,
+    emptyText: String,
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit,
+    addLabel: String,
+    inputHint: String,
+    error: String?,
+    loading: Boolean = false,
+) {
+    ResentinSectionCard {
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 0.8.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        when {
+            loading -> CircularProgressIndicator(Modifier.height(24.dp))
+            items.isEmpty() -> Text(emptyText, style = MaterialTheme.typography.bodySmall)
+            else -> items.forEachIndexed { index, item ->
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(item, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { onRemove(item) }) {
+                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.cd_remove))
+                    }
+                }
+                if (index < items.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = onDraftChange,
+                placeholder = { Text(inputHint) },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = onAdd, enabled = draft.isNotBlank(), shape = MaterialTheme.shapes.medium) {
+                Text(addLabel)
+            }
+        }
+        error?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
