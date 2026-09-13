@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -501,9 +502,11 @@ fun ChatScreen(
     // composer received focus and restore that position after the IME resizes
     // the layout. If the user was reading history, keep their position.
     var shouldScrollToBottomOnIme by remember { mutableStateOf(false) }
+    // Track multiline growth too: IME insets stay constant while the composer gets taller.
+    var composerHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, composerHeightPx) {
         snapshotFlow {
             val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             Triple(
@@ -874,6 +877,7 @@ fun ChatScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(max = 120.dp)
+                                .onSizeChanged { composerHeightPx = it.height }
                                 .focusRequester(draftFocusRequester)
                                 .onFocusChanged { focusState ->
                                     shouldScrollToBottomOnIme = if (focusState.isFocused) {
