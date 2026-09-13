@@ -3,6 +3,7 @@ package pm.antani.resentin.ui.chat
 import pm.antani.resentin.ui.theme.ResentinSpacing
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -370,6 +372,16 @@ fun ChatScreen(
     // "Copia parziale" actions — the sheet itself only knows the sender's nick (it opens
     // off a WHOIS reply, which arrives async), not which message triggered it.
     var longPressedMessageText by remember { mutableStateOf<String?>(null) }
+    // Long-press message menu target (Copy / Reply / !addquote / Select… / user
+    // card — cicchetto MessageContextMenu parity). Null = menu closed.
+    var messageMenuTarget by remember { mutableStateOf<MessageMenuTarget?>(null) }
+    // Text-selection latch: the one message id whose body renders inside a
+    // SelectionContainer (cicchetto's "Select…" escape hatch). Gestures on that
+    // row are disabled while latched; back clears it.
+    var selectingMessageId by remember { mutableStateOf<Long?>(null) }
+    if (selectingMessageId != null) {
+        BackHandler { selectingMessageId = null }
+    }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::uploadFile)
     }
@@ -1037,10 +1049,8 @@ fun ChatScreen(
                                 isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
                                 isSelected = message.id == selectedSearchMessageId,
                                 onReply = viewModel::reply,
-                                onLongPress = { nick, text ->
-                                    longPressedMessageText = text
-                                    viewModel.onMessageLongPress(nick)
-                                },
+                                onMessageMenu = { target -> messageMenuTarget = target },
+                                selectingMessageId = selectingMessageId,
                                 tight = tight,
                             )
                         }
@@ -1086,10 +1096,8 @@ fun ChatScreen(
                                             isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
                                             isSelected = event.id == selectedSearchMessageId,
                                             onReply = viewModel::reply,
-                                            onLongPress = { nick, text ->
-                                                longPressedMessageText = text
-                                                viewModel.onMessageLongPress(nick)
-                                            },
+                                            onMessageMenu = { target -> messageMenuTarget = target },
+                                            selectingMessageId = selectingMessageId,
                                             tight = false,
                                         )
                                     }
@@ -1335,10 +1343,8 @@ fun ChatScreen(
                                     isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
                                     isSelected = false,
                                     onReply = viewModel::reply,
-                                    onLongPress = { nick, text ->
-                                        longPressedMessageText = text
-                                        viewModel.onMessageLongPress(nick)
-                                    },
+                                    onMessageMenu = { target -> messageMenuTarget = target },
+                                    selectingMessageId = selectingMessageId,
                                     tight = false,
                                 )
                             }
@@ -1349,9 +1355,32 @@ fun ChatScreen(
         }
     }
 
+    messageMenuTarget?.let { target ->
+        MessageActionsSheet(
+            target = target,
+            onDismiss = { messageMenuTarget = null },
+            onReply = {
+                viewModel.reply(target.sender, target.text)
+                messageMenuTarget = null
+            },
+            onAddQuote = {
+                viewModel.appendAddQuote(target.sender, target.text, target.isAction)
+                messageMenuTarget = null
+            },
+            onSelect = {
+                selectingMessageId = target.messageId
+                messageMenuTarget = null
+            },
+            onUserCard = {
+                longPressedMessageText = target.text
+                viewModel.onMessageLongPress(target.sender)
+                messageMenuTarget = null
+            },
+        )
+    }
+
     val whoisValue = whois
-    if (whoisValue != null) {
-        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initial = false)
+    if (whoisValue != null) {        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initial = false)
         val avatar by viewModel.avatarBitmap.collectAsState()
         UserCardSheet(
             whois = whoisValue,
@@ -1937,7 +1966,8 @@ private fun ChatTimelineMessageItem(
     isMine: Boolean,
     isSelected: Boolean,
     onReply: (nick: String, body: String) -> Unit,
-    onLongPress: (nick: String, text: String) -> Unit,
+    onMessageMenu: (MessageMenuTarget) -> Unit,
+    selectingMessageId: Long?,
     tight: Boolean,
 ) {
     Box(
@@ -1960,7 +1990,8 @@ private fun ChatTimelineMessageItem(
             isQuery = isQuery,
             isMine = isMine,
             onReply = onReply,
-            onLongPress = onLongPress,
+            onMessageMenu = onMessageMenu,
+            selectingMessageId = selectingMessageId,
             tight = tight,
         )
     }
@@ -2042,7 +2073,8 @@ private fun MessageRow(
     isQuery: Boolean,
     isMine: Boolean,
     onReply: (nick: String, body: String) -> Unit,
-    onLongPress: (nick: String, text: String) -> Unit,
+    onMessageMenu: (MessageMenuTarget) -> Unit,
+    selectingMessageId: Long?,
     tight: Boolean = false,
 ) {
     val meta = remember(message.metaJson) {
@@ -2069,7 +2101,13 @@ private fun MessageRow(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = density.lineVertical())
                         .pointerInput(formatted.sender, eventText) {
-                            detectTapGestures(onLongPress = { onLongPress(formatted.sender, eventText) })
+                            detectTapGestures(
+                                onLongPress = {
+                                    onMessageMenu(
+                                        MessageMenuTarget(message.id, formatted.sender, eventText, isChat = false),
+                                    )
+                                },
+                            )
                         },
                 )
             } else {
@@ -2087,7 +2125,13 @@ private fun MessageRow(
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         ),
                         modifier = Modifier.pointerInput(formatted.sender, eventText) {
-                            detectTapGestures(onLongPress = { onLongPress(formatted.sender, eventText) })
+                            detectTapGestures(
+                                onLongPress = {
+                                    onMessageMenu(
+                                        MessageMenuTarget(message.id, formatted.sender, eventText, isChat = false),
+                                    )
+                                },
+                            )
                         },
                     ) {
                         MircText(
@@ -2103,16 +2147,31 @@ private fun MessageRow(
         is FormattedEvent.Chat -> {
             SwipeToReply(
                 onReply = { onReply(message.sender, formatted.text) },
-                onLongPress = { onLongPress(message.sender, formatted.text) },
+                onLongPress = {
+                    onMessageMenu(
+                        MessageMenuTarget(
+                            message.id,
+                            message.sender,
+                            formatted.text,
+                            isChat = true,
+                            isAction = formatted.isAction,
+                        ),
+                    )
+                },
+                // Text selection owns the row's gestures while latched — the
+                // drag/long-press detectors would fight SelectionContainer.
+                gesturesEnabled = selectingMessageId == null,
             ) {
+                val selecting = selectingMessageId == message.id
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density)
+                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density, selecting)
                 } else {
                     BubbleRow(
                         message, formatted, prefix, time, coloredNicklist, isMention,
                         isMine = isMine,
                         tight = tight,
                         density = density,
+                        selecting = selecting,
                     )
                 }
             }
@@ -2149,6 +2208,31 @@ private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "
 private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 
+// Dimmed reply-quote block above a bubble body (cicchetto scrollback-reply-quote
+// parity): thin bar + quoted head in secondary color, capped at two lines.
+@Composable
+private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.Color) {
+    Row(
+        modifier = Modifier.padding(bottom = 4.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 2.dp, end = 6.dp)
+                .size(width = 2.dp, height = 28.dp)
+                .background(barColor, CircleShape),
+        )
+        Text(
+            text = head.trimEnd(),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalResentinChatFontFamily.current),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+    }
+}
+
 @Composable
 private fun BubbleRow(
     message: MessageEntity,
@@ -2160,6 +2244,7 @@ private fun BubbleRow(
     isMine: Boolean,
     tight: Boolean = false,
     density: MessageDensity = MessageDensity.NORMAL,
+    selecting: Boolean = false,
 ) {
     // WhatsApp-style: i messaggi propri stanno a destra, gli altri a sinistra.
     // isMention non scatta mai per i propri (vedi isMentionRow), ma resta primo
@@ -2184,12 +2269,18 @@ private fun BubbleRow(
         fontFamily = LocalResentinChatFontFamily.current,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    val bodyWithTime = remember(formatted.text, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler) {
+    // Reply quote head (`<nick> … << ` / `nick: `) renders as a dimmed block
+    // above the body (cicchetto scrollback-reply-quote parity) — actions keep
+    // their third-person grammar untouched.
+    val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
+        if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
+    }
+    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
+            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2296,18 +2387,46 @@ private fun BubbleRow(
                         }
                     }
                     if (formatted.isAction) {
-                        Text(
-                            text = actionWithTime,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontStyle = FontStyle.Italic,
-                                fontFamily = LocalResentinChatFontFamily.current,
-                            ),
-                        )
+                        if (selecting) {
+                            SelectionContainer {
+                                Text(
+                                    text = actionWithTime,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontStyle = FontStyle.Italic,
+                                        fontFamily = LocalResentinChatFontFamily.current,
+                                    ),
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = actionWithTime,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontStyle = FontStyle.Italic,
+                                    fontFamily = LocalResentinChatFontFamily.current,
+                                ),
+                            )
+                        }
                     } else {
-                        Text(
-                            text = bodyWithTime,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = LocalResentinChatFontFamily.current),
+                        if (quoteHead != null) {
+                            QuoteHeadBlock(
+                                head = quoteHead,
+                                barColor = if (isOutgoing) {
+                                    MaterialTheme.colorScheme.primary
+                                } else if (coloredNicklist) {
+                                    colorForNick(message.sender, lightTheme)
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                            )
+                        }
+                        val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontFamily = LocalResentinChatFontFamily.current,
                         )
+                        if (selecting) {
+                            SelectionContainer { Text(text = bodyWithTime, style = bodyStyle) }
+                        } else {
+                            Text(text = bodyWithTime, style = bodyStyle)
+                        }
                         // Sui propri l'header col nick è ridondante: ora in calce a destra,
                         // come WhatsApp. Il marker (notice) va preservato in calce.
                         if (isOutgoing && !continuesGroup) {
@@ -2340,6 +2459,7 @@ private fun IrcLineRow(
     coloredNicklist: Boolean,
     isMention: Boolean,
     density: MessageDensity = MessageDensity.NORMAL,
+    selecting: Boolean = false,
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
@@ -2352,14 +2472,17 @@ private fun IrcLineRow(
             else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
         }
     }
-    Text(
-        text = annotated,
-        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = LocalResentinCodeFontFamily.current),
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(mentionHighlight(isMention))
-            .padding(horizontal = 16.dp, vertical = density.lineVertical()),
-    )
+    val body: @Composable () -> Unit = {
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = LocalResentinCodeFontFamily.current),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(mentionHighlight(isMention))
+                .padding(horizontal = 16.dp, vertical = density.lineVertical()),
+        )
+    }
+    if (selecting) SelectionContainer { body() } else body()
 }
 
 /** Vertical rhythm of chat rows — NORMAL preserves the previous spacing. */
@@ -2390,16 +2513,26 @@ private fun MessageDensity.dividerVertical(): Dp = when (this) {
 private const val REPLY_SWIPE_THRESHOLD_DP = 64
 
 /** Swipe-right-to-reply, WhatsApp/Telegram style: drag reveals a reply icon behind the
- * row and, past the threshold, prefills the draft with `nick: ` on release. IRC has no
+ * row and, past the threshold, prefills the draft on release. IRC has no
  * real threaded replies, so this only ever affects the compose box, never the message.
- * A separate long-press gesture opens the sender's user card — the drag detector only
- * consumes events once the finger has actually moved, so the two coexist on one row. */
+ * A separate long-press gesture opens the message menu — the drag detector only
+ * consumes events once the finger has actually moved, so the two coexist on one row.
+ * Pass [gesturesEnabled] = false while the row's text selection is latched. */
 @Composable
-private fun SwipeToReply(onReply: () -> Unit, onLongPress: () -> Unit, content: @Composable () -> Unit) {
+private fun SwipeToReply(
+    onReply: () -> Unit,
+    onLongPress: () -> Unit,
+    gesturesEnabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val thresholdPx = with(LocalDensity.current) { REPLY_SWIPE_THRESHOLD_DP.dp.toPx() }
 
+    if (!gesturesEnabled) {
+        Box(modifier = Modifier.fillMaxWidth()) { content() }
+        return
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()

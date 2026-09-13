@@ -652,6 +652,8 @@
     <string name="chat_multiline_title">Incolla come %1$d messaggi?</string>
     <string name="chat_multiline_body">Il testo verrà inviato a %1$s come %2$d messaggi separati (uno per riga).</string>
     <string name="chat_slash_alias_builtin">Non puoi sostituire un comando integrato</string>
+    <string name="chat_menu_select">Seleziona…</string>
+    <string name="chat_menu_user_card">Scheda utente</string>
     <string name="home_register_nick">Registra nick</string>
     <string name="registration_wizard_title">Registra il tuo nick</string>
     <string name="registration_wizard_step">Passo %1$d di %2$d</string>
