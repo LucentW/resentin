@@ -35,6 +35,11 @@ Azzurra; le ultime due dal proprio account su un bouncer personale.)*
 - Login via client token, username/password o link magico `grappa://` (es.
   da QR code) — inclusi i client token per account con 2FA — con supporto ai
   login "visitor" anonimi dei bouncer che li offrono.
+- Accesso via QR direttamente dalla sessione web di cicchetto: nel menu
+  **Actions → Settings → "Open on another device"** di cicchetto viene
+  mostrato un QR temporaneo, che basta scansionare da Resentin (pulsante
+  "Scansiona codice QR" nella schermata di login) per accedere sul telefono
+  senza reinserire credenziali.
 - Elenco reti/canali con contatori dei messaggi non letti e delle menzioni
   (badge rosso se ci sono menzioni), in grassetto se ci sono messaggi da
   leggere; menu a pressione lunga su un canale per segnarlo come letto o
