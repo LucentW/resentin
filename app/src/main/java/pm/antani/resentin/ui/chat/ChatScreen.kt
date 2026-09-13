@@ -386,6 +386,12 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.scrollToLatestAfterSend.collect {
+            listState.animateToChatBottom()
+        }
+    }
+
     // Position (within the displayed timeline) of the first row past the read cursor —
     // also where the "Hai letto fino a qui" divider renders. During the first layout
     // use the frozen cursor so it remains a stable landing target. Once positioned,
