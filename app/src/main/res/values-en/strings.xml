@@ -240,6 +240,9 @@
     <string name="chat_search_no_results">No results</string>
     <string name="chat_topic_dialog_title">Topic</string>
     <string name="chat_dialog_close">Close</string>
+    <string name="chat_dcc_offer_title">Incoming file (DCC)</string>
+    <string name="chat_dcc_offer_body">%1$s wants to send you %2$s (%3$s)</string>
+    <string name="chat_dcc_offer_accept">Accept</string>
     <string name="chat_unread_divider">You\'ve read up to here</string>
     <string name="chat_motd_title">Message of the day</string>
     <string name="chat_date_today">Today</string>
@@ -435,7 +438,11 @@
     <string name="irc_list_exempt">Exempt (+e)</string>
     <string name="irc_list_invite">Invite (+I)</string>
     <string name="irc_list_quiet">Quiet (+q)</string>
-    <string name="irc_list_restrict">Restrict (+z)</string>    <string name="channel_settings_list_empty">List is empty</string>
+    <string name="irc_list_restrict">Restrict (+z)</string>
+    <string name="irc_list_reop">Reops (+R)</string>
+    <string name="dcc_download_success">File downloaded</string>
+    <string name="dcc_download_failed">File download failed</string>
+    <string name="channel_settings_list_empty">List is empty</string>
     <string name="channel_settings_list_set_by">set by %1$s</string>
     <string name="channel_settings_new_mask_hint">nick or mask</string>
     <string name="channel_settings_add_mask">Add</string>
@@ -532,6 +539,8 @@
     <string name="home_invite_decline">Dismiss</string>
     <string name="notif_invite_title">Channel invite</string>
     <string name="notif_invite_body">%1$s invited you to %2$s</string>
+    <string name="notif_dcc_offer_title">Incoming file (DCC)</string>
+    <string name="notif_dcc_offer_body">%1$s wants to send you %2$s</string>
 
     <!-- Notifications -->
     <string name="notif_action_reply">Reply</string>

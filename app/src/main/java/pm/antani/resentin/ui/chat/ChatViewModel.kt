@@ -33,6 +33,7 @@ import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.IgnoresRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.PendingDccOffer
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.domain.session.channelTopic
 import pm.antani.resentin.domain.session.ConnectionManager
@@ -108,6 +109,28 @@ class ChatViewModel(
     /** `/hilight` watchlist patterns (null = never loaded — match nick-only
      * until the first `list` reply lands). Warmed once the user topic is joined. */
     val highlightPatterns: StateFlow<List<String>?> = userSettingsRepository.highlightPatterns
+
+    /** DCC offers (issue 2089 on grappa-irc) held for THIS window — a stranger's offer
+     * routes to `$server`, so this is never empty there for long on a busy bouncer.
+     * Passthrough-filtered from [NetworksRepository.pendingDccOffers], which is shared
+     * app-wide since the same offer's banner must show wherever it was pushed. */
+    val pendingDccOffers: StateFlow<List<PendingDccOffer>> = networksRepository.pendingDccOffers
+        .map { offers -> offers.filter { it.networkSlug == networkSlug && canonicalTarget(it.channel) == canonicalTarget(channelName) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun acceptDccOffer(offer: PendingDccOffer) {
+        viewModelScope.launch {
+            networksRepository.acceptDccOffer(networkSlug, offer.offerId)
+                .onFailure { _error.value = it.message ?: appContext.getString(R.string.home_unknown_error) }
+        }
+    }
+
+    fun declineDccOffer(offer: PendingDccOffer) {
+        viewModelScope.launch {
+            networksRepository.declineDccOffer(networkSlug, offer.offerId)
+                .onFailure { _error.value = it.message ?: appContext.getString(R.string.home_unknown_error) }
+        }
+    }
 
     // Ephemeral `/whowas` result card — last-write-wins per network, like cicchetto's
     // one-bundle-per-slug card. Dismissed by the user, replaced by the next reply.

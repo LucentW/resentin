@@ -467,6 +467,7 @@ private fun listModeLabel(letter: String): String = when (letter) {
     "I" -> stringResource(R.string.irc_list_invite)
     "q" -> stringResource(R.string.irc_list_quiet)
     "z" -> stringResource(R.string.irc_list_restrict)
+    "R" -> stringResource(R.string.irc_list_reop)
     else -> "+$letter"
 }
 

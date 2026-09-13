@@ -6,6 +6,8 @@ import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
+import pm.antani.resentin.net.dto.DccOfferDto
+import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
@@ -92,6 +94,12 @@ sealed interface WsEvent {
 
     /** The invite for a channel was declined (this device or another one) — drop its banner. */
     data class WindowInviteDeclined(val declined: WindowInviteDeclinedDto) : WsEvent
+
+    /** A peer's `DCC SEND` is being held awaiting Accept/Decline — issue 2089 on grappa-irc. */
+    data class DccOffer(val offer: DccOfferDto) : WsEvent
+
+    /** A held DCC offer left the held set (accepted, declined, or expired) — drop its banner. */
+    data class DccOfferResolved(val resolved: DccOfferResolvedDto) : WsEvent
 
     data class Unknown(val kind: String?, val raw: JsonObject) : WsEvent
 }

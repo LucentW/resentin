@@ -34,6 +34,7 @@ import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.PendingDccOffer
 import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.domain.session.ConnectionManager
@@ -105,6 +106,11 @@ class NotificationRouter(
         // NetworksRepository.newInvites for the reconnect-dedup this relies on.
         networksRepository.newInvites
             .onEach { postInviteNotification(it) }
+            .launchIn(scope)
+
+        // Same "nothing is silent" parity for a held DCC offer (issue 2089).
+        networksRepository.newDccOffers
+            .onEach { postDccOfferNotification(it) }
             .launchIn(scope)
     }
 
@@ -364,6 +370,39 @@ class NotificationRouter(
         val notification = NotificationCompat.Builder(context, INVITE_CHANNEL_ID)
             .setContentTitle(context.getString(R.string.notif_invite_title))
             .setContentText(context.getString(R.string.notif_invite_body, invite.inviter, invite.channel))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
+    }
+
+    /** Deep-links into the offer's own channel (unlike [postInviteNotification]'s plain
+     * app-open, since here there's already an open, joined window to land on — even a
+     * stranger's offer routes to `$server`, which is always a valid destination). */
+    private fun postDccOfferNotification(offer: PendingDccOffer) {
+        ensureInviteChannel()
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra(EXTRA_NETWORK_SLUG, offer.networkSlug)
+            putExtra(EXTRA_CHANNEL_NAME, offer.channel)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val notificationId = "dcc_offer/${offer.offerId}".hashCode()
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(context, INVITE_CHANNEL_ID)
+            .setContentTitle(context.getString(R.string.notif_dcc_offer_title))
+            .setContentText(context.getString(R.string.notif_dcc_offer_body, offer.from, offer.filename))
             .setSmallIcon(R.drawable.ic_notification)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

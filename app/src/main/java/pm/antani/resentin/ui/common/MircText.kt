@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import pm.antani.resentin.irc.DccFileLinkDetector
 import pm.antani.resentin.irc.UrlDetector
 import pm.antani.resentin.mirc.MircParser
 import pm.antani.resentin.mirc.MircSpan
@@ -89,6 +91,13 @@ private val lightLinkStyles = TextLinkStyles(
 internal fun linkStylesFor(lightTheme: Boolean): TextLinkStyles =
     if (lightTheme) lightLinkStyles else darkLinkStyles
 
+/** Handles a tap on a DCC delivery report's download path (see [DccFileLinkDetector]) —
+ * default no-op so [mircAnnotatedString]'s other callers (e.g. the topic dialog, which
+ * never shows one of these) don't need to know it exists. Chat screens provide the real
+ * handler once at their root instead of threading a callback through every intermediate
+ * row composable down to [withClickableLinks]'s two call sites. */
+val LocalDccFileDownloadHandler = staticCompositionLocalOf<(path: String, filename: String?) -> Unit> { { _, _ -> } }
+
 /** The message with every mIRC control code consumed and none of its formatting kept —
  * for contexts that need plain text (a reply-quote preview), not a styled [AnnotatedString]. */
 fun stripMircCodes(text: String): String = MircParser.parse(text).joinToString("") { it.text }
@@ -128,15 +137,24 @@ fun mircAnnotatedString(text: String, lightTheme: Boolean = false): AnnotatedStr
 fun withClickableLinks(
     annotated: AnnotatedString,
     linkStyles: TextLinkStyles = darkLinkStyles,
+    onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
 ): AnnotatedString {
     val ranges = UrlDetector.find(annotated.text)
-    if (ranges.isEmpty()) return annotated
+    val dccLinks = DccFileLinkDetector.find(annotated.text)
+    if (ranges.isEmpty() && dccLinks.isEmpty()) return annotated
     return AnnotatedString.Builder(annotated).apply {
         ranges.forEach { range ->
             addLink(
                 LinkAnnotation.Url(annotated.text.substring(range.first, range.last + 1), linkStyles),
                 range.first,
                 range.last + 1,
+            )
+        }
+        dccLinks.forEach { link ->
+            addLink(
+                LinkAnnotation.Clickable("dcc_file", linkStyles) { onDccFileClick(link.path, link.filename) },
+                link.pathRange.first,
+                link.pathRange.last + 1,
             )
         }
     }.toAnnotatedString()
@@ -153,9 +171,10 @@ fun MircText(
     enableLinks: Boolean = true,
 ) {
     val lightTheme = isLightTheme()
-    val annotated = remember(text, enableLinks, lightTheme) {
+    val dccFileHandler = LocalDccFileDownloadHandler.current
+    val annotated = remember(text, enableLinks, lightTheme, dccFileHandler) {
         val parsed = mircAnnotatedString(text, lightTheme)
-        if (enableLinks) withClickableLinks(parsed, linkStylesFor(lightTheme)) else parsed
+        if (enableLinks) withClickableLinks(parsed, linkStylesFor(lightTheme), dccFileHandler) else parsed
     }
     Text(text = annotated, modifier = modifier, style = style, color = color, maxLines = maxLines, overflow = overflow)
 }

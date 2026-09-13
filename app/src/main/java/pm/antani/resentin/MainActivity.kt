@@ -19,6 +19,7 @@ import pm.antani.resentin.data.prefs.ThemeMode
 import pm.antani.resentin.service.NotificationRouter
 import pm.antani.resentin.ui.AppRoot
 import pm.antani.resentin.ui.DeepLinkChat
+import pm.antani.resentin.ui.common.DccFileDownloadHost
 import pm.antani.resentin.ui.common.LocalDensityScale
 import pm.antani.resentin.ui.login.parseGrappaLoginLink
 import pm.antani.resentin.ui.theme.ResentinTheme
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
                 chatFontFamilyChoice = chatFontFamily,
             ) {
                 CompositionLocalProvider(LocalDensityScale provides messageDensity.scale) {
+                DccFileDownloadHost(authRepository = container.authRepository) {
                 AppRoot(
                     container = container,
                     deepLink = pendingDeepLink.value,
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
                     loginLink = pendingLoginLink.value,
                     onLoginLinkConsumed = { pendingLoginLink.value = null },
                 )
+                }
                 }
             }
         }

@@ -11,6 +11,8 @@ import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
+import pm.antani.resentin.net.dto.DccOfferDto
+import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
@@ -96,6 +98,12 @@ object WsEventDecoder {
                 )
                 "window_invite_declined" -> WsEvent.WindowInviteDeclined(
                     AppJson.decodeFromJsonElement(WindowInviteDeclinedDto.serializer(), raw),
+                )
+                "dcc_offer" -> WsEvent.DccOffer(
+                    AppJson.decodeFromJsonElement(DccOfferDto.serializer(), raw),
+                )
+                "dcc_offer_resolved" -> WsEvent.DccOfferResolved(
+                    AppJson.decodeFromJsonElement(DccOfferResolvedDto.serializer(), raw),
                 )
                 "session_identity_changed" -> WsEvent.SessionIdentityChanged(
                     networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),

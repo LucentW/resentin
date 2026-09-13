@@ -59,6 +59,18 @@ private const val SERVER_PSEUDO_CHANNEL = "\$server"
  * [pm.antani.resentin.domain.events.WsEvent]. */
 data class PendingInvite(val networkSlug: String, val channel: String, val inviter: String)
 
+/** A peer's `DCC SEND` held awaiting Accept/Decline (issue 2089 on grappa-irc) — see
+ * `dcc_offer` in [pm.antani.resentin.domain.events.WsEvent]. [offerId] is the unique
+ * key (unlike [PendingInvite], several offers can target the same channel at once). */
+data class PendingDccOffer(
+    val networkSlug: String,
+    val channel: String,
+    val offerId: String,
+    val from: String,
+    val filename: String,
+    val size: Long,
+)
+
 class NetworksRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
@@ -91,6 +103,15 @@ class NetworksRepository(
      * invite they simply haven't acted on yet. [NotificationRouter] posts from this. */
     private val _newInvites = MutableSharedFlow<PendingInvite>(extraBufferCapacity = 8)
     val newInvites: SharedFlow<PendingInvite> = _newInvites.asSharedFlow()
+
+    /** Held DCC offers awaiting Accept/Decline — same cold-subscribe-snapshot-plus-live
+     * pattern as [pendingInvites] (`dcc_offer`/`dcc_offer_resolved` on the per-user topic). */
+    private val _pendingDccOffers = MutableStateFlow<List<PendingDccOffer>>(emptyList())
+    val pendingDccOffers: StateFlow<List<PendingDccOffer>> = _pendingDccOffers.asStateFlow()
+
+    /** Fires only for a genuinely new offer — same reconnect-dedup reasoning as [newInvites]. */
+    private val _newDccOffers = MutableSharedFlow<PendingDccOffer>(extraBufferCapacity = 8)
+    val newDccOffers: SharedFlow<PendingDccOffer> = _newDccOffers.asSharedFlow()
 
     /** Last query_windows_list snapshot. Re-applied at the end of every REST
      * refresh: the snapshot can win the race against refresh() repopulating the
@@ -236,6 +257,25 @@ class NetworksRepository(
                 _pendingInvites.update { current ->
                     current.filterNot { it.networkSlug == declined.network && it.channel == declined.channel }
                 }
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.DccOffer>()
+            .map { it.offer }
+            .onEach { offer ->
+                val isNew = _pendingDccOffers.value.none { it.offerId == offer.offerId }
+                val pending = PendingDccOffer(offer.network, offer.channel, offer.offerId, offer.from, offer.filename, offer.size)
+                _pendingDccOffers.update { current -> current.filterNot { it.offerId == offer.offerId } + pending }
+                if (isNew) _newDccOffers.tryEmit(pending)
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.DccOfferResolved>()
+            .map { it.resolved }
+            .onEach { resolved ->
+                _pendingDccOffers.update { current -> current.filterNot { it.offerId == resolved.offerId } }
             }
             .launchIn(scope)
     }
@@ -480,6 +520,23 @@ class NetworksRepository(
         val response = api.declineInvite(slug, channel)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         _pendingInvites.update { current -> current.filterNot { it.networkSlug == slug && it.channel == channel } }
+    }
+
+    /** Consents to a held DCC offer. 202 means admission only — the delivered file
+     * arrives later as a normal scrollback row (`Grappa.Dcc.Report`), not from this
+     * call, so this just drops the offer's own banner optimistically. */
+    suspend fun acceptDccOffer(slug: String, offerId: String): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.acceptDccOffer(slug, offerId)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        _pendingDccOffers.update { current -> current.filterNot { it.offerId == offerId } }
+    }
+
+    suspend fun declineDccOffer(slug: String, offerId: String): Result<Unit> = runCatching {
+        val api = authRepository.api(NetworksApi::class.java)
+        val response = api.declineDccOffer(slug, offerId)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        _pendingDccOffers.update { current -> current.filterNot { it.offerId == offerId } }
     }
 
     suspend fun getDirectory(slug: String, sort: String, q: String? = null, cursor: String? = null): Result<DirectoryPageDto> =

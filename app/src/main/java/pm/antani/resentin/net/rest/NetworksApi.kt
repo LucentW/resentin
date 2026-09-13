@@ -40,6 +40,17 @@ interface NetworksApi {
     @DELETE("networks/{slug}/invites/{channel}")
     suspend fun declineInvite(@Path("slug") slug: String, @Path("channel") channel: String): Response<ResponseBody>
 
+    /** Consents to a held DCC offer (issue 2089 on grappa-irc). 202: the admission is
+     * complete (quota spent, offer left the held set) but the transfer runs detached —
+     * the outcome lands later as a scrollback row, not in this response. */
+    @POST("networks/{slug}/dcc_offers/{offerId}/accept")
+    suspend fun acceptDccOffer(@Path("slug") slug: String, @Path("offerId") offerId: String): Response<ResponseBody>
+
+    /** Refuses a held DCC offer. Nothing is sent to the peer — IRC has no DCC REJECT
+     * this bouncer relays; this only drops the local hold and its banner everywhere. */
+    @DELETE("networks/{slug}/dcc_offers/{offerId}")
+    suspend fun declineDccOffer(@Path("slug") slug: String, @Path("offerId") offerId: String): Response<ResponseBody>
+
     @GET("networks/{slug}/directory")
     suspend fun getDirectory(
         @Path("slug") slug: String,

@@ -141,6 +141,8 @@ import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.domain.repository.PendingDccOffer
+import pm.antani.resentin.ui.common.LocalDccFileDownloadHandler
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.rememberAvatarBitmap
 import pm.antani.resentin.ui.common.ResentinDropdownMenu
@@ -346,6 +348,7 @@ fun ChatScreen(
     val whoReply by viewModel.whoReply.collectAsState()
     val lusers by viewModel.lusers.collectAsState()
     val highlightNotice by viewModel.highlightNotice.collectAsState()
+    val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
     var initialListIndex by remember { mutableStateOf<Int?>(null) }
     val positioned = initialListIndex != null
@@ -1179,6 +1182,14 @@ fun ChatScreen(
                         )
                     }
                 }
+                pendingDccOffers.forEach { offer ->
+                    Spacer(Modifier.size(8.dp))
+                    DccOfferCard(
+                        offer = offer,
+                        onAccept = { viewModel.acceptDccOffer(offer) },
+                        onDecline = { viewModel.declineDccOffer(offer) },
+                    )
+                }
             }
             // Show the jump control only while there is content below the viewport.
             // The bottom anchor makes this check reliable even with long final rows.
@@ -1499,6 +1510,42 @@ fun ChatScreen(
             },
         )
     }
+}
+
+/** Consent banner for a held DCC offer (issue 2089 on grappa-irc) — the close (×)
+ * button IS the decline action, same as every other [EphemeralResultCard] dismissal;
+ * there is a separate, explicit Accept button because unlike those cards this one has
+ * a real consequence (a transfer actually starts). */
+@Composable
+private fun DccOfferCard(offer: PendingDccOffer, onAccept: () -> Unit, onDecline: () -> Unit) {
+    EphemeralResultCard(onDismiss = onDecline, title = stringResource(R.string.chat_dcc_offer_title)) {
+        Text(
+            text = stringResource(R.string.chat_dcc_offer_body, offer.from, offer.filename, formatFileSize(offer.size)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(onClick = onAccept) {
+                Text(stringResource(R.string.chat_dcc_offer_accept), fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** `1234` -> `"1,2 KB"`, whole MB/GB units the way a human reads a size, not a raw
+ * byte count — the peer's own claim ([PendingDccOffer.size]), never a measured value. */
+private fun formatFileSize(bytes: Long): String {
+    val units = listOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var unitIndex = 0
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex++
+    }
+    return if (unitIndex == 0) "$bytes ${units[0]}" else "%.1f %s".format(value, units[unitIndex])
 }
 
 @Composable
@@ -2084,6 +2131,7 @@ private fun buildNickLine(
     body: String,
     coloredNicklist: Boolean,
     lightTheme: Boolean = false,
+    onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
 ) = buildAnnotatedString {
     append(before)
     append(prefix)
@@ -2093,7 +2141,7 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(withClickableLinks(mircAnnotatedString(body, lightTheme), linkStylesFor(lightTheme)))
+    append(withClickableLinks(mircAnnotatedString(body, lightTheme), linkStylesFor(lightTheme), onDccFileClick))
 }
 
 private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
@@ -2129,18 +2177,19 @@ private fun BubbleRow(
         else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     }
     val lightTheme = isLightTheme()
+    val dccFileHandler = LocalDccFileDownloadHandler.current
     val timestampStyle = SpanStyle(
         fontSize = 11.sp,
         fontStyle = FontStyle.Normal,
         fontFamily = LocalResentinChatFontFamily.current,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    val bodyWithTime = remember(formatted.text, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle) {
+    val bodyWithTime = remember(formatted.text, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme)))
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2148,7 +2197,7 @@ private fun BubbleRow(
         }
     }
     val actionWithTime = remember(
-        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle,
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler,
     ) {
         buildAnnotatedString {
             if (continuesGroup) {
@@ -2163,12 +2212,13 @@ private fun BubbleRow(
                         body = "",
                         coloredNicklist = coloredNicklist,
                         lightTheme = lightTheme,
+                        onDccFileClick = dccFileHandler,
                     ),
                 )
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme)))
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2292,11 +2342,14 @@ private fun IrcLineRow(
     density: MessageDensity = MessageDensity.NORMAL,
 ) {
     val lightTheme = isLightTheme()
-    val annotated = remember(message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme) {
+    val dccFileHandler = LocalDccFileDownloadHandler.current
+    val annotated = remember(
+        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler,
+    ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
         }
     }
     Text(
