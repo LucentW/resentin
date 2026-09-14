@@ -4,6 +4,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -13,6 +14,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import pm.antani.resentin.irc.ChannelReferenceDetector
 import pm.antani.resentin.irc.DccFileLinkDetector
 import pm.antani.resentin.irc.UrlDetector
 import pm.antani.resentin.mirc.MircParser
@@ -78,7 +81,7 @@ fun isLightTheme(): Boolean = MaterialTheme.colorScheme.background.luminance() >
 
 // A fixed link blue rather than a MaterialTheme color: this file builds the
 // AnnotatedString outside of composition (mircAnnotatedString/withClickableLinks are
-// plain functions, reused as-is by the topic dialog), and a link needs to read as a
+// plain functions reused by chat text and the expanded topic), and a link needs to read as a
 // link the same way regardless of whatever mIRC color the surrounding text carries.
 // Two variants: the bright one vanishes on white, the dark one is muddy on black.
 private val darkLinkStyles = TextLinkStyles(
@@ -92,11 +95,14 @@ internal fun linkStylesFor(lightTheme: Boolean): TextLinkStyles =
     if (lightTheme) lightLinkStyles else darkLinkStyles
 
 /** Handles a tap on a DCC delivery report's download path (see [DccFileLinkDetector]) —
- * default no-op so [mircAnnotatedString]'s other callers (e.g. the topic dialog, which
- * never shows one of these) don't need to know it exists. Chat screens provide the real
+ * default no-op so [mircAnnotatedString]'s other callers (e.g. expanded topic text) don't
+ * need to know it exists. Chat screens provide the real
  * handler once at their root instead of threading a callback through every intermediate
  * row composable down to [withClickableLinks]'s two call sites. */
 val LocalDccFileDownloadHandler = staticCompositionLocalOf<(path: String, filename: String?) -> Unit> { { _, _ -> } }
+
+/** Opens a referenced channel in the current network; null outside a chat screen. */
+val LocalIrcChannelLinkHandler = staticCompositionLocalOf<((String) -> Unit)?> { null }
 
 /** The message with every mIRC control code consumed and none of its formatting kept —
  * for contexts that need plain text (a reply-quote preview), not a styled [AnnotatedString]. */
@@ -147,17 +153,30 @@ internal fun withoutDccOverlaps(urls: List<IntRange>, dccRanges: List<IntRange>)
 /** Layers clickable [LinkAnnotation.Url] ranges on top of an already-built
  * [AnnotatedString] (which may already carry mIRC color/bold/etc. spans) — Text renders
  * a link's default styling and opens it via the platform URI handler automatically, no
- * manual tap handling needed. */
+ * manual tap handling needed. Channel references are linked only when a chat supplies
+ * onChannelClick, so previews outside a chat keep their ordinary text behavior. */
 fun withClickableLinks(
     annotated: AnnotatedString,
     linkStyles: TextLinkStyles = darkLinkStyles,
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
+    onChannelClick: ((channelName: String) -> Unit)? = null,
+    channelLinkVisibleEndExclusive: Int = Int.MAX_VALUE,
 ): AnnotatedString {
     val dccLinks = DccFileLinkDetector.find(annotated.text)
     // A DCC delivery URL is also a plain https URL — DCC wins over the generic link
     // on any overlap so the tap opens the app's own save flow, not the browser.
     val ranges = withoutDccOverlaps(UrlDetector.find(annotated.text), dccLinks.map { it.pathRange })
-    if (ranges.isEmpty() && dccLinks.isEmpty()) return annotated
+    val channelClick = onChannelClick
+    val channelLinks = if (channelClick == null) {
+        emptyList()
+    } else {
+        ChannelReferenceDetector.find(annotated.text, channelLinkVisibleEndExclusive).filterNot { reference ->
+            (ranges + dccLinks.map { it.pathRange }).any { occupied ->
+                reference.range.first <= occupied.last && occupied.first <= reference.range.last
+            }
+        }
+    }
+    if (ranges.isEmpty() && dccLinks.isEmpty() && channelLinks.isEmpty()) return annotated
     return AnnotatedString.Builder(annotated).apply {
         ranges.forEach { range ->
             addLink(
@@ -171,6 +190,13 @@ fun withClickableLinks(
                 LinkAnnotation.Clickable("dcc_file", linkStyles) { onDccFileClick(link.path, link.filename) },
                 link.pathRange.first,
                 link.pathRange.last + 1,
+            )
+        }
+        channelLinks.forEach { reference ->
+            addLink(
+                LinkAnnotation.Clickable("irc_channel", linkStyles) { channelClick?.invoke(reference.channelName) },
+                reference.range.first,
+                reference.range.last + 1,
             )
         }
     }.toAnnotatedString()
@@ -189,9 +215,39 @@ fun MircText(
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
-    val annotated = remember(text, enableLinks, lightTheme, dccFileHandler, stripFormatting) {
-        val parsed = mircAnnotatedString(text, lightTheme, stripFormatting)
-        if (enableLinks) withClickableLinks(parsed, linkStylesFor(lightTheme), dccFileHandler) else parsed
+    val channelLinkHandler = LocalIrcChannelLinkHandler.current
+    val visibleChannelLinkEnd = remember(text, maxLines, overflow) {
+        mutableStateOf(if (maxLines < Int.MAX_VALUE) 0 else text.length)
     }
-    Text(text = annotated, modifier = modifier, style = style, color = color, maxLines = maxLines, overflow = overflow)
+    val annotated = remember(text, enableLinks, lightTheme, dccFileHandler, channelLinkHandler, visibleChannelLinkEnd.value, stripFormatting) {
+        val parsed = mircAnnotatedString(text, lightTheme, stripFormatting)
+        if (enableLinks) {
+            withClickableLinks(
+                parsed,
+                linkStylesFor(lightTheme),
+                dccFileHandler,
+                channelLinkHandler,
+                visibleChannelLinkEnd.value,
+            )
+        } else {
+            parsed
+        }
+    }
+    Text(
+        text = annotated,
+        modifier = modifier,
+        style = style,
+        color = color,
+        maxLines = maxLines,
+        overflow = overflow,
+        onTextLayout = { layout ->
+            if (maxLines < Int.MAX_VALUE && layout.lineCount > 0) {
+                val lastVisibleLine = (layout.lineCount - 1).coerceAtMost(maxLines - 1)
+                val visibleEnd = layout.getLineEnd(lastVisibleLine, visibleEnd = true)
+                if (visibleChannelLinkEnd.value != visibleEnd) {
+                    visibleChannelLinkEnd.value = visibleEnd
+                }
+            }
+        },
+    )
 }
