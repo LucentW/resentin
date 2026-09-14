@@ -44,6 +44,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -98,6 +100,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -230,6 +234,12 @@ fun ChatScreen(
     val allMessages by viewModel.allMessages.collectAsState()
     val topic by viewModel.topic.collectAsState()
     val channelModes by viewModel.channelModes.collectAsState()
+    val topicSubtitle = remember(channelModes, topic) {
+        buildString {
+            if (channelModes != null) append("($channelModes) ")
+            if (topic != null) append(topic)
+        }.takeIf { it.isNotBlank() }
+    }
     val peerAvatarUrl by viewModel.peerAvatarUrl.collectAsState()
     val peerAvatarBitmap = rememberAvatarBitmap(peerAvatarUrl, viewModel::fetchAvatarBytes)
     val draft by viewModel.draft.collectAsState()
@@ -361,7 +371,7 @@ fun ChatScreen(
     val showHistoryError = messages.isEmpty() && initialHistoryReady && error != null && !isRefreshing
     // Do not briefly compose the list at index 0 and then jump to the unread divider.
     // The first LazyColumn is created with the final landing index already applied.
-    var showTopicDialog by remember { mutableStateOf(false) }
+    var topicExpanded by remember(networkSlug, channelName) { mutableStateOf(false) }
     var showChannelMenu by remember { mutableStateOf(false) }
     var expandedPresenceBursts by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var showActivitySheet by remember { mutableStateOf(false) }
@@ -570,6 +580,7 @@ fun ChatScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
+            Column {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -603,9 +614,7 @@ fun ChatScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                             }
-                            Column(
-                                modifier = Modifier.clickable(enabled = topic != null) { showTopicDialog = true },
-                    ) {
+                            Column {
                         Text(
                             text = if (!isQuery && !isServer) {
                                 pluralStringResource(
@@ -627,10 +636,7 @@ fun ChatScreen(
                         // l'header resta su due righe totali e lascia più spazio
                         // alla chat. "(+rnt) topic" segue la convenzione della
                         // status bar dei client IRC classici.
-                        val subtitle = buildString {
-                            if (channelModes != null) append("($channelModes) ")
-                            if (topic != null) append(topic)
-                        }.takeIf { it.isNotBlank() }
+                        val subtitle = topicSubtitle
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -671,14 +677,50 @@ fun ChatScreen(
                             }
                             if (subtitle != null) {
                                 Spacer(Modifier.size(6.dp))
-                                MircText(
-                                    text = subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
+                                if (topic != null) {
+                                    val topicActionLabel = stringResource(
+                                        if (topicExpanded) R.string.cd_collapse_topic else R.string.cd_expand_topic,
+                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(MaterialTheme.shapes.extraSmall)
+                                            .clickable { topicExpanded = !topicExpanded }
+                                            .semantics(mergeDescendants = true) {
+                                                role = Role.Button
+                                                contentDescription = topicActionLabel
+                                            },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        MircText(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Icon(
+                                            imageVector = if (topicExpanded) {
+                                                Icons.Outlined.KeyboardArrowUp
+                                            } else {
+                                                Icons.Outlined.KeyboardArrowDown
+                                            },
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                } else {
+                                    MircText(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
                             }
                         }
                             }
@@ -811,6 +853,51 @@ fun ChatScreen(
                     }
                 },
             )
+            if (topicExpanded && topic != null && !searchOpen) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 8.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(max = 180.dp)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            MircText(
+                                text = topic.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        IconButton(
+                            onClick = { topicExpanded = false },
+                            modifier = Modifier.size(36.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.KeyboardArrowUp,
+                                contentDescription = stringResource(R.string.cd_collapse_topic),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            }
         },
         bottomBar = {
             Column(
@@ -1402,28 +1489,6 @@ fun ChatScreen(
             onIgnore = viewModel::ignore,
             onUnignore = viewModel::unignore,
             avatarBitmap = avatar,
-        )
-    }
-
-    if (showTopicDialog && topic != null) {
-        AlertDialog(
-            onDismissRequest = { showTopicDialog = false },
-            shape = MaterialTheme.shapes.large,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 0.dp,
-            title = {
-                Text(
-                    stringResource(R.string.chat_topic_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            },
-            text = { MircText(text = topic!!, style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = {
-                TextButton(onClick = { showTopicDialog = false }) {
-                    Text(stringResource(R.string.chat_dialog_close))
-                }
-            },
         )
     }
 
