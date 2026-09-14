@@ -244,7 +244,8 @@
     <string name="chat_search_hint">Cerca messaggio o nickname…</string>
     <string name="chat_search_counter">%1$d di %2$d</string>
     <string name="chat_search_no_results">Nessun risultato</string>
-    <string name="chat_topic_dialog_title">Topic</string>
+    <string name="cd_expand_topic">Espandi topic</string>
+    <string name="cd_collapse_topic">Comprimi topic</string>
     <string name="chat_dialog_close">Chiudi</string>
     <string name="chat_dcc_offer_title">File in arrivo (DCC)</string>
     <string name="chat_dcc_offer_body">%1$s vuole inviarti %2$s (%3$s)</string>
