@@ -51,6 +51,7 @@ import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.ui.common.UserCardController
+import pm.antani.resentin.ui.common.stripMircCodes
 
 sealed interface ChatCommandEffect {
     data class OpenChannel(val channelName: String) : ChatCommandEffect
@@ -418,6 +419,25 @@ class ChatViewModel(
             val customTemplate = appPreferences.replyCustomTemplate.first()
             val prefix = buildReplyPrefix(style, customTemplate, nick, messageBody)
             if (!_draft.value.startsWith(prefix)) setDraft(prefix + _draft.value)
+            _replyFocusRequests.tryEmit(Unit)
+        }
+    }
+
+    /** Message-menu `!addquote`: appends the archive command for [messageBody] to
+     * the draft and stops — nothing is sent, whatever quote bot sits in the
+     * channel interprets it (cicchetto #1107 parity). The payload carries the
+     * sender (`<nick> body`, `* nick body` for actions): what gets quoted is what
+     * the operator read. A draft already holding a command earns the bare payload
+     * instead of a second verb (one command per line for the bot). */
+    fun appendAddQuote(nick: String, messageBody: String, isAction: Boolean) {
+        val plain = stripMircCodes(messageBody).trim()
+        if (plain.isEmpty()) return
+        val payload = if (isAction) "* $nick $plain" else "<$nick> $plain"
+        viewModelScope.launch {
+            val draft = _draft.value
+            val addition = if (!draft.contains(ADDQUOTE_COMMAND)) "$ADDQUOTE_COMMAND$payload"
+            else if (draft.endsWith(" ")) payload else " $payload"
+            setDraft(draft + addition)
             _replyFocusRequests.tryEmit(Unit)
         }
     }

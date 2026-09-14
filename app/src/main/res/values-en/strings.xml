@@ -660,6 +660,8 @@
     <string name="chat_multiline_title">Paste as %1$d messages?</string>
     <string name="chat_multiline_body">This will be sent to %1$s as %2$d separate messages (one per line).</string>
     <string name="chat_slash_alias_builtin">Built-in commands cannot be shadowed</string>
+    <string name="chat_menu_select">Select…</string>
+    <string name="chat_menu_user_card">User card</string>
     <string name="home_register_nick">Register nick</string>
     <string name="registration_wizard_title">Register your nick</string>
     <string name="registration_wizard_step">Step %1$d of %2$d</string>
