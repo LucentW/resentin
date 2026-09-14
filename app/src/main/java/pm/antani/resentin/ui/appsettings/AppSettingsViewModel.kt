@@ -56,6 +56,12 @@ data class AppSettingsUiState(
     val showPeerProfiles: Boolean = false,
     val showPeerProfilesSaving: Boolean = false,
     val showPeerProfilesError: String? = null,
+    val ircPartDraft: String = "",
+    val ircQuitDraft: String = "",
+    val ircLoading: Boolean = true,
+    val ircSaving: Boolean = false,
+    val ircSaved: Boolean = false,
+    val ircError: String? = null,
 )
 
 class AppSettingsViewModel(
@@ -211,6 +217,96 @@ class AppSettingsViewModel(
         refreshAutoAwayDebounce()
         refreshWatchlist()
         refreshShowPeerProfiles()
+        refreshIrcMessages()
+    }
+
+    fun refreshIrcMessages() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(ircLoading = true, ircError = null) }
+            userSettingsRepository.getIrcMessages()
+                .onSuccess { dto ->
+                    // `null` (mai personalizzato, anche per chi aggiorna) -> mostra il
+                    // predefinito con versione senza scriverlo sul server (non congela
+                    // la versione né sovrascrive altri device); `""` -> campo vuoto
+                    // (nessun motivo); altro -> valore grezzo (il `%version` resta e
+                    // verrà espanso solo all'invio).
+                    _uiState.update {
+                        it.copy(
+                            ircPartDraft = dto.partMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                            ircQuitDraft = dto.quitMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                            ircLoading = false,
+                            ircError = null,
+                            ircSaved = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            // Fallback ai predefiniti anche se il GET fallisce: chi
+                            // aggiorna senza aver personalizzato deve comunque inviare
+                            // i predefiniti, non restare senza motivo.
+                            ircPartDraft = it.ircPartDraft.ifBlank { pm.antani.resentin.irc.defaultIrcMessage() },
+                            ircQuitDraft = it.ircQuitDraft.ifBlank { pm.antani.resentin.irc.defaultIrcMessage() },
+                            ircLoading = false,
+                            ircError = error.message,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun onIrcPartDraftChange(value: String) =
+        _uiState.update { it.copy(ircPartDraft = value, ircSaved = false, ircError = null) }
+
+    fun onIrcQuitDraftChange(value: String) =
+        _uiState.update { it.copy(ircQuitDraft = value, ircSaved = false, ircError = null) }
+
+    fun saveIrcMessages() {
+        val partDraft = _uiState.value.ircPartDraft
+        val quitDraft = _uiState.value.ircQuitDraft
+        viewModelScope.launch {
+            _uiState.update { it.copy(ircSaving = true, ircError = null, ircSaved = false) }
+            // Blank -> "" (nessun motivo, distinto da `null` = predefinito);
+            // uguale al predefinito/template -> `null` (così i futuri bump di
+            // versione si propagano); altro -> grezzo (mai versione risolta).
+            val partToSave = pm.antani.resentin.irc.normalizeIrcMessageForSave(partDraft)
+            val quitToSave = pm.antani.resentin.irc.normalizeIrcMessageForSave(quitDraft)
+            userSettingsRepository.updateIrcMessages(partToSave, quitToSave)
+                .onSuccess { dto ->
+                    _uiState.update {
+                        it.copy(
+                            ircSaving = false,
+                            ircSaved = true,
+                            ircPartDraft = dto.partMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                            ircQuitDraft = dto.quitMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(ircSaving = false, ircError = error.message) }
+                }
+        }
+    }
+
+    fun resetIrcMessages() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(ircSaving = true, ircError = null, ircSaved = false) }
+            userSettingsRepository.updateIrcMessages(null, null)
+                .onSuccess { dto ->
+                    _uiState.update {
+                        it.copy(
+                            ircSaving = false,
+                            ircSaved = true,
+                            ircPartDraft = dto.partMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                            ircQuitDraft = dto.quitMessage ?: pm.antani.resentin.irc.defaultIrcMessage(),
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(ircSaving = false, ircError = error.message) }
+                }
+        }
     }
 
     private fun refreshShowPeerProfiles() {

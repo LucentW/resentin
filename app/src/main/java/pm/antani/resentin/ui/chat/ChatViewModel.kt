@@ -569,16 +569,26 @@ class ChatViewModel(
                     setDraft("")
                     _commandEffects.emit(ChatCommandEffect.CloseChat)
                 } else {
-                    val reason = if (argument != null && isChannelName(argument)) args.drop(1) else args
-                    networksRepository.partChannel(networkSlug, target, reason.joinToString(" ").ifBlank { null }).getOrThrow()
+                    val reasonArgs = if (argument != null && isChannelName(argument)) args.drop(1) else args
+                    // Motivo esplicito preservato, altrimenti PART configurato
+                    // (predefinito versionato se mai personalizzato, nessun motivo se vuoto).
+                    val reason = pm.antani.resentin.irc.partReasonForSend(
+                        reasonArgs,
+                        userSettingsRepository.ircMessages.value?.partMessage,
+                    )
+                    networksRepository.partChannel(networkSlug, target, reason).getOrThrow()
                     setDraft("")
                     if (canonicalTarget(target) == canonicalTarget(channelName)) _commandEffects.emit(ChatCommandEffect.CloseChat)
                 }
             }
             "cycle" -> {
                 val target = argument?.takeIf(::isChannelName) ?: channelName
-                val reason = if (argument != null && isChannelName(argument)) args.drop(1) else args
-                networksRepository.partChannel(networkSlug, target, reason.joinToString(" ").ifBlank { null }).getOrThrow()
+                val reasonArgs = if (argument != null && isChannelName(argument)) args.drop(1) else args
+                val reason = pm.antani.resentin.irc.partReasonForSend(
+                    reasonArgs,
+                    userSettingsRepository.ircMessages.value?.partMessage,
+                )
+                networksRepository.partChannel(networkSlug, target, reason).getOrThrow()
                 networksRepository.joinChannel(networkSlug, target).getOrThrow()
                 setDraft("")
                 _commandEffects.emit(ChatCommandEffect.OpenChannel(target))
@@ -789,19 +799,45 @@ class ChatViewModel(
             }
             "connect", "disconnect", "reconnect" -> {
                 val (targetNetwork, reason) = resolveNetworkAndReason(args, command.name == "connect")
+                // Motivo esplicito preservato (con `%version` espanso); se omesso e si
+                // disconnette davvero, QUIT configurato (predefinito versionato o nessun
+                // motivo se vuoto). La (ri)connessione non invia QUIT.
+                val storedQuit = userSettingsRepository.ircMessages.value?.quitMessage
                 when (command.name) {
-                    "connect" -> networksRepository.updateConnectionState(targetNetwork, true, reason.ifBlank { null }).getOrThrow()
-                    "disconnect" -> networksRepository.updateConnectionState(targetNetwork, false, reason.ifBlank { null }).getOrThrow()
+                    "connect" -> networksRepository.updateConnectionState(
+                        targetNetwork,
+                        true,
+                        pm.antani.resentin.irc.resolveExplicitIrcReason(reason.ifBlank { null }),
+                    ).getOrThrow()
+                    "disconnect" -> networksRepository.updateConnectionState(
+                        targetNetwork,
+                        false,
+                        pm.antani.resentin.irc.quitReasonForSend(reason.ifBlank { null }, storedQuit),
+                    ).getOrThrow()
                     else -> {
-                        networksRepository.updateConnectionState(targetNetwork, false, reason.ifBlank { null }).getOrThrow()
-                        networksRepository.updateConnectionState(targetNetwork, true, reason.ifBlank { null }).getOrThrow()
+                        networksRepository.updateConnectionState(
+                            targetNetwork,
+                            false,
+                            pm.antani.resentin.irc.quitReasonForSend(reason.ifBlank { null }, storedQuit),
+                        ).getOrThrow()
+                        networksRepository.updateConnectionState(
+                            targetNetwork,
+                            true,
+                            pm.antani.resentin.irc.resolveExplicitIrcReason(reason.ifBlank { null }),
+                        ).getOrThrow()
                     }
                 }
                 if (reason.isNotBlank()) Unit
                 setDraft("")
             }
             "quit" -> {
-                val reason = args.joinToString(" ").ifBlank { null }
+                // `/quit [motivo]`: esplicito preservato, altrimenti QUIT configurato.
+                // Poi detach (che da solo non invia QUIT — la disconnessione vera è qui).
+                val explicit = args.joinToString(" ").ifBlank { null }
+                val reason = pm.antani.resentin.irc.quitReasonForSend(
+                    explicit,
+                    userSettingsRepository.ircMessages.value?.quitMessage,
+                )
                 networksRepository.networksWithChannels.first().forEach { networksRepository.updateConnectionState(it.network.slug, false, reason).getOrThrow() }
                 authRepository.detach()
                 setDraft("")

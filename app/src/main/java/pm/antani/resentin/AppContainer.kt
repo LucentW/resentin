@@ -47,7 +47,7 @@ class AppContainer(private val context: Context) {
     val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
     val membersRepository = MembersRepository(connectionManager, database)
     val ignoresRepository = IgnoresRepository(authRepository)
-    val userSettingsRepository = UserSettingsRepository(authRepository, connectionManager)
+    val userSettingsRepository = UserSettingsRepository(authRepository, connectionManager, appPreferences)
     val pushRepository = PushRepository(authRepository, appPreferences)
     val adminRepository = AdminRepository(authRepository)
     val openChatTracker = OpenChatTracker()
@@ -91,6 +91,15 @@ class AppContainer(private val context: Context) {
         appScope.launch {
             tokenStore.session.filterNotNull().collect {
                 runCatching { userSettingsRepository.refreshDisplayPrefs() }
+            }
+        }
+
+        // Warm the server-owned IRC PART/QUIT messages so every leave/disconnect
+        // path sends the configured reason (or the versioned default for upgraders
+        // who never customized) without an extra round-trip at send time.
+        appScope.launch {
+            tokenStore.session.filterNotNull().collect {
+                runCatching { userSettingsRepository.getIrcMessages() }
             }
         }
 

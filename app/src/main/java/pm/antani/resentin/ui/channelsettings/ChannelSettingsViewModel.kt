@@ -161,7 +161,10 @@ class ChannelSettingsViewModel(
     fun part() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, error = null) }
-            networksRepository.partChannel(networkSlug, channelName)
+            // Dalle impostazioni del canale si invia sempre il PART configurato
+            // (stessa disciplina della Home: predefinito versionato se mai
+            // personalizzato, nessun motivo se il campo è vuoto).
+            networksRepository.partChannel(networkSlug, channelName, userSettingsRepository.partMessageForSend())
                 .onSuccess { _uiState.update { it.copy(isSaving = false, parted = true) } }
                 .onFailure { _uiState.update { s -> s.copy(isSaving = false, error = it.message) } }
         }

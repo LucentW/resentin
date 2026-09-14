@@ -78,6 +78,8 @@ class AppPreferences(private val context: Context) {
     private val keyUnifiedPushEndpoint = stringPreferencesKey("unifiedpush_endpoint")
     private val keyUnifiedPushSubscriptionId = stringPreferencesKey("unifiedpush_subscription_id")
     private val keyPushDecryptionFailureAt = longPreferencesKey("push_decryption_failure_at")
+    private val keyIrcPartMessage = stringPreferencesKey("irc_part_message")
+    private val keyIrcQuitMessage = stringPreferencesKey("irc_quit_message")
     private val keyPinnedChannels = stringSetPreferencesKey("pinned_channels")
     private val keyDismissedFeaturedChannels = stringSetPreferencesKey("dismissed_featured_channels")
     private fun draftKey(networkSlug: String, channel: String) =
@@ -326,6 +328,28 @@ class AppPreferences(private val context: Context) {
     suspend fun setPushDecryptionFailureAt(epochMillis: Long?) {
         context.dataStore.edit {
             if (epochMillis != null) it[keyPushDecryptionFailureAt] = epochMillis else it.remove(keyPushDecryptionFailureAt)
+        }
+    }
+
+    /** Fallback locale per i messaggi IRC PART/QUIT quando il server non espone ancora
+     * `GET/PUT /me/settings/irc-messages` (risponde con l'SPA HTML → "Unexpected JSON
+     * token at offset 0" se parsato come JSON). `null` = mai personalizzato (usa il
+     * predefinito versionato), `""` = nessun motivo — stessa disciplina del DTO server.
+     * Quando il server supporterà l'endpoint, i valori server vince sui non-null e il
+     * locale lo segue (vedi UserSettingsRepository). */
+    val ircPartMessage: Flow<String?> = context.dataStore.data.map { it[keyIrcPartMessage] }
+
+    suspend fun setIrcPartMessage(value: String?) {
+        context.dataStore.edit {
+            if (value != null) it[keyIrcPartMessage] = value else it.remove(keyIrcPartMessage)
+        }
+    }
+
+    val ircQuitMessage: Flow<String?> = context.dataStore.data.map { it[keyIrcQuitMessage] }
+
+    suspend fun setIrcQuitMessage(value: String?) {
+        context.dataStore.edit {
+            if (value != null) it[keyIrcQuitMessage] = value else it.remove(keyIrcQuitMessage)
         }
     }
 }

@@ -325,6 +325,14 @@
     <string name="settings_group_identity_desc">Indirizzo con cui ti colleghi alle reti</string>
     <string name="settings_group_commands">Comandi</string>
     <string name="settings_group_commands_desc">Alias personali per la chat</string>
+    <string name="settings_group_irc">IRC</string>
+    <string name="settings_group_irc_desc">Messaggi di uscita e disconnessione</string>
+    <string name="settings_irc_part_title">Messaggio di uscita dal canale (PART)</string>
+    <string name="settings_irc_part_desc">Inviato quando abbandoni un canale. Lascia vuoto per nessun messaggio. Puoi usare %version per la versione dell’app.</string>
+    <string name="settings_irc_quit_title">Messaggio di disconnessione (QUIT)</string>
+    <string name="settings_irc_quit_desc">Inviato quando disconnetti davvero una rete IRC. Lascia vuoto per nessun messaggio. Puoi usare %version per la versione dell’app.</string>
+    <string name="settings_irc_default_hint">Predefinito: %1$s</string>
+    <string name="settings_irc_reset">Ripristina predefiniti</string>
     <string name="settings_group_data">Spazio e dati</string>
     <string name="settings_group_data_desc">Dati salvati su questo dispositivo</string>
     <string name="settings_theme">Tema</string>

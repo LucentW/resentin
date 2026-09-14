@@ -3,6 +3,7 @@ package pm.antani.resentin.net.rest
 import kotlinx.serialization.json.JsonObject
 import pm.antani.resentin.net.dto.AliasesEnvelopeDto
 import pm.antani.resentin.net.dto.AutoAwayDebounceDto
+import pm.antani.resentin.net.dto.IrcMessagesDto
 import pm.antani.resentin.net.dto.NotificationPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.ShowPeerProfilesDto
@@ -64,4 +65,17 @@ interface UserSettingsApi {
 
     @PUT("me/settings/show-peer-profiles")
     suspend fun updateShowPeerProfiles(@Body body: ShowPeerProfilesDto): ShowPeerProfilesDto
+
+    /** Sezione IRC — messaggi PART/QUIT personalizzabili (vedi [IrcMessagesDto]).
+     * Stessa infrastruttura server-side delle altre user settings (cross-device).
+     * Il PUT prende un [JsonObject] hand-built (non [IrcMessagesDto]) perché `null`
+     * qui è uno stato reale — "torna al predefinito" — non "lascia invariato", e la
+     * config condivisa `AppJson` con `explicitNulls = false` dropperebbe la chiave
+     * per un body data-class, trasformando silenziosamente quel reset in un no-op
+     * (stesso motivo di [updateAutoAwayDebounce]). `""` è invece "nessun motivo". */
+    @GET("me/settings/irc-messages")
+    suspend fun getIrcMessages(): IrcMessagesDto
+
+    @PUT("me/settings/irc-messages")
+    suspend fun updateIrcMessages(@Body body: JsonObject): IrcMessagesDto
 }

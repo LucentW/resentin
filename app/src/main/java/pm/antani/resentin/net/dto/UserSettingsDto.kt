@@ -64,3 +64,21 @@ data class AutoAwayDebounceDto(
 data class ShowPeerProfilesDto(
     val showPeerProfiles: Boolean = false,
 )
+
+/**
+ * Sezione IRC delle Impostazioni — messaggi PART/QUIT personalizzabili,
+ * persistenti server-side (stessa infrastruttura delle altre user settings,
+ * quindi cross-device come display-prefs/aliases).
+ *
+ * `null` = mai personalizzato (il client usa il predefinito
+ * `Grappa-IRC - Resentin %version` con versione risolta, senza scriverlo sul
+ * server per non congelare la versione né sovrascrivere altri device);
+ * `""`/blank = nessun motivo (comportamento attuale senza motivo);
+ * qualsiasi altro valore = messaggio personalizzato (`%version` espanso solo
+ * all'invio, mai persistito risolto né inviato letteralmente).
+ */
+@Serializable
+data class IrcMessagesDto(
+    val partMessage: String? = null,
+    val quitMessage: String? = null,
+)

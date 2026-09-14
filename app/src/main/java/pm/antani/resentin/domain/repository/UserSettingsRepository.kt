@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -14,12 +15,15 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.net.AppJson
+import pm.antani.resentin.irc.resolveStoredIrcMessage
 import pm.antani.resentin.net.dto.AliasesEnvelopeDto
 import pm.antani.resentin.net.dto.DisplayPrefsDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
+import pm.antani.resentin.net.dto.IrcMessagesDto
 import pm.antani.resentin.net.dto.MutedTargetDto
 import pm.antani.resentin.net.dto.NotificationPrefsDto
 import pm.antani.resentin.net.dto.ShowPeerProfilesDto
@@ -50,6 +54,7 @@ data class ServerMute(
 class UserSettingsRepository(
     private val authRepository: AuthRepository,
     private val connectionManager: ConnectionManager,
+    private val appPreferences: AppPreferences,
 ) {
 
     // #348 on grappa-irc — cached auto-away preference. `null` covers both "not loaded
@@ -130,6 +135,88 @@ class UserSettingsRepository(
     suspend fun updateShowPeerProfiles(enabled: Boolean): Result<Boolean> = runCatching {
         authRepository.api(UserSettingsApi::class.java).updateShowPeerProfiles(ShowPeerProfilesDto(enabled)).showPeerProfiles
     }
+
+    private val _ircMessages = MutableStateFlow<IrcMessagesDto?>(null)
+
+    /** Ultimi messaggi IRC PART/QUIT caricati (`null` = mai caricati).
+     * `IrcMessagesDto.partMessage/quitMessage == null` = mai personalizzato
+     * (il mittente usa il predefinito con versione, senza scriverlo sul server
+     * per non congelare la versione né sovrascrivere altri device). */
+    val ircMessages: StateFlow<IrcMessagesDto?> = _ircMessages.asStateFlow()
+
+    /**
+     * Legge i messaggi IRC con fallback locale. Il server non espone ancora
+     * `GET /me/settings/irc-messages`: le route non registrate cadono sul catch-all
+     * SPA (HTML), che parsato come JSON dà "Unexpected JSON token at offset 0".
+     * Per non mostrare quell'errore tecnico in Impostazioni e non restare
+     * senza motivo, ogni fallimento server (endpoint assente, offline, HTML) cade sul
+     * DataStore locale — che distingue comunque `null` (predefinito) da `""` (nessun
+     * motivo). Quando il server supporterà l'endpoint, i suoi non-null vincono e il
+     * locale lo segue, così i valori restano cross-device.
+     */
+    suspend fun getIrcMessages(): Result<IrcMessagesDto> = runCatching {
+        val serverDto = runCatching {
+            authRepository.api(UserSettingsApi::class.java).getIrcMessages()
+        }.getOrNull()
+        if (serverDto != null) {
+            val localPart = appPreferences.ircPartMessage.first()
+            val localQuit = appPreferences.ircQuitMessage.first()
+            val effective = IrcMessagesDto(
+                partMessage = serverDto.partMessage ?: localPart,
+                quitMessage = serverDto.quitMessage ?: localQuit,
+            )
+            if (effective.partMessage != localPart) appPreferences.setIrcPartMessage(effective.partMessage)
+            if (effective.quitMessage != localQuit) appPreferences.setIrcQuitMessage(effective.quitMessage)
+            effective
+        } else {
+            IrcMessagesDto(
+                partMessage = appPreferences.ircPartMessage.first(),
+                quitMessage = appPreferences.ircQuitMessage.first(),
+            )
+        }
+    }.onSuccess { _ircMessages.value = it }
+
+    /**
+     * Salva entrambi i messaggi in un colpo solo (stesso endpoint, come
+     * display-prefs: full-map PUT, non PATCH). `null` = torna al predefinito,
+     * `""`/blank = nessun motivo, altro = personalizzato. Il body è hand-built
+     * come JsonObject affinché un `null` esplicito sopravviva ad AppJson con
+     * `explicitNulls = false` (stessa trappola di updateAutoAwayDebounce).
+     * Non scrive mai il predefinito risolto: il server conserva grezzo/`null`.
+     *
+     * Se il server non accetta ancora l'endpoint (o offline), persiste comunque in
+     * locale così la funzione resta usabile su questo device senza mostrare
+     * "Unexpected JSON token at offset 0"; al prossimo round-trip server riuscito i
+     * valori locali verranno spinti su (il save invia sempre entrambi i draft).
+     */
+    suspend fun updateIrcMessages(partMessage: String?, quitMessage: String?): Result<IrcMessagesDto> =
+        runCatching {
+            val serverDto = runCatching {
+                val body = buildJsonObject {
+                    put("part_message", partMessage?.let { JsonPrimitive(it) } ?: JsonNull)
+                    put("quit_message", quitMessage?.let { JsonPrimitive(it) } ?: JsonNull)
+                }
+                authRepository.api(UserSettingsApi::class.java).updateIrcMessages(body)
+            }.getOrNull()
+            if (serverDto != null) {
+                appPreferences.setIrcPartMessage(serverDto.partMessage)
+                appPreferences.setIrcQuitMessage(serverDto.quitMessage)
+                serverDto
+            } else {
+                appPreferences.setIrcPartMessage(partMessage)
+                appPreferences.setIrcQuitMessage(quitMessage)
+                IrcMessagesDto(partMessage, quitMessage)
+            }
+        }.onSuccess { _ircMessages.value = it }
+
+    /** Motivo PART risolto per l'invio (sincrono, fail verso predefinito se mai
+     * caricato — copre anche chi aggiorna senza aver mai personalizzato). */
+    fun partMessageForSend(): String? =
+        resolveStoredIrcMessage(_ircMessages.value?.partMessage)
+
+    /** Motivo QUIT risolto per l'invio (stessa disciplina del PART). */
+    fun quitMessageForSend(): String? =
+        resolveStoredIrcMessage(_ircMessages.value?.quitMessage)
 
     private val _notificationPrefs = MutableStateFlow<NotificationPrefsDto?>(null)
 

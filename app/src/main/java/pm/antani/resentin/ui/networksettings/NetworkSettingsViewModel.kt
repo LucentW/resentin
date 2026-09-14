@@ -63,6 +63,7 @@ data class NetworkSettingsUiState(
 class NetworkSettingsViewModel(
     private val networksRepository: NetworksRepository,
     private val ignoresRepository: IgnoresRepository,
+    private val userSettingsRepository: pm.antani.resentin.domain.repository.UserSettingsRepository,
     private val appContext: Context,
     private val networkSlug: String,
 ) : ViewModel() {
@@ -141,7 +142,10 @@ class NetworkSettingsViewModel(
     fun toggleConnection() {
         val target = !_uiState.value.connected
         viewModelScope.launch {
-            networksRepository.updateConnectionState(networkSlug, target)
+            // Disconnessione vera -> QUIT configurato (predefinito versionato o
+            // nessun motivo se vuoto); connessione -> nessun motivo QUIT.
+            val reason = if (!target) userSettingsRepository.quitMessageForSend() else null
+            networksRepository.updateConnectionState(networkSlug, target, reason)
                 .onFailure { _uiState.update { s -> s.copy(error = it.message) } }
         }
     }
@@ -252,13 +256,14 @@ class NetworkSettingsViewModel(
         fun factory(
             networksRepository: NetworksRepository,
             ignoresRepository: IgnoresRepository,
+            userSettingsRepository: pm.antani.resentin.domain.repository.UserSettingsRepository,
             appContext: Context,
             networkSlug: String,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                     @Suppress("UNCHECKED_CAST")
-                    return NetworkSettingsViewModel(networksRepository, ignoresRepository, appContext, networkSlug) as T
+                    return NetworkSettingsViewModel(networksRepository, ignoresRepository, userSettingsRepository, appContext, networkSlug) as T
                 }
             }
     }

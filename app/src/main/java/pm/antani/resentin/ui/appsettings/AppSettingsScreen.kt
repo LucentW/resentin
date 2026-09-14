@@ -138,6 +138,7 @@ private enum class SettingsSection {
     PRESENCE,
     IDENTITY,
     COMMANDS,
+    IRC,
     DATA,
 }
 
@@ -149,6 +150,7 @@ private fun SettingsSection.icon(): ImageVector = when (this) {
     SettingsSection.PRESENCE -> Icons.Outlined.Schedule
     SettingsSection.IDENTITY -> Icons.Outlined.Person
     SettingsSection.COMMANDS -> Icons.Outlined.Terminal
+    SettingsSection.IRC -> Icons.Outlined.ChatBubbleOutline
     SettingsSection.DATA -> Icons.Outlined.Storage
 }
 
@@ -160,6 +162,7 @@ private fun SettingsSection.title(): String = when (this) {
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands)
+    SettingsSection.IRC -> stringResource(R.string.settings_group_irc)
     SettingsSection.DATA -> stringResource(R.string.settings_group_data)
 }
 
@@ -171,6 +174,7 @@ private fun SettingsSection.description(): String = when (this) {
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence_desc)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity_desc)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands_desc)
+    SettingsSection.IRC -> stringResource(R.string.settings_group_irc_desc)
     SettingsSection.DATA -> stringResource(R.string.settings_group_data_desc)
 }
 
@@ -979,6 +983,79 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 }
             }
             }
+            if (section == SettingsSection.IRC) {
+            item {
+                SettingsGroupCard(
+                    showHeader = false,
+                    icon = Icons.Outlined.ChatBubbleOutline,
+                    title = stringResource(R.string.settings_group_irc),
+                    description = stringResource(R.string.settings_group_irc_desc),
+                ) {
+                    SettingsBlockLabel(text = stringResource(R.string.settings_irc_part_title))
+                    Text(
+                        stringResource(R.string.settings_irc_part_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    OutlinedTextField(
+                        value = state.ircPartDraft,
+                        onValueChange = viewModel::onIrcPartDraftChange,
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.ircLoading,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsBlockLabel(text = stringResource(R.string.settings_irc_quit_title))
+                    Text(
+                        stringResource(R.string.settings_irc_quit_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    OutlinedTextField(
+                        value = state.ircQuitDraft,
+                        onValueChange = viewModel::onIrcQuitDraftChange,
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.ircLoading,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ResentinSpacing.small)) {
+                        Button(
+                            onClick = viewModel::saveIrcMessages,
+                            enabled = !state.ircSaving && !state.ircLoading,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.network_settings_save))
+                        }
+                        OutlinedButton(
+                            onClick = viewModel::resetIrcMessages,
+                            enabled = !state.ircSaving && !state.ircLoading,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.settings_irc_reset))
+                        }
+                    }
+                    if (state.ircSaved) {
+                        Spacer(Modifier.height(ResentinSpacing.small))
+                        Text(
+                            stringResource(R.string.settings_reply_custom_saved),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    state.ircError?.let { error ->
+                        Spacer(Modifier.height(ResentinSpacing.small))
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            }
             if (section == SettingsSection.DATA) {
             item {
                 SettingsGroupCard(
@@ -1147,6 +1224,7 @@ private fun SettingsHubCard(
                 add(SettingsSection.PRESENCE)
                 if (showIdentity) add(SettingsSection.IDENTITY)
                 add(SettingsSection.COMMANDS)
+                add(SettingsSection.IRC)
                 add(SettingsSection.DATA)
             }
             // Extra rows that aren't a SettingsSection: admin opens a separate screen

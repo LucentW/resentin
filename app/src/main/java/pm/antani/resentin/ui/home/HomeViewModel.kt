@@ -291,7 +291,10 @@ class HomeViewModel(
                     networksRepository.closeLocalQuery(networkSlug, channel.name)
                 }
             } else {
-                networksRepository.partChannel(networkSlug, channel.name)
+                // Dall'interfaccia si invia sempre il PART configurato (o il
+                // predefinito versionato per chi non ha personalizzato; `""`
+                // = nessun motivo e mantiene il comportamento senza motivo).
+                networksRepository.partChannel(networkSlug, channel.name, userSettingsRepository.partMessageForSend())
             }
             result.onSuccess {
                 if (channel.source != "query") {
@@ -352,8 +355,11 @@ class HomeViewModel(
      * tears a persistent identity's IRC session down, only an ephemeral visitor's. */
     fun quit() {
         viewModelScope.launch {
+            // Disconnessione vera: invia il QUIT configurato (o il predefinito
+            // versionato; `""` = nessun motivo). Il detach da solo non invia QUIT.
+            val quitReason = userSettingsRepository.quitMessageForSend()
             runCatching {
-                networks.value.forEach { nwc -> networksRepository.updateConnectionState(nwc.network.slug, connected = false) }
+                networks.value.forEach { nwc -> networksRepository.updateConnectionState(nwc.network.slug, connected = false, reason = quitReason) }
             }
             authRepository.detach()
         }
