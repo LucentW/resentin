@@ -42,6 +42,30 @@ class QuoteHeadTest {
     }
 
     @Test
+    fun rejectsNickOnlyPrefixWithNoReplyText() {
+        val text = "mario: "
+        val (head, rest) = splitQuoteHead(text)
+        assertNull(head)
+        assertEquals(text, rest)
+    }
+
+    @Test
+    fun rejectsNickOnlyPrefixWhenRestIsFormattingOnly() {
+        val text = "mario: " + charArrayOf(3.toChar(), '0', '4').concatToString()
+        val (head, rest) = splitQuoteHead(text)
+        assertNull(head)
+        assertEquals(text, rest)
+    }
+
+    @Test
+    fun rejectsQuoteAttributionWithoutReplyText() {
+        val text = "<mario> ciao mondo << "
+        val (head, rest) = splitQuoteHead(text)
+        assertNull(head)
+        assertEquals(text, rest)
+    }
+
+    @Test
     fun rejectsEmptyAndPlain() {
         assertEquals(null to "", splitQuoteHead(""))
         assertEquals(null to "ciao a tutti", splitQuoteHead("ciao a tutti"))

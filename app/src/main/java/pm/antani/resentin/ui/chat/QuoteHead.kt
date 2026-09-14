@@ -1,5 +1,7 @@
 package pm.antani.resentin.ui.chat
 
+import pm.antani.resentin.ui.common.stripMircCodes
+
 // Visual quote-head detection — cicchetto parity (dimmed `scrollback-reply-quote`).
 //
 // Matches the two built-in reply shapes at the START of a message body:
@@ -35,13 +37,17 @@ fun splitQuoteHead(text: String): Pair<String?, String> {
         // cap; `shift << 2` alone has no `<nick>`/`* nick` shape — require it).
         val headBody = head.dropLast(QUOTE_TAIL.length)
         if (headBody.startsWith("<") || headBody.startsWith("* ")) {
-            return head to text.substring(head.length)
+            val rest = text.substring(head.length)
+            if (hasVisibleText(rest)) return head to rest
         }
     }
     val nickMatch = NICK_HEAD_RE.find(text)
     if (nickMatch != null) {
         val head = nickMatch.value
-        return head to text.substring(head.length)
+        val rest = text.substring(head.length)
+        if (hasVisibleText(rest)) return head to rest
     }
     return null to text
 }
+
+private fun hasVisibleText(value: String): Boolean = stripMircCodes(value).isNotBlank()
