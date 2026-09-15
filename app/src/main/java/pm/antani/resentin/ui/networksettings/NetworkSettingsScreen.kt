@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pm.antani.resentin.R
 import pm.antani.resentin.ui.common.ResentinFilterChip
+import pm.antani.resentin.ui.common.UnreadCountBadge
 import pm.antani.resentin.ui.common.ResentinErrorState
 import pm.antani.resentin.ui.common.ResentinHeaderAction
 import pm.antani.resentin.ui.common.ResentinLoadingState
@@ -355,7 +356,19 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                         shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.network_settings_archive))
+                        Text(
+                            stringResource(R.string.network_settings_archive),
+                            modifier = Modifier.weight(1f),
+                        )
+                        // #2099 rollup — total unread across archived windows. Same
+                        // pill language as Home/archive rows; absent when zero.
+                        if (state.archiveUnreadMentions > 0) {
+                            UnreadCountBadge(count = state.archiveUnreadMentions, isMention = true)
+                            if (state.archiveUnreadMessages > 0) Spacer(Modifier.width(6.dp))
+                        }
+                        if (state.archiveUnreadMessages > 0) {
+                            UnreadCountBadge(count = state.archiveUnreadMessages)
+                        }
                     }
                 }
             }

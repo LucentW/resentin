@@ -31,7 +31,9 @@ import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.irc.formatChannelModes
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.ArchiveEntryDto
+import pm.antani.resentin.net.dto.ArchiveEntryWithUnread
 import pm.antani.resentin.net.dto.ChannelDto
+import pm.antani.resentin.net.dto.mergeArchiveUnread
 import pm.antani.resentin.net.dto.ChannelModesEntryDto
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
 import pm.antani.resentin.net.dto.DirectoryPageDto
@@ -573,6 +575,16 @@ class NetworksRepository(
 
     suspend fun getArchive(slug: String): Result<List<ArchiveEntryDto>> = runCatching {
         authRepository.api(NetworksApi::class.java).getArchive(slug).archive
+    }
+
+    /** #2099 — archive rows joined with their unread state, plus the data for the
+     * launcher rollup. The `/me` snapshot is best-effort: when it fails the rows
+     * still load with whatever unread the archive payload itself carried (possibly
+     * zero on old servers), so a badge outage never becomes an archive outage. */
+    suspend fun getArchiveWithUnread(slug: String): Result<List<ArchiveEntryWithUnread>> = runCatching {
+        val archive = authRepository.api(NetworksApi::class.java).getArchive(slug).archive
+        val unread = authRepository.getMe().getOrNull()?.unreadCounts?.get(slug).orEmpty()
+        mergeArchiveUnread(archive, unread)
     }
 
     suspend fun deleteArchiveEntry(slug: String, target: String): Result<Unit> = runCatching {
