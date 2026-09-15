@@ -48,8 +48,10 @@ import pm.antani.resentin.irc.presenceVisible
 import pm.antani.resentin.irc.serviceNickFor
 import pm.antani.resentin.net.RateLimitException
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
+import pm.antani.resentin.net.dto.effectiveUploadTtlSeconds
 import pm.antani.resentin.ui.common.UserCardController
 import pm.antani.resentin.ui.common.stripMircCodes
 
@@ -59,6 +61,18 @@ sealed interface ChatCommandEffect {
     data object OpenChannelSettings : ChatCommandEffect
     data object OpenAppSettings : ChatCommandEffect
 }
+
+/** #1883 — a picked/shared file staged behind the pre-upload confirm dialog.
+ * Non-null while the dialog is up; the bytes are read only on confirm, so a
+ * declined pick never pays the read. */
+data class PendingUploadConfirm(
+    val uri: Uri,
+    val fileName: String,
+    val sizeBytes: Long,
+    val mimeType: String,
+    /** TTL choice in seconds, preselected with the effective default. */
+    val ttlSeconds: Int,
+)
 class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val networksRepository: NetworksRepository,
@@ -284,6 +298,15 @@ class ChatViewModel(
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
+    private val _pendingUpload = MutableStateFlow<PendingUploadConfirm?>(null)
+    val pendingUpload: StateFlow<PendingUploadConfirm?> = _pendingUpload.asStateFlow()
+
+    // #1883/#2095 — server upload prefs, loaded on open. Failures keep the
+    // server defaults (confirm off, no TTL pref) so an upload never blocks on
+    // a prefs fetch — same fail-open posture as the highlight patterns below.
+    private var uploadConfirmEnabled = false
+    private var uploadTtlPreference: Int? = null
+
     // One-shot signal for ChatScreen to grab keyboard focus (and move the cursor to the
     // end of the now-prefilled draft) right after a swipe-to-reply — reply() alone only
     // changes the draft's TEXT, which doesn't imply focus or cursor position on its own.
@@ -376,6 +399,13 @@ class ChatViewModel(
         viewModelScope.launch {
             runCatching { channelReady.await() }
             runCatching { userSettingsRepository.refreshWatchlist(subject) }
+        }
+        // #1883/#2095 — the upload confirm + TTL preference. Loads beside the
+        // watchlist above; until it lands uploads go out unconfirmed with the
+        // server TTL default (a sub-second window right after opening a chat).
+        viewModelScope.launch {
+            uploadConfirmEnabled = userSettingsRepository.getUploadConfirmEnabled().getOrDefault(false)
+            uploadTtlPreference = userSettingsRepository.getUploadTtlSeconds().getOrNull()
         }
     }
 
@@ -866,12 +896,51 @@ class ChatViewModel(
 
     fun uploadFile(uri: Uri) {
         viewModelScope.launch {
+            runCatching { channelReady.await() }
+                .onFailure { postError(it.message); return@launch }
+            val meta = readUploadMeta(appContext, uri)
+                ?: run { postError(appContext.getString(R.string.chat_upload_failed)); return@launch }
+            if (uploadConfirmEnabled && _pendingUpload.value == null) {
+                // #1883 — stage behind the confirm dialog instead of sending.
+                // A second pick arriving while one is staged (e.g. a multi-file
+                // OS share) goes straight out: the dialog holds a single file.
+                _pendingUpload.value = PendingUploadConfirm(
+                    uri = meta.uri,
+                    fileName = meta.fileName,
+                    sizeBytes = meta.sizeBytes,
+                    mimeType = meta.mimeType,
+                    ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
+                )
+            } else {
+                sendUpload(meta.uri, uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS })
+            }
+        }
+    }
+
+    fun onPendingUploadTtlChange(seconds: Int) {
+        _pendingUpload.value = _pendingUpload.value?.copy(ttlSeconds = seconds)
+    }
+
+    /** The dialog's Send: uploads the staged file with the chosen TTL. The
+     * choice is per-batch only — it is NOT written back to the stored
+     * preference (same as cicchetto: a one-off stays a one-off). */
+    fun confirmPendingUpload() {
+        val pending = _pendingUpload.value ?: return
+        _pendingUpload.value = null
+        sendUpload(pending.uri, pending.ttlSeconds)
+    }
+
+    fun dismissPendingUpload() {
+        _pendingUpload.value = null
+    }
+
+    private fun sendUpload(uri: Uri, expireSeconds: Int?) {
+        viewModelScope.launch {
             runCatching {
-                channelReady.await()
                 _isUploading.value = true
                 val pending = readUploadFile(appContext, uri)
                     ?: error(appContext.getString(R.string.chat_upload_failed))
-                chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType)
+                chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType, expireSeconds)
                     .getOrThrow()
             }.onFailure { postError(it.message) }
             _isUploading.value = false

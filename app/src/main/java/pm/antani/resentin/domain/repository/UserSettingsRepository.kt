@@ -23,6 +23,7 @@ import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.MutedTargetDto
 import pm.antani.resentin.net.dto.NotificationPrefsDto
 import pm.antani.resentin.net.dto.ShowPeerProfilesDto
+import pm.antani.resentin.net.dto.UploadConfirmEnabledDto
 import pm.antani.resentin.net.dto.VhostSelectionUpdateDto
 import pm.antani.resentin.net.dto.VhostSettingsDto
 import pm.antani.resentin.net.dto.WatchlistDto
@@ -129,6 +130,36 @@ class UserSettingsRepository(
 
     suspend fun updateShowPeerProfiles(enabled: Boolean): Result<Boolean> = runCatching {
         authRepository.api(UserSettingsApi::class.java).updateShowPeerProfiles(ShowPeerProfilesDto(enabled)).showPeerProfiles
+    }
+
+    /** #2095 — the stored upload-TTL preference (`null` = site default). Read
+     * when a chat opens so the confirm dialog (and the no-confirm fast path)
+     * already know the effective TTL; failures stay `null`, which is the
+     * server's own default too. */
+    suspend fun getUploadTtlSeconds(): Result<Int?> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).getUploadTtlSeconds().uploadTtlSeconds
+    }
+
+    /** [seconds]: `null` clears the preference (site default applies), any
+     * other value must be a positive integer (the `expire` ladder itself is
+     * enforced per-upload by the server). Hand-built body so an explicit
+     * `null` survives `AppJson`'s `explicitNulls = false`. */
+    suspend fun updateUploadTtlSeconds(seconds: Int?): Result<Int?> = runCatching {
+        val body = buildJsonObject {
+            put("upload_ttl_seconds", seconds?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
+        authRepository.api(UserSettingsApi::class.java).updateUploadTtlSeconds(body).uploadTtlSeconds
+    }
+
+    /** #1883 — the pre-upload confirm opt-in. Off by default; read at upload
+     * time (the server stores it only — no session involvement), so a flip
+     * takes effect on the next upload with no reload. */
+    suspend fun getUploadConfirmEnabled(): Result<Boolean> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).getUploadConfirmEnabled().uploadConfirmEnabled
+    }
+
+    suspend fun updateUploadConfirmEnabled(enabled: Boolean): Result<Boolean> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).updateUploadConfirmEnabled(UploadConfirmEnabledDto(enabled)).uploadConfirmEnabled
     }
 
     private val _notificationPrefs = MutableStateFlow<NotificationPrefsDto?>(null)

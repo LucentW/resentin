@@ -56,6 +56,14 @@ data class AppSettingsUiState(
     val showPeerProfiles: Boolean = false,
     val showPeerProfilesSaving: Boolean = false,
     val showPeerProfilesError: String? = null,
+    // #1883/#2095 — upload confirm opt-in + stored TTL preference (null = site
+    // default). Same save/error discipline as showPeerProfiles above.
+    val uploadConfirmEnabled: Boolean = false,
+    val uploadConfirmSaving: Boolean = false,
+    val uploadConfirmError: String? = null,
+    val uploadTtlSeconds: Int? = null,
+    val uploadTtlSaving: Boolean = false,
+    val uploadTtlError: String? = null,
 )
 
 class AppSettingsViewModel(
@@ -215,6 +223,7 @@ class AppSettingsViewModel(
         refreshAutoAwayDebounce()
         refreshWatchlist()
         refreshShowPeerProfiles()
+        refreshUploadSettings()
     }
 
     private fun refreshShowPeerProfiles() {
@@ -232,6 +241,43 @@ class AppSettingsViewModel(
                 .onSuccess { enabled -> _uiState.update { it.copy(showPeerProfiles = enabled, showPeerProfilesSaving = false) } }
                 .onFailure { error ->
                     _uiState.update { it.copy(showPeerProfilesSaving = false, showPeerProfilesError = error.message) }
+                }
+        }
+    }
+
+    // #1883/#2095 — upload confirm opt-in + stored TTL preference. Failures on
+    // load stay silent (server defaults apply); failures on save surface inline.
+    private fun refreshUploadSettings() {
+        viewModelScope.launch {
+            userSettingsRepository.getUploadConfirmEnabled()
+                .onSuccess { enabled -> _uiState.update { it.copy(uploadConfirmEnabled = enabled) } }
+            userSettingsRepository.getUploadTtlSeconds()
+                .onSuccess { seconds -> _uiState.update { it.copy(uploadTtlSeconds = seconds) } }
+        }
+    }
+
+    fun toggleUploadConfirm() {
+        val target = !_uiState.value.uploadConfirmEnabled
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadConfirmSaving = true, uploadConfirmError = null) }
+            userSettingsRepository.updateUploadConfirmEnabled(target)
+                .onSuccess { enabled -> _uiState.update { it.copy(uploadConfirmEnabled = enabled, uploadConfirmSaving = false) } }
+                .onFailure { error ->
+                    _uiState.update { it.copy(uploadConfirmSaving = false, uploadConfirmError = error.message) }
+                }
+        }
+    }
+
+    /** [seconds]: `null` = site default, otherwise a ladder value. The server
+     * validates the range (up to 1 year); the ladder itself is enforced
+     * per-upload, so any in-range value persists here. */
+    fun setUploadTtl(seconds: Int?) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadTtlSaving = true, uploadTtlError = null) }
+            userSettingsRepository.updateUploadTtlSeconds(seconds)
+                .onSuccess { persisted -> _uiState.update { it.copy(uploadTtlSeconds = persisted, uploadTtlSaving = false) } }
+                .onFailure { error ->
+                    _uiState.update { it.copy(uploadTtlSaving = false, uploadTtlError = error.message) }
                 }
         }
     }

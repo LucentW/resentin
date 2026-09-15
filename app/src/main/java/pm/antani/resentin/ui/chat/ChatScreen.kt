@@ -36,6 +36,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -143,6 +144,7 @@ import pm.antani.resentin.irc.containsMention
 import pm.antani.resentin.irc.matchesHighlight
 import pm.antani.resentin.irc.MessageLines
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.irc.highestSigil
@@ -263,6 +265,7 @@ fun ChatScreen(
     }
     val error by viewModel.error.collectAsState()
     val pendingMultiLineSend by viewModel.pendingMultiLineSend.collectAsState()
+    val pendingUpload by viewModel.pendingUpload.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
     val ownSigils by viewModel.ownSigils.collectAsState()
     val privilegeModes by viewModel.privilegeModes.collectAsState()
@@ -1606,6 +1609,110 @@ fun ChatScreen(
             },
         )
     }
+
+    // #1883 — pre-upload confirm (opt-in, server-side). The staged file goes out
+    // only on Send, with the TTL picked here (a per-batch choice, not saved).
+    val stagedUpload = pendingUpload
+    if (stagedUpload != null) {
+        UploadConfirmDialog(
+            pending = stagedUpload,
+            channelName = channelName,
+            onTtlChange = viewModel::onPendingUploadTtlChange,
+            onConfirm = viewModel::confirmPendingUpload,
+            onDismiss = viewModel::dismissPendingUpload,
+        )
+    }
+}
+
+/** #1883 — pre-upload confirm dialog (opt-in, server-side). Shows what is about
+ * to leave the device (name, size, type, destination) plus the per-batch TTL
+ * choice; Send uploads with that TTL, Cancel drops the staged file. A one-off
+ * stays a one-off: the choice is never written back to the stored preference. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun UploadConfirmDialog(
+    pending: PendingUploadConfirm,
+    channelName: String,
+    onTtlChange: (Int) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 0.dp,
+        title = {
+            Text(
+                stringResource(R.string.chat_upload_confirm_title, channelName),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    pending.fileName,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val sizeLabel = if (pending.sizeBytes >= 0) formatFileSize(pending.sizeBytes) else null
+                Text(
+                    listOfNotNull(pending.mimeType, sizeLabel).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.chat_upload_confirm_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    stringResource(R.string.chat_upload_ttl_label),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    UPLOAD_TTL_LADDER_SECONDS.forEach { seconds ->
+                        ResentinFilterChip(
+                            selected = pending.ttlSeconds == seconds,
+                            onClick = { onTtlChange(seconds) },
+                            label = { Text(uploadTtlChipLabel(seconds)) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.cd_send))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cd_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun uploadTtlChipLabel(seconds: Int): String = when (seconds) {
+    3600 -> stringResource(R.string.chat_upload_ttl_1h)
+    43200 -> stringResource(R.string.chat_upload_ttl_12h)
+    86400 -> stringResource(R.string.chat_upload_ttl_24h)
+    259200 -> stringResource(R.string.chat_upload_ttl_72h)
+    else -> stringResource(R.string.chat_upload_ttl_custom, seconds)
 }
 
 /** Consent banner for a held DCC offer (issue 2089 on grappa-irc) — the close (×)

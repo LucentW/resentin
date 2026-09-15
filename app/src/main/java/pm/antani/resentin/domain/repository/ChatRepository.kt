@@ -236,18 +236,24 @@ class ChatRepository(
     /** Uploads [bytes] via the embedded media endpoint, then sends the resulting URL as
      * an ordinary chat message — the server has no separate "attachment" message kind,
      * cicchetto itself just posts the upload URL as the PRIVMSG body (the extension in
-     * the URL is what tells a viewer it's an image/video/etc., not a message flag). */
+     * the URL is what tells a viewer it's an image/video/etc., not a message flag).
+     *
+     * [expireSeconds]: per-upload TTL on the server's `1h/12h/24h/72h` ladder
+     * (see `UPLOAD_TTL_LADDER_SECONDS`) — `null` omits the field and the server
+     * default (24h) applies. */
     suspend fun uploadAndSend(
         networkSlug: String,
         channelName: String,
         bytes: ByteArray,
         fileName: String,
         mimeType: String,
+        expireSeconds: Int? = null,
     ): Result<Unit> = runCatching {
         val uploadsApi = authRepository.api(UploadsApi::class.java)
         val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
         val part = MultipartBody.Part.createFormData("file", fileName, body)
-        val response = uploadsApi.upload(part)
+        val expire = expireSeconds?.toString()?.toRequestBody("text/plain".toMediaTypeOrNull())
+        val response = uploadsApi.upload(part, expire)
         check(response.isSuccessful) { context.getString(R.string.upload_error_http, response.code()) }
         val url = checkNotNull(response.body()) { context.getString(R.string.upload_error_invalid_response) }.url
         sendMessage(networkSlug, channelName, url).getOrThrow()
