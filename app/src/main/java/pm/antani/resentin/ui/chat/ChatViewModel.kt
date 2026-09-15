@@ -976,9 +976,10 @@ class ChatViewModel(
         }
     }
 
-    /** Manual "reload the buffer" — the only recourse when a backfill silently fell
-     * behind (a gap wider than [pm.antani.resentin.domain.repository.ChatRepository]'s
-     * drain cap) and there's no other trigger to try again from. */
+    /** Manual "reload the buffer" — the only *user-driven* recourse when a backfill
+     * silently fell behind (a gap wider than
+     * [pm.antani.resentin.domain.repository.ChatRepository]'s drain cap). See
+     * [onResumed] for the automatic counterpart. */
     fun refresh() {
         if (_isRefreshing.value) return
         viewModelScope.launch {
@@ -986,6 +987,23 @@ class ChatViewModel(
             _error.value = null
             chatRepository.backfill(networkSlug, channelName).onFailure { postError(it.message) }
             _isRefreshing.value = false
+        }
+    }
+
+    /** Automatic counterpart to [refresh], fired whenever this chat screen becomes
+     * visible again (`ON_RESUME`) — including "the screen was off while this chat
+     * stayed open the whole time". `init`'s own backfill only ever runs once, when
+     * this ViewModel is first created; staying on the same chat across a screen-off
+     * cycle never recreates it, so without this the live WS feed is the ONLY way new
+     * messages arrive, and a connection that silently died while asleep (a dropped
+     * radio during Doze, a socket that never got a chance to notice and reconnect)
+     * left the chat frozen at whatever it last saw until the user noticed and pulled
+     * to refresh. Silent (no spinner, no error banner) since it fires on every
+     * resume — including the unremarkable common case where nothing was missed at
+     * all — not just the rare one this exists for. */
+    fun onResumed() {
+        viewModelScope.launch {
+            chatRepository.backfill(networkSlug, channelName)
         }
     }
 
