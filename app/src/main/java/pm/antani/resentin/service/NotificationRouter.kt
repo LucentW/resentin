@@ -20,9 +20,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
@@ -111,6 +113,27 @@ class NotificationRouter(
         // Same "nothing is silent" parity for a held DCC offer (issue 2089).
         networksRepository.newDccOffers
             .onEach { postDccOfferNotification(it) }
+            .launchIn(scope)
+
+        // Auto-dismiss: the server re-seeds a channel's window_counts to zero on
+        // every read-cursor advance — this device's own read (ChatViewModel marking
+        // the latest message read on open, or Home's "mark as read") as much as
+        // another device's (the same live echo NetworksRepository already applies
+        // to ChannelEntity.unreadMessages). cancel() on an already-gone or
+        // never-posted notification id is a harmless no-op, so this only needs to
+        // know WHICH conversations currently read as zero-unread; distinctUntilChanged
+        // keeps it from re-sweeping on every unrelated row change Room's Flow
+        // invalidates on (a message landing in some OTHER channel).
+        db.networkDao().observeNetworksWithChannels()
+            .map { networks ->
+                networks.flatMap { nwc -> nwc.channels.filter { it.unreadMessages == 0 }.map { nwc.network.slug to it.name } }.toSet()
+            }
+            .distinctUntilChanged()
+            .onEach { readConversations ->
+                readConversations.forEach { (slug, name) ->
+                    NotificationManagerCompat.from(context).cancel(conversationNotificationId(slug, name))
+                }
+            }
             .launchIn(scope)
     }
 
