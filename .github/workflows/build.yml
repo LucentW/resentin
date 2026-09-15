@@ -11,7 +11,7 @@ jobs:
     name: Build debug APK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history, not the default shallow clone — scripts/credits.sh
           # below reads it via `git shortlog` for the /credits contributor
@@ -46,7 +46,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
