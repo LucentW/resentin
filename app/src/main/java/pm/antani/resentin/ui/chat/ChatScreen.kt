@@ -2467,7 +2467,7 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
                 ) {
                     append(nick)
                 }
-                append(if (parts.isAction) " " else "> ")
+                append(if (parts.isAction) " " else ": ")
                 append(preview)
             }
         }
