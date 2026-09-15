@@ -138,6 +138,8 @@
     <string name="admin_tab_users">Users</string>
     <string name="admin_tab_sessions">Sessions</string>
     <string name="admin_tab_visitors">Visitors</string>
+    <string name="admin_tab_settings">Settings</string>
+    <string name="admin_tab_session_log">Session log</string>
     <string name="admin_create">Create</string>
     <string name="admin_action_create_network">Create network</string>
     <string name="admin_action_create_vhost">Create vhost</string>
@@ -146,6 +148,11 @@
     <string name="admin_network_caps">max users %1$d · max visitors %2$d (-1 = unlimited)</string>
     <string name="admin_network_visitors_label">Visitors</string>
     <string name="admin_add_server">Add server</string>
+    <string name="admin_toggle_servers">Show/hide servers</string>
+    <string name="admin_servers_empty">No servers configured</string>
+    <string name="admin_server_disabled">disabled</string>
+    <string name="admin_delete_server_title">Remove server</string>
+    <string name="admin_delete_server_confirm">Remove %1$s from this network?</string>
     <string name="admin_edit_network">Edit network</string>
     <string name="admin_edit_network_title">Edit %1$s</string>
     <string name="admin_network_autoconnect_label">Visitor autoconnect</string>
@@ -166,6 +173,9 @@
     <string name="admin_vhost_available">available to everyone</string>
     <string name="admin_new_vhost_title">New vhost</string>
     <string name="admin_new_vhost_hint">address</string>
+    <string name="admin_vhost_pick_address">Address (measured by the server)</string>
+    <string name="admin_vhost_in_pool_label">In outbound rotation pool</string>
+    <string name="admin_vhost_generally_available_label">Generally available</string>
     <string name="admin_delete_vhost_title">Delete vhost</string>
     <string name="admin_delete_vhost_confirm">Delete %1$s? Any grants will be revoked.</string>
     <string name="admin_users_empty">No users</string>
@@ -176,6 +186,13 @@
     <string name="admin_user_password_hint">password</string>
     <string name="admin_delete_user_title">Delete user</string>
     <string name="admin_delete_user_confirm">Permanently delete %1$s?</string>
+    <string name="admin_manage_networks">Manage networks</string>
+    <string name="admin_manage_networks_title">%1$s\'s networks</string>
+    <string name="admin_rotate_password">Rotate password</string>
+    <string name="admin_rotate_password_title">Rotate %1$s\'s password</string>
+    <string name="admin_new_password_label">New password</string>
+    <string name="admin_unbind_network_title">Remove network access</string>
+    <string name="admin_unbind_network_confirm">Remove this user\'s access to %1$s? Their IRC session will be closed.</string>
     <string name="admin_sessions_empty">No live sessions</string>
     <string name="admin_session_meta">%1$s · %2$s · %3$s</string>
     <string name="admin_session_disconnect">Disconnect</string>
@@ -187,6 +204,23 @@
     <string name="admin_delete_visitor_confirm">Delete visitor %1$s?</string>
     <string name="admin_sweep_now">Sweep visitors now</string>
     <string name="admin_sweep_result">Removed %1$d expired visitors</string>
+
+    <string name="admin_settings_empty">Settings unavailable</string>
+    <string name="admin_settings_upload_title">File uploads</string>
+    <string name="admin_settings_active_host_label">Active host</string>
+    <string name="admin_settings_image_cap_label">Image cap (bytes)</string>
+    <string name="admin_settings_video_cap_label">Video cap (bytes)</string>
+    <string name="admin_settings_document_cap_label">Document cap (bytes)</string>
+    <string name="admin_settings_audio_cap_label">Audio cap (bytes)</string>
+    <string name="admin_settings_global_cap_label">Global cap (bytes)</string>
+    <string name="admin_settings_video_duration_label">Max video duration (seconds)</string>
+    <string name="admin_settings_addressing_title">Addressing</string>
+    <string name="admin_settings_static_prefix_label">Static mapping prefix</string>
+    <string name="admin_uploads_title">Uploaded files</string>
+    <string name="admin_uploads_empty">No uploaded files</string>
+    <string name="admin_delete_upload_title">Delete file</string>
+    <string name="admin_delete_upload_confirm">Delete %1$s?</string>
+    <string name="admin_session_log_empty">No events recorded</string>
 
     <!-- Chat -->
     <string name="cd_members">Members</string>

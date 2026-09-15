@@ -2,13 +2,21 @@ package pm.antani.resentin.net.rest
 
 import kotlinx.serialization.json.JsonObject
 import okhttp3.ResponseBody
+import pm.antani.resentin.net.dto.CredentialAdminDto
+import pm.antani.resentin.net.dto.CredentialCreateRequestDto
+import pm.antani.resentin.net.dto.CredentialsAdminEnvelopeDto
 import pm.antani.resentin.net.dto.NetworkAdminDto
 import pm.antani.resentin.net.dto.NetworkCreateRequestDto
 import pm.antani.resentin.net.dto.NetworksAdminEnvelopeDto
 import pm.antani.resentin.net.dto.ReaperRunResultDto
 import pm.antani.resentin.net.dto.ServerAdminDto
 import pm.antani.resentin.net.dto.ServerCreateRequestDto
+import pm.antani.resentin.net.dto.ServersAdminEnvelopeDto
+import pm.antani.resentin.net.dto.SessionLogEnvelopeDto
+import pm.antani.resentin.net.dto.SessionLogSessionsEnvelopeDto
 import pm.antani.resentin.net.dto.SessionsAdminEnvelopeDto
+import pm.antani.resentin.net.dto.SettingsEnvelopeDto
+import pm.antani.resentin.net.dto.UploadsAdminEnvelopeDto
 import pm.antani.resentin.net.dto.UserAdminDto
 import pm.antani.resentin.net.dto.UserAdminFlagsRequestDto
 import pm.antani.resentin.net.dto.UserCreateRequestDto
@@ -26,6 +34,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /** Operator-console surface (every `/admin` route), gated server-side on
  * `{:user, %User{is_admin: true}}` — a non-admin (or a visitor) gets a uniform
@@ -49,8 +58,14 @@ interface AdminApi {
     @DELETE("admin/networks/{id}")
     suspend fun deleteNetwork(@Path("id") id: Int): Response<ResponseBody>
 
+    @GET("admin/networks/{networkId}/servers")
+    suspend fun getServers(@Path("networkId") networkId: Int): ServersAdminEnvelopeDto
+
     @POST("admin/networks/{networkId}/servers")
     suspend fun createServer(@Path("networkId") networkId: Int, @Body body: ServerCreateRequestDto): Response<ServerAdminDto>
+
+    @DELETE("admin/networks/{networkId}/servers/{id}")
+    suspend fun deleteServer(@Path("networkId") networkId: Int, @Path("id") id: Int): Response<ResponseBody>
 
     @GET("admin/vhosts")
     suspend fun getVhosts(): VhostsAdminEnvelopeDto
@@ -93,4 +108,35 @@ interface AdminApi {
 
     @POST("admin/reaper/run")
     suspend fun runReaper(): Response<ReaperRunResultDto>
+
+    @GET("admin/credentials")
+    suspend fun getCredentials(): CredentialsAdminEnvelopeDto
+
+    @POST("admin/credentials")
+    suspend fun createCredential(@Body body: CredentialCreateRequestDto): Response<CredentialAdminDto>
+
+    @DELETE("admin/credentials/{userId}/{networkId}")
+    suspend fun deleteCredential(@Path("userId") userId: String, @Path("networkId") networkId: Int): Response<ResponseBody>
+
+    @GET("admin/settings")
+    suspend fun getSettings(): SettingsEnvelopeDto
+
+    /** Body is a hand-built [JsonObject], same reasoning as [updateNetwork]: an
+     * emptied cap or `static_mapping_prefix` field needs to reach the server as
+     * an explicit `null` (clear), which a normal `explicitNulls = false` DTO body
+     * would silently drop instead. See [pm.antani.resentin.domain.repository.AdminRepository.updateSettings]. */
+    @PUT("admin/settings")
+    suspend fun updateSettings(@Body body: JsonObject): Response<SettingsEnvelopeDto>
+
+    @GET("admin/uploads")
+    suspend fun getUploads(): UploadsAdminEnvelopeDto
+
+    @DELETE("admin/uploads/{id}")
+    suspend fun deleteUpload(@Path("id") id: Int): Response<ResponseBody>
+
+    @GET("admin/session_log")
+    suspend fun getSessionLog(@Query("limit") limit: Int? = null): SessionLogEnvelopeDto
+
+    @GET("admin/session_log/sessions")
+    suspend fun getSessionLogSessions(@Query("limit") limit: Int? = null): SessionLogSessionsEnvelopeDto
 }

@@ -4,18 +4,26 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import pm.antani.resentin.net.dto.AddressingSettingsAdminDto
+import pm.antani.resentin.net.dto.CredentialAdminDto
+import pm.antani.resentin.net.dto.CredentialCreateRequestDto
 import pm.antani.resentin.net.dto.NetworkAdminDto
 import pm.antani.resentin.net.dto.NetworkCreateRequestDto
 import pm.antani.resentin.net.dto.ReaperRunResultDto
 import pm.antani.resentin.net.dto.ServerAdminDto
 import pm.antani.resentin.net.dto.ServerCreateRequestDto
 import pm.antani.resentin.net.dto.SessionAdminDto
+import pm.antani.resentin.net.dto.SessionLogEntryDto
+import pm.antani.resentin.net.dto.SettingsAdminDto
+import pm.antani.resentin.net.dto.UploadAdminDto
+import pm.antani.resentin.net.dto.UploadSettingsAdminDto
 import pm.antani.resentin.net.dto.UserAdminDto
 import pm.antani.resentin.net.dto.UserAdminFlagsRequestDto
 import pm.antani.resentin.net.dto.UserCreateRequestDto
 import pm.antani.resentin.net.dto.UserPasswordRequestDto
 import pm.antani.resentin.net.dto.VhostAdminDto
 import pm.antani.resentin.net.dto.VhostCreateRequestDto
+import pm.antani.resentin.net.dto.VhostsAdminEnvelopeDto
 import pm.antani.resentin.net.dto.VisitorAdminDto
 import pm.antani.resentin.net.rest.AdminApi
 
@@ -65,16 +73,23 @@ class AdminRepository(private val authRepository: AuthRepository) {
         check(response.isSuccessful) { "HTTP ${response.code()}" }
     }
 
+    suspend fun getServers(networkId: Int): Result<List<ServerAdminDto>> = runCatching { api().getServers(networkId).servers }
+
     suspend fun createServer(networkId: Int, host: String, port: Int, tls: Boolean): Result<ServerAdminDto> = runCatching {
         val response = api().createServer(networkId, ServerCreateRequestDto(host, port, tls))
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         checkNotNull(response.body())
     }
 
-    suspend fun getVhosts(): Result<List<VhostAdminDto>> = runCatching { api().getVhosts().vhosts }
+    suspend fun deleteServer(networkId: Int, id: Int): Result<Unit> = runCatching {
+        val response = api().deleteServer(networkId, id)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
 
-    suspend fun createVhost(address: String): Result<VhostAdminDto> = runCatching {
-        val response = api().createVhost(VhostCreateRequestDto(address = address))
+    suspend fun getVhosts(): Result<VhostsAdminEnvelopeDto> = runCatching { api().getVhosts() }
+
+    suspend fun createVhost(address: String, inPool: Boolean, generallyAvailable: Boolean): Result<VhostAdminDto> = runCatching {
+        val response = api().createVhost(VhostCreateRequestDto(address, inPool, generallyAvailable))
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         checkNotNull(response.body())
     }
@@ -133,4 +148,75 @@ class AdminRepository(private val authRepository: AuthRepository) {
         check(response.isSuccessful) { "HTTP ${response.code()}" }
         checkNotNull(response.body())
     }
+
+    // --- Credentials (per-user network access) -------------------------------
+
+    suspend fun getCredentials(): Result<List<CredentialAdminDto>> = runCatching { api().getCredentials().credentials }
+
+    suspend fun createCredential(
+        userId: String,
+        networkId: Int,
+        nick: String,
+        authMethod: String,
+        password: String?,
+    ): Result<CredentialAdminDto> = runCatching {
+        val response = api().createCredential(CredentialCreateRequestDto(userId, networkId, nick, authMethod, password))
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+        checkNotNull(response.body())
+    }
+
+    suspend fun deleteCredential(userId: String, networkId: Int): Result<Unit> = runCatching {
+        val response = api().deleteCredential(userId, networkId)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
+
+    // --- Settings (upload + addressing) --------------------------------------
+
+    suspend fun getSettings(): Result<SettingsAdminDto> = runCatching { api().getSettings().settings }
+
+    /** Every field always sent explicitly (`null` = clear), same three-valued
+     * reasoning as [updateNetwork] — see [pm.antani.resentin.net.rest.AdminApi.updateSettings]. */
+    suspend fun updateSettings(upload: UploadSettingsAdminDto, addressing: AddressingSettingsAdminDto): Result<SettingsAdminDto> =
+        runCatching {
+            val body = buildJsonObject {
+                put(
+                    "upload",
+                    buildJsonObject {
+                        put("active_host", upload.activeHost)
+                        put("image_per_file_cap_bytes", upload.imagePerFileCapBytes?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("video_per_file_cap_bytes", upload.videoPerFileCapBytes?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("document_per_file_cap_bytes", upload.documentPerFileCapBytes?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("audio_per_file_cap_bytes", upload.audioPerFileCapBytes?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("global_cap_bytes", upload.globalCapBytes?.let { JsonPrimitive(it) } ?: JsonNull)
+                        put("video_max_duration_seconds", upload.videoMaxDurationSeconds?.let { JsonPrimitive(it) } ?: JsonNull)
+                    },
+                )
+                put(
+                    "addressing",
+                    buildJsonObject {
+                        put("mode", addressing.mode)
+                        put("static_mapping_prefix", addressing.staticMappingPrefix?.let { JsonPrimitive(it) } ?: JsonNull)
+                    },
+                )
+            }
+            val response = api().updateSettings(body)
+            check(response.isSuccessful) { "HTTP ${response.code()}" }
+            checkNotNull(response.body()).settings
+        }
+
+    // --- Uploads registry ------------------------------------------------------
+
+    suspend fun getUploads(): Result<List<UploadAdminDto>> = runCatching { api().getUploads().uploads }
+
+    suspend fun deleteUpload(id: Int): Result<Unit> = runCatching {
+        val response = api().deleteUpload(id)
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
+
+    // --- Session log -------------------------------------------------------------
+
+    suspend fun getSessionLog(limit: Int? = null): Result<List<SessionLogEntryDto>> = runCatching { api().getSessionLog(limit).sessionLog }
+
+    suspend fun getSessionLogSessions(limit: Int? = null): Result<List<SessionLogEntryDto>> =
+        runCatching { api().getSessionLogSessions(limit).sessionLogSessions }
 }

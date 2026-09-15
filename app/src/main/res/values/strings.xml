@@ -144,6 +144,8 @@
     <string name="admin_tab_users">Utenti</string>
     <string name="admin_tab_sessions">Sessioni</string>
     <string name="admin_tab_visitors">Visitor</string>
+    <string name="admin_tab_settings">Impostazioni</string>
+    <string name="admin_tab_session_log">Log sessioni</string>
     <string name="admin_create">Crea</string>
     <string name="admin_action_create_network">Crea rete</string>
     <string name="admin_action_create_vhost">Crea vhost</string>
@@ -152,6 +154,11 @@
     <string name="admin_network_caps">max utenti %1$d · max visitor %2$d (-1 = illimitato)</string>
     <string name="admin_network_visitors_label">Visitor</string>
     <string name="admin_add_server">Aggiungi server</string>
+    <string name="admin_toggle_servers">Mostra/nascondi server</string>
+    <string name="admin_servers_empty">Nessun server configurato</string>
+    <string name="admin_server_disabled">disattivo</string>
+    <string name="admin_delete_server_title">Rimuovi server</string>
+    <string name="admin_delete_server_confirm">Rimuovere %1$s da questa rete?</string>
     <string name="admin_edit_network">Modifica rete</string>
     <string name="admin_edit_network_title">Modifica %1$s</string>
     <string name="admin_network_autoconnect_label">Autoconnessione visitor</string>
@@ -172,6 +179,9 @@
     <string name="admin_vhost_available">disponibile a tutti</string>
     <string name="admin_new_vhost_title">Nuovo vhost</string>
     <string name="admin_new_vhost_hint">indirizzo</string>
+    <string name="admin_vhost_pick_address">Indirizzo (misurato dal server)</string>
+    <string name="admin_vhost_in_pool_label">Nel pool di rotazione outbound</string>
+    <string name="admin_vhost_generally_available_label">Disponibile in generale</string>
     <string name="admin_delete_vhost_title">Elimina vhost</string>
     <string name="admin_delete_vhost_confirm">Eliminare %1$s? Le eventuali assegnazioni verranno revocate.</string>
     <string name="admin_users_empty">Nessun utente</string>
@@ -182,6 +192,13 @@
     <string name="admin_user_password_hint">password</string>
     <string name="admin_delete_user_title">Elimina utente</string>
     <string name="admin_delete_user_confirm">Eliminare definitivamente %1$s?</string>
+    <string name="admin_manage_networks">Gestisci reti</string>
+    <string name="admin_manage_networks_title">Reti di %1$s</string>
+    <string name="admin_rotate_password">Cambia password</string>
+    <string name="admin_rotate_password_title">Cambia password di %1$s</string>
+    <string name="admin_new_password_label">Nuova password</string>
+    <string name="admin_unbind_network_title">Rimuovi accesso alla rete</string>
+    <string name="admin_unbind_network_confirm">Rimuovere l\'accesso di questo utente a %1$s? La sessione IRC verrà chiusa.</string>
     <string name="admin_sessions_empty">Nessuna sessione attiva</string>
     <string name="admin_session_meta">%1$s · %2$s · %3$s</string>
     <string name="admin_session_disconnect">Disconnetti</string>
@@ -193,6 +210,23 @@
     <string name="admin_delete_visitor_confirm">Eliminare il visitor %1$s?</string>
     <string name="admin_sweep_now">Sweep visitor ora</string>
     <string name="admin_sweep_result">Rimossi %1$d visitor scaduti</string>
+
+    <string name="admin_settings_empty">Impostazioni non disponibili</string>
+    <string name="admin_settings_upload_title">Upload file</string>
+    <string name="admin_settings_active_host_label">Host attivo</string>
+    <string name="admin_settings_image_cap_label">Limite immagini (byte)</string>
+    <string name="admin_settings_video_cap_label">Limite video (byte)</string>
+    <string name="admin_settings_document_cap_label">Limite documenti (byte)</string>
+    <string name="admin_settings_audio_cap_label">Limite audio (byte)</string>
+    <string name="admin_settings_global_cap_label">Limite globale (byte)</string>
+    <string name="admin_settings_video_duration_label">Durata massima video (secondi)</string>
+    <string name="admin_settings_addressing_title">Indirizzamento</string>
+    <string name="admin_settings_static_prefix_label">Prefisso mappatura statica</string>
+    <string name="admin_uploads_title">File caricati</string>
+    <string name="admin_uploads_empty">Nessun file caricato</string>
+    <string name="admin_delete_upload_title">Elimina file</string>
+    <string name="admin_delete_upload_confirm">Eliminare %1$s?</string>
+    <string name="admin_session_log_empty">Nessun evento registrato</string>
 
     <!-- Chat -->
     <string name="cd_members">Membri</string>

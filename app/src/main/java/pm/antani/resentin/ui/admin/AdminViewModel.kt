@@ -10,13 +10,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pm.antani.resentin.domain.repository.AdminRepository
+import pm.antani.resentin.net.dto.AddressingSettingsAdminDto
+import pm.antani.resentin.net.dto.CredentialAdminDto
 import pm.antani.resentin.net.dto.NetworkAdminDto
+import pm.antani.resentin.net.dto.ServerAdminDto
 import pm.antani.resentin.net.dto.SessionAdminDto
+import pm.antani.resentin.net.dto.SessionLogEntryDto
+import pm.antani.resentin.net.dto.SettingsAdminDto
+import pm.antani.resentin.net.dto.UploadAdminDto
+import pm.antani.resentin.net.dto.UploadSettingsAdminDto
 import pm.antani.resentin.net.dto.UserAdminDto
 import pm.antani.resentin.net.dto.VhostAdminDto
 import pm.antani.resentin.net.dto.VisitorAdminDto
 
-enum class AdminTab { NETWORKS, VHOSTS, USERS, SESSIONS, VISITORS }
+enum class AdminTab { NETWORKS, VHOSTS, USERS, SESSIONS, VISITORS, SETTINGS, SESSION_LOG }
 
 data class AdminUiState(
     val tab: AdminTab = AdminTab.NETWORKS,
@@ -28,6 +35,25 @@ data class AdminUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val lastSweepCount: Int? = null,
+    // Per-network server list: no GET /admin/networks/servers surface — the
+    // list is per-network (GET /admin/networks/{id}/servers), so it's fetched
+    // lazily on expand rather than N+1'd upfront for every network.
+    val expandedNetworkIds: Set<Int> = emptySet(),
+    val serversByNetworkId: Map<Int, List<ServerAdminDto>> = emptyMap(),
+    val vhostHostCandidates: List<String> = emptyList(),
+    // Per-user network access (issue: "can't manage a user's networks"). Flat,
+    // server-wide list (GET /admin/credentials has no per-user filter) — the
+    // "manage networks" dialog filters client-side by user id.
+    val credentials: List<CredentialAdminDto> = emptyList(),
+    val managingNetworksForUser: UserAdminDto? = null,
+    // Settings + uploads registry — lazy-loaded on first visit to the tab
+    // rather than upfront, like the per-network server lists.
+    val settings: SettingsAdminDto? = null,
+    val uploads: List<UploadAdminDto> = emptyList(),
+    val settingsLoaded: Boolean = false,
+    // Session log — same lazy-on-first-visit loading.
+    val sessionLog: List<SessionLogEntryDto> = emptyList(),
+    val sessionLogLoaded: Boolean = false,
 )
 
 class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel() {
@@ -39,7 +65,11 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
         refreshAll()
     }
 
-    fun selectTab(tab: AdminTab) = _uiState.update { it.copy(tab = tab) }
+    fun selectTab(tab: AdminTab) {
+        _uiState.update { it.copy(tab = tab) }
+        if (tab == AdminTab.SETTINGS && !_uiState.value.settingsLoaded) refreshSettings()
+        if (tab == AdminTab.SESSION_LOG && !_uiState.value.sessionLogLoaded) refreshSessionLog()
+    }
 
     fun consumeError() = _uiState.update { it.copy(error = null) }
 
@@ -51,15 +81,18 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
             val users = adminRepository.getUsers()
             val sessions = adminRepository.getSessions()
             val visitors = adminRepository.getVisitors()
+            val credentials = adminRepository.getCredentials()
             _uiState.update {
                 it.copy(
                     networks = networks.getOrDefault(it.networks),
-                    vhosts = vhosts.getOrDefault(it.vhosts),
+                    vhosts = vhosts.getOrNull()?.vhosts ?: it.vhosts,
+                    vhostHostCandidates = vhosts.getOrNull()?.hostCandidates ?: it.vhostHostCandidates,
                     users = users.getOrDefault(it.users),
                     sessions = sessions.getOrDefault(it.sessions),
                     visitors = visitors.getOrDefault(it.visitors),
+                    credentials = credentials.getOrDefault(it.credentials),
                     isLoading = false,
-                    error = listOf(networks, vhosts, users, sessions, visitors)
+                    error = listOf(networks, vhosts, users, sessions, visitors, credentials)
                         .firstNotNullOfOrNull { r -> r.exceptionOrNull()?.message },
                 )
             }
@@ -126,6 +159,47 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
         if (host.isBlank()) return
         viewModelScope.launch {
             adminRepository.createServer(networkId, host, port, tls)
+                .onSuccess { server ->
+                    _uiState.update { state ->
+                        state.copy(
+                            expandedNetworkIds = state.expandedNetworkIds + networkId,
+                            serversByNetworkId = state.serversByNetworkId +
+                                (networkId to (state.serversByNetworkId[networkId].orEmpty() + server)),
+                        )
+                    }
+                }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    /** Toggles the per-network server list open/closed, fetching it on first
+     * expand — there's no bulk GET, only GET /admin/networks/{id}/servers. */
+    fun toggleNetworkServers(network: NetworkAdminDto) {
+        val expanded = _uiState.value.expandedNetworkIds
+        if (network.id in expanded) {
+            _uiState.update { it.copy(expandedNetworkIds = expanded - network.id) }
+            return
+        }
+        _uiState.update { it.copy(expandedNetworkIds = expanded + network.id) }
+        if (network.id in _uiState.value.serversByNetworkId) return
+        viewModelScope.launch {
+            adminRepository.getServers(network.id)
+                .onSuccess { servers -> _uiState.update { it.copy(serversByNetworkId = it.serversByNetworkId + (network.id to servers)) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    fun removeServer(networkId: Int, server: ServerAdminDto) {
+        viewModelScope.launch {
+            adminRepository.deleteServer(networkId, server.id)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            serversByNetworkId = state.serversByNetworkId +
+                                (networkId to state.serversByNetworkId[networkId].orEmpty().filter { it.id != server.id }),
+                        )
+                    }
+                }
                 .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
         }
     }
@@ -136,10 +210,13 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
 
     // --- Vhosts -----------------------------------------------------------
 
-    fun createVhost(address: String) {
+    fun createVhost(address: String, inPool: Boolean, generallyAvailable: Boolean) {
         if (address.isBlank()) return
         viewModelScope.launch {
-            adminRepository.createVhost(address)
+            // #228 rule mirrored client-side: in_pool implies generally_available
+            // (a source drawn into the outbound rotation is, by construction, one
+            // any auto-allocated session may pick).
+            adminRepository.createVhost(address, inPool, generallyAvailable || inPool)
                 .onSuccess { vhost -> _uiState.update { it.copy(vhosts = it.vhosts + vhost) } }
                 .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
         }
@@ -177,6 +254,84 @@ class AdminViewModel(private val adminRepository: AdminRepository) : ViewModel()
             adminRepository.deleteUser(user.id)
                 .onSuccess { _uiState.update { it.copy(users = it.users.filter { u -> u.id != user.id }) } }
                 .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    fun rotateUserPassword(user: UserAdminDto, newPassword: String) {
+        if (newPassword.isBlank()) return
+        viewModelScope.launch {
+            adminRepository.setUserPassword(user.id, newPassword)
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    // --- Credentials (per-user network access) -------------------------------
+
+    fun openManageNetworks(user: UserAdminDto) = _uiState.update { it.copy(managingNetworksForUser = user) }
+
+    fun closeManageNetworks() = _uiState.update { it.copy(managingNetworksForUser = null) }
+
+    fun bindNetwork(user: UserAdminDto, network: NetworkAdminDto, nick: String, authMethod: String, password: String?) {
+        if (nick.isBlank()) return
+        viewModelScope.launch {
+            adminRepository.createCredential(user.id, network.id, nick, authMethod, password?.ifBlank { null })
+                .onSuccess { credential -> _uiState.update { it.copy(credentials = it.credentials + credential) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    fun unbindNetwork(user: UserAdminDto, network: NetworkAdminDto) {
+        viewModelScope.launch {
+            adminRepository.deleteCredential(user.id, network.id)
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(credentials = state.credentials.filterNot { it.userId == user.id && it.networkId == network.id })
+                    }
+                }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    // --- Settings + uploads ------------------------------------------------------
+
+    fun refreshSettings() {
+        viewModelScope.launch {
+            val settings = adminRepository.getSettings()
+            val uploads = adminRepository.getUploads()
+            _uiState.update {
+                it.copy(
+                    settings = settings.getOrNull() ?: it.settings,
+                    uploads = uploads.getOrDefault(it.uploads),
+                    settingsLoaded = true,
+                    error = listOf(settings, uploads).firstNotNullOfOrNull { r -> r.exceptionOrNull()?.message },
+                )
+            }
+        }
+    }
+
+    fun updateSettings(upload: UploadSettingsAdminDto, addressing: AddressingSettingsAdminDto) {
+        viewModelScope.launch {
+            adminRepository.updateSettings(upload, addressing)
+                .onSuccess { updated -> _uiState.update { it.copy(settings = updated) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    fun deleteUpload(upload: UploadAdminDto) {
+        viewModelScope.launch {
+            adminRepository.deleteUpload(upload.id)
+                .onSuccess { _uiState.update { it.copy(uploads = it.uploads.filter { u -> u.id != upload.id }) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+        }
+    }
+
+    // --- Session log -------------------------------------------------------------
+
+    fun refreshSessionLog() {
+        viewModelScope.launch {
+            adminRepository.getSessionLog()
+                .onSuccess { entries -> _uiState.update { it.copy(sessionLog = entries, sessionLogLoaded = true) } }
+                .onFailure { error -> _uiState.update { it.copy(error = error.message, sessionLogLoaded = true) } }
         }
     }
 
