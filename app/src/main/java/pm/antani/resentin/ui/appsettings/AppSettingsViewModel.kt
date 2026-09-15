@@ -68,7 +68,10 @@ class AppSettingsViewModel(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AppSettingsUiState())
-    private val coloredNicklistSaveMutex = Mutex()
+    // Guards every full-object display-prefs PUT (both toggles below write the
+    // whole object, so they must serialize against each other, not just
+    // against themselves — otherwise two quick toggles lose one write).
+    private val displayPrefsSaveMutex = Mutex()
     val uiState: StateFlow<AppSettingsUiState> = _uiState.asStateFlow()
 
     private val _messageDbSizeBytes = MutableStateFlow(0L)
@@ -199,6 +202,7 @@ class AppSettingsViewModel(
                 )
             }
             appPreferences.setColoredNicklist(prefs.coloredNicklist)
+            appPreferences.setStripFormatting(prefs.stripFormatting)
         }
         viewModelScope.launch {
             authRepository.getMe().onSuccess { me -> _uiState.update { it.copy(isAdmin = me.isAdmin) } }
@@ -419,19 +423,43 @@ class AppSettingsViewModel(
     }
 
     fun toggleColoredNicklist() {
+        toggleDisplayPrefsField(
+            transform = { it.copy(coloredNicklist = !it.coloredNicklist) },
+            syncMirror = { serverPrefs -> appPreferences.setColoredNicklist(serverPrefs.coloredNicklist) },
+            rollbackMirror = { previous -> appPreferences.setColoredNicklist(previous.coloredNicklist) },
+        )
+    }
+
+    /** #2029 — same full-object round-trip as [toggleColoredNicklist]: the one
+     * shared [displayPrefsSaveMutex] keeps the two toggles from clobbering each
+     * other, and the untouched fields (presence_filter, show_bottom_bar, ...) ride
+     * along so a cicchetto choice is never reset by a toggle from this client. */
+    fun toggleStripFormatting() {
+        toggleDisplayPrefsField(
+            transform = { it.copy(stripFormatting = !it.stripFormatting) },
+            syncMirror = { serverPrefs -> appPreferences.setStripFormatting(serverPrefs.stripFormatting) },
+            rollbackMirror = { previous -> appPreferences.setStripFormatting(previous.stripFormatting) },
+        )
+    }
+
+    private fun toggleDisplayPrefsField(
+        transform: (DisplayPrefsDto) -> DisplayPrefsDto,
+        syncMirror: suspend (DisplayPrefsDto) -> Unit,
+        rollbackMirror: suspend (DisplayPrefsDto) -> Unit,
+    ) {
         // Round-trip the full object — the server rejects a PUT missing fields like
         // presence_filter even when they're unrelated to this toggle.
         val previous = _uiState.value.displayPrefs
-        val updated = previous.copy(coloredNicklist = !previous.coloredNicklist)
+        val updated = transform(previous)
         _uiState.update { it.copy(displayPrefs = updated, error = null) }
         viewModelScope.launch {
-            coloredNicklistSaveMutex.withLock {
+            displayPrefsSaveMutex.withLock {
                 userSettingsRepository.updateDisplayPrefs(updated)
                     .onSuccess { serverPrefs ->
                         // Persist the local mirror only after the server accepted the
                         // change. The server response is authoritative if it normalizes
                         // any part of the full display-prefs object.
-                        appPreferences.setColoredNicklist(serverPrefs.coloredNicklist)
+                        syncMirror(serverPrefs)
                         _uiState.update { state ->
                             if (state.displayPrefs == updated) {
                                 state.copy(displayPrefs = serverPrefs, error = null)
@@ -451,7 +479,7 @@ class AppSettingsViewModel(
                         // Do not overwrite a newer toggle, but roll back the local
                         // mirror when this request still represents the visible state.
                         if (_uiState.value.displayPrefs == previous) {
-                            appPreferences.setColoredNicklist(previous.coloredNicklist)
+                            rollbackMirror(previous)
                         }
                     }
             }

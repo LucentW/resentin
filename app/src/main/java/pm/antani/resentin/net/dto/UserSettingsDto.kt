@@ -14,6 +14,15 @@ data class DisplayPrefsDto(
     // The server rejects a PUT missing this field ("presence_filter must be a map"),
     // so it must round-trip even though this client doesn't yet expose editing it.
     val presenceFilter: Map<String, String> = emptyMap(),
+    // #2029 — strip mIRC formatting on render (opt-in, off by default so colors
+    // keep working until the reader asks them to stop).
+    val stripFormatting: Boolean = false,
+    // #1766 — mobile window bar (opt-OUT, default shown). No native equivalent yet,
+    // but it must round-trip: omitting it would reset a cicchetto choice on every
+    // full-map PUT from this client.
+    val showBottomBar: Boolean = true,
+    // #2037 — sidebar events pill (opt-in). Same round-trip reasoning as above.
+    val showEventBadge: Boolean = false,
 )
 
 @Serializable

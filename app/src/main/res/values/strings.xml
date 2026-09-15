@@ -353,6 +353,8 @@
     <string name="settings_stay_connected">Resta connesso in background</string>
     <string name="settings_stay_connected_desc">Mantiene la connessione attiva e mostra notifiche per i messaggi privati e le menzioni</string>
     <string name="settings_colored_nicklist">Nick colorati</string>
+    <string name="settings_strip_formatting">Nascondi formattazione mIRC</string>
+    <string name="settings_strip_formatting_desc">Mostra colori, grassetto e sottolineature dei messaggi come testo semplice</string>
     <string name="settings_reply_style_title">Comportamento di risposta</string>
     <string name="settings_reply_style_nick">Nick</string>
     <string name="settings_reply_style_quote">Citazione</string>

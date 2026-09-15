@@ -1,6 +1,7 @@
 package pm.antani.resentin.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import pm.antani.resentin.ui.archive.ArchiveScreen
 import pm.antani.resentin.ui.archive.ArchiveViewModel
 import pm.antani.resentin.ui.chat.ChatScreen
 import pm.antani.resentin.ui.chat.ChatViewModel
+import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.directory.DirectoryScreen
 import pm.antani.resentin.ui.directory.DirectoryViewModel
 import pm.antani.resentin.ui.home.HomeScreen
@@ -109,6 +111,11 @@ fun AppRoot(
         navController.navigate("chat/$networkSlug/${encode(nick)}")
     }
 
+    // #2029 — the server-owned strip-mIRC pref, provided app-wide from the local
+    // mirror so every MircText and transcript row follows it (a cicchetto user who
+    // turned colors off no longer gets them back here).
+    val stripFormatting by container.appPreferences.stripFormatting.collectAsState(initial = false)
+    CompositionLocalProvider(LocalStripMircFormatting provides stripFormatting) {
     NavHost(
         navController = navController,
         startDestination = ROUTE_HOME,
@@ -434,5 +441,6 @@ fun AppRoot(
                 },
             )
         }
+    }
     }
 }

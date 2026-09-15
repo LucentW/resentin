@@ -102,8 +102,16 @@ val LocalDccFileDownloadHandler = staticCompositionLocalOf<(path: String, filena
  * for contexts that need plain text (a reply-quote preview), not a styled [AnnotatedString]. */
 fun stripMircCodes(text: String): String = MircParser.parse(text).joinToString("") { it.text }
 
-fun mircAnnotatedString(text: String, lightTheme: Boolean = false): AnnotatedString = buildAnnotatedString {
-    MircParser.parse(text).forEach { span ->
+/** Server-owned `#2029` pref (see `DisplayPrefsDto.stripFormatting`): when true every
+ * surface below renders mIRC-coded text as plain text instead. A CompositionLocal —
+ * provided once in AppRoot from the local mirror, so chat transcript, topics, home
+ * previews and directory all follow it without threading a boolean through every row
+ * composable (same shape as [LocalDccFileDownloadHandler]). */
+val LocalStripMircFormatting = staticCompositionLocalOf { false }
+
+fun mircAnnotatedString(text: String, lightTheme: Boolean = false, stripFormatting: Boolean = false): AnnotatedString = buildAnnotatedString {
+    val spans = if (stripFormatting) listOf(MircSpan(text = stripMircCodes(text))) else MircParser.parse(text)
+    spans.forEach { span ->
         // An explicitly dark background (e.g. white-on-black highlights) keeps the
         // dark-theme foreground: remapping it for a light surface would print dark
         // on black. Only spans on a light/absent background get the light palette.
@@ -169,11 +177,12 @@ fun MircText(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
     enableLinks: Boolean = true,
+    stripFormatting: Boolean = LocalStripMircFormatting.current,
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
-    val annotated = remember(text, enableLinks, lightTheme, dccFileHandler) {
-        val parsed = mircAnnotatedString(text, lightTheme)
+    val annotated = remember(text, enableLinks, lightTheme, dccFileHandler, stripFormatting) {
+        val parsed = mircAnnotatedString(text, lightTheme, stripFormatting)
         if (enableLinks) withClickableLinks(parsed, linkStylesFor(lightTheme), dccFileHandler) else parsed
     }
     Text(text = annotated, modifier = modifier, style = style, color = color, maxLines = maxLines, overflow = overflow)
