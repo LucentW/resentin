@@ -57,6 +57,7 @@ import pm.antani.resentin.ui.common.stripMircCodes
 
 sealed interface ChatCommandEffect {
     data class OpenChannel(val channelName: String) : ChatCommandEffect
+    data class ConfirmChannelJoin(val channelName: String) : ChatCommandEffect
     data object CloseChat : ChatCommandEffect
     data object OpenChannelSettings : ChatCommandEffect
     data object OpenAppSettings : ChatCommandEffect
@@ -427,6 +428,34 @@ class ChatViewModel(
 
     fun onDraftChange(text: String) {
         setDraft(text)
+    }
+
+    /** Open joined channels directly; ask before joining a channel mentioned in chat. */
+    fun requestOpenChannelFromReference(target: String) {
+        if (!isChannelName(target)) return
+        viewModelScope.launch {
+            val isJoined = networksRepository.networksWithChannels.first()
+                .firstOrNull { it.network.slug.equals(networkSlug, ignoreCase = true) }
+                ?.channels
+                ?.any { it.joined && canonicalTarget(it.name) == canonicalTarget(target) } == true
+            _commandEffects.emit(
+                if (isJoined) ChatCommandEffect.OpenChannel(target)
+                else ChatCommandEffect.ConfirmChannelJoin(target),
+            )
+        }
+    }
+
+    /** The user confirmed the prompt shown for an unjoined channel reference. */
+    fun confirmChannelJoinFromReference(target: String) {
+        if (!isChannelName(target)) return
+        viewModelScope.launch {
+            runCatching {
+                channelReady.await()
+                networksRepository.joinChannel(networkSlug, target).getOrThrow()
+            }.onSuccess {
+                _commandEffects.emit(ChatCommandEffect.OpenChannel(target))
+            }.onFailure { postError(it.message) }
+        }
     }
 
     private fun setDraft(text: String) {

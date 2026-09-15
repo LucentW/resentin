@@ -241,6 +241,8 @@
     <string name="cd_expand_topic">Expand topic</string>
     <string name="cd_collapse_topic">Collapse topic</string>
     <string name="chat_dialog_close">Close</string>
+    <string name="chat_channel_link_join_title">Join channel?</string>
+    <string name="chat_channel_link_join_body">You are not currently in %1$s. Do you want to join?</string>
     <string name="chat_dcc_offer_title">Incoming file (DCC)</string>
     <string name="chat_dcc_offer_body">%1$s wants to send you %2$s (%3$s)</string>
     <string name="chat_dcc_offer_accept">Accept</string>

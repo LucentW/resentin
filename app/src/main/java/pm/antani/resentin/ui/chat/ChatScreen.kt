@@ -86,6 +86,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -147,10 +148,12 @@ import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
+import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.domain.repository.PendingDccOffer
 import pm.antani.resentin.ui.common.LocalDccFileDownloadHandler
+import pm.antani.resentin.ui.common.LocalIrcChannelLinkHandler
 import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.stripMircCodes
@@ -348,6 +351,14 @@ fun ChatScreen(
         viewModel.onDraftChange(completion.text)
         draftFocusRequester.requestFocus()
     }
+    val openReferencedChannel = remember(channelName, viewModel) {
+        { referencedChannel: String ->
+            if (canonicalTarget(referencedChannel) != canonicalTarget(channelName)) {
+                viewModel.requestOpenChannelFromReference(referencedChannel)
+            }
+        }
+    }
+
     val displayMode by viewModel.chatDisplayMode.collectAsState()
     val messageDensity by viewModel.messageDensity.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
@@ -377,6 +388,7 @@ fun ChatScreen(
     // Do not briefly compose the list at index 0 and then jump to the unread divider.
     // The first LazyColumn is created with the final landing index already applied.
     var topicExpanded by remember(networkSlug, channelName) { mutableStateOf(false) }
+    var channelJoinConfirmation by remember(networkSlug, channelName) { mutableStateOf<String?>(null) }
     var showChannelMenu by remember { mutableStateOf(false) }
     var expandedPresenceBursts by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var showActivitySheet by remember { mutableStateOf(false) }
@@ -409,6 +421,7 @@ fun ChatScreen(
         viewModel.commandEffects.collect { effect ->
             when (effect) {
                 is ChatCommandEffect.OpenChannel -> onOpenChannel(networkSlug, effect.channelName)
+                is ChatCommandEffect.ConfirmChannelJoin -> channelJoinConfirmation = effect.channelName
                 ChatCommandEffect.CloseChat -> onBack()
                 ChatCommandEffect.OpenChannelSettings -> onSettingsClick()
                 ChatCommandEffect.OpenAppSettings -> onAppSettings()
@@ -582,6 +595,9 @@ fun ChatScreen(
             .collect { index -> if (index == 0 && messages.isNotEmpty()) viewModel.loadOlder() }
     }
 
+    CompositionLocalProvider(
+        LocalIrcChannelLinkHandler provides openReferencedChannel,
+    ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -1348,6 +1364,43 @@ fun ChatScreen(
         }
     }
 
+    channelJoinConfirmation?.let { target ->
+        AlertDialog(
+            onDismissRequest = { channelJoinConfirmation = null },
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            title = {
+                Text(
+                    stringResource(R.string.chat_channel_link_join_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.chat_channel_link_join_body, target),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        channelJoinConfirmation = null
+                        viewModel.confirmChannelJoinFromReference(target)
+                    },
+                ) {
+                    Text(stringResource(R.string.home_new_chat_join))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { channelJoinConfirmation = null }) {
+                    Text(stringResource(R.string.cd_cancel))
+                }
+            },
+        )
+    }
+
     if (showActivitySheet) {
         val activityMessages = remember(allMessages, activityFilter) {
             allMessages.asReversed().filter { message ->
@@ -1610,6 +1663,7 @@ fun ChatScreen(
         )
     }
 
+
     // #1883 — pre-upload confirm (opt-in, server-side). The staged file goes out
     // only on Send, with the TTL picked here (a per-batch choice, not saved).
     val stagedUpload = pendingUpload
@@ -1621,6 +1675,7 @@ fun ChatScreen(
             onConfirm = viewModel::confirmPendingUpload,
             onDismiss = viewModel::dismissPendingUpload,
         )
+    }
     }
 }
 
@@ -2366,6 +2421,7 @@ private fun buildNickLine(
     lightTheme: Boolean = false,
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
     stripFormatting: Boolean = false,
+    onChannelClick: ((channelName: String) -> Unit)? = null,
 ) = buildAnnotatedString {
     append(before)
     append(prefix)
@@ -2375,7 +2431,7 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick))
+    append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick, onChannelClick))
 }
 
 private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
@@ -2442,6 +2498,7 @@ private fun BubbleRow(
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
     val stripFormatting = LocalStripMircFormatting.current
+    val channelClickHandler = LocalIrcChannelLinkHandler.current
     val timestampStyle = SpanStyle(
         fontSize = 11.sp,
         fontStyle = FontStyle.Normal,
@@ -2454,12 +2511,12 @@ private fun BubbleRow(
     val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }
-    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting) {
+    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler))
+            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2467,7 +2524,7 @@ private fun BubbleRow(
         }
     }
     val actionWithTime = remember(
-        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting,
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler,
     ) {
         buildAnnotatedString {
             if (continuesGroup) {
@@ -2484,12 +2541,13 @@ private fun BubbleRow(
                         lightTheme = lightTheme,
                         onDccFileClick = dccFileHandler,
                         stripFormatting = stripFormatting,
+                        onChannelClick = channelClickHandler,
                     ),
                 )
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler))
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2644,13 +2702,14 @@ private fun IrcLineRow(
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
     val stripFormatting = LocalStripMircFormatting.current
+    val channelClickHandler = LocalIrcChannelLinkHandler.current
     val annotated = remember(
-        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting,
+        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler,
     ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
         }
     }
     val body: @Composable () -> Unit = {
