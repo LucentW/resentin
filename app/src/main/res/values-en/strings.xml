@@ -250,6 +250,14 @@
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="cd_reply">Reply</string>
     <string name="chat_upload_failed">Unable to read the file</string>
+    <string name="chat_upload_confirm_title">Send to %1$s?</string>
+    <string name="chat_upload_confirm_body">Each file below is uploaded and its link is posted there. This cannot be taken back.</string>
+    <string name="chat_upload_ttl_label">Delete after</string>
+    <string name="chat_upload_ttl_1h">1 hour</string>
+    <string name="chat_upload_ttl_12h">12 hours</string>
+    <string name="chat_upload_ttl_24h">24 hours</string>
+    <string name="chat_upload_ttl_72h">72 hours</string>
+    <string name="chat_upload_ttl_custom">%1$d s</string>
     <string name="chat_slash_syntax_me">/me &lt;text&gt;</string>
     <string name="chat_slash_syntax_join">/join &lt;#channel&gt;</string>
     <string name="chat_slash_syntax_part">/part [#channel]</string>
@@ -366,6 +374,12 @@
     <string name="settings_show_hostmask_desc">Shows [ident@host] next to the nick on join/part/quit events, when the server provides one</string>
     <string name="settings_unread_first">Unread first</string>
     <string name="settings_unread_first_desc">Channels with unread messages move up, below pinned ones</string>
+    <string name="settings_upload_title">File uploads</string>
+    <string name="settings_upload_confirm">Ask before sending</string>
+    <string name="settings_upload_confirm_desc">Show a confirmation with a preview before a file is uploaded and posted to chat</string>
+    <string name="settings_upload_ttl_title">Upload retention</string>
+    <string name="settings_upload_ttl_desc">How long uploaded files stay on the server before being deleted</string>
+    <string name="settings_upload_ttl_default">Site default</string>
     <string name="settings_font_size">Text size</string>
     <string name="settings_font_size_preview">Preview: how text looks in chat</string>
     <string name="settings_language">Language</string>

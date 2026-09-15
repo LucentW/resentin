@@ -6,6 +6,8 @@ import pm.antani.resentin.net.dto.AutoAwayDebounceDto
 import pm.antani.resentin.net.dto.NotificationPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.ShowPeerProfilesDto
+import pm.antani.resentin.net.dto.UploadConfirmEnabledDto
+import pm.antani.resentin.net.dto.UploadTtlSecondsDto
 import pm.antani.resentin.net.dto.VhostSelectionUpdateDto
 import pm.antani.resentin.net.dto.VhostSettingsDto
 import retrofit2.http.Body
@@ -64,4 +66,23 @@ interface UserSettingsApi {
 
     @PUT("me/settings/show-peer-profiles")
     suspend fun updateShowPeerProfiles(@Body body: ShowPeerProfilesDto): ShowPeerProfilesDto
+
+    /** #2095 — the stored upload-TTL preference (`null` = site default).
+     * See [UploadTtlSecondsDto]. */
+    @GET("me/settings/upload-ttl-seconds")
+    suspend fun getUploadTtlSeconds(): UploadTtlSecondsDto
+
+    /** Body is a hand-built [JsonObject] (not [UploadTtlSecondsDto]) because
+     * `null` here is a real state — "clear to site default" — and the shared
+     * `AppJson` config's `explicitNulls = false` would drop the key for a normal
+     * data-class body (same trap as [updateAutoAwayDebounce]). */
+    @PUT("me/settings/upload-ttl-seconds")
+    suspend fun updateUploadTtlSeconds(@Body body: JsonObject): UploadTtlSecondsDto
+
+    /** #1883 — the pre-upload confirm opt-in. See [UploadConfirmEnabledDto]. */
+    @GET("me/settings/upload-confirm-enabled")
+    suspend fun getUploadConfirmEnabled(): UploadConfirmEnabledDto
+
+    @PUT("me/settings/upload-confirm-enabled")
+    suspend fun updateUploadConfirmEnabled(@Body body: UploadConfirmEnabledDto): UploadConfirmEnabledDto
 }

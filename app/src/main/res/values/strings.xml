@@ -256,6 +256,14 @@
     <string name="chat_date_yesterday">Ieri</string>
     <string name="cd_reply">Rispondi</string>
     <string name="chat_upload_failed">Impossibile leggere il file</string>
+    <string name="chat_upload_confirm_title">Inviare a %1$s?</string>
+    <string name="chat_upload_confirm_body">Il file viene caricato e il link pubblicato lì. Non si può annullare.</string>
+    <string name="chat_upload_ttl_label">Elimina dopo</string>
+    <string name="chat_upload_ttl_1h">1 ora</string>
+    <string name="chat_upload_ttl_12h">12 ore</string>
+    <string name="chat_upload_ttl_24h">24 ore</string>
+    <string name="chat_upload_ttl_72h">72 ore</string>
+    <string name="chat_upload_ttl_custom">%1$d s</string>
     <string name="chat_slash_syntax_me">/me &lt;testo&gt;</string>
     <string name="chat_slash_syntax_join">/join &lt;#canale&gt;</string>
     <string name="chat_slash_syntax_part">/part [#canale]</string>
@@ -372,6 +380,12 @@
     <string name="settings_show_hostmask_desc">Mostra [ident@host] accanto al nick negli eventi di entrata/uscita dal canale, quando il server lo fornisce</string>
     <string name="settings_unread_first">Non letti in cima</string>
     <string name="settings_unread_first_desc">I canali con messaggi da leggere salgono in alto, sotto i fissati</string>
+    <string name="settings_upload_title">Upload di file</string>
+    <string name="settings_upload_confirm">Chiedi prima di inviare</string>
+    <string name="settings_upload_confirm_desc">Mostra una conferma con anteprima prima che un file venga caricato e pubblicato in chat</string>
+    <string name="settings_upload_ttl_title">Conservazione upload</string>
+    <string name="settings_upload_ttl_desc">Per quanto tempo i file caricati restano sul server prima di essere eliminati</string>
+    <string name="settings_upload_ttl_default">Default sito</string>
     <string name="settings_font_size">Dimensione testo</string>
     <string name="settings_font_size_preview">Anteprima: così appare il testo in chat</string>
     <string name="settings_language">Lingua</string>

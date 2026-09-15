@@ -676,6 +676,45 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         checked = unreadFirst,
                         onCheckedChange = viewModel::setUnreadFirst,
                     )
+                    SettingsRowDivider()
+                    SettingsBlockLabel(text = stringResource(R.string.settings_upload_title))
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_upload_confirm),
+                        description = stringResource(R.string.settings_upload_confirm_desc),
+                        checked = state.uploadConfirmEnabled,
+                        enabled = !state.uploadConfirmSaving,
+                        onCheckedChange = { viewModel.toggleUploadConfirm() },
+                    )
+                    state.uploadConfirmError?.let { error ->
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    Text(
+                        stringResource(R.string.settings_upload_ttl_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        stringResource(R.string.settings_upload_ttl_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    FlowRow(modifier = Modifier.fillMaxWidth()) {
+                        uploadTtlSettingOptions().forEach { option ->
+                            ResentinFilterChip(
+                                selected = state.uploadTtlSeconds == option.value,
+                                enabled = !state.uploadTtlSaving,
+                                onClick = { viewModel.setUploadTtl(option.value) },
+                                label = { Text(option.label) },
+                                modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
+                            )
+                        }
+                    }
+                    state.uploadTtlError?.let { error ->
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
             }
@@ -1128,6 +1167,18 @@ private fun appFontFamilyOptions(): List<SettingsDropdownOption<AppFontFamily>> 
         )
     }
 
+/** #2095 — stored TTL preference picker: site default (null, clears the key)
+ * plus the server's per-upload ladder. */
+@Composable
+private fun uploadTtlSettingOptions(): List<SettingsDropdownOption<Int?>> =
+    listOf(
+        SettingsDropdownOption(value = null, label = stringResource(R.string.settings_upload_ttl_default)),
+        SettingsDropdownOption(value = 3600, label = stringResource(R.string.chat_upload_ttl_1h)),
+        SettingsDropdownOption(value = 43200, label = stringResource(R.string.chat_upload_ttl_12h)),
+        SettingsDropdownOption(value = 86400, label = stringResource(R.string.chat_upload_ttl_24h)),
+        SettingsDropdownOption(value = 259200, label = stringResource(R.string.chat_upload_ttl_72h)),
+    )
+
 /** The hub menu: one row per group, same row language as the home's channel rows
  * (40dp icon avatar, title + subtitle, chevron). Groups without content available
  * right now (e.g. Identità with no vhost options) are hidden, not disabled. */
@@ -1353,6 +1404,7 @@ private fun SettingsSwitchRow(
     description: String?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1371,7 +1423,7 @@ private fun SettingsSwitchRow(
                 )
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
