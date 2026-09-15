@@ -41,3 +41,39 @@ fun splitQuoteHead(text: String): Pair<String?, String> {
 }
 
 private fun hasVisibleText(value: String): Boolean = stripMircCodes(value).isNotBlank()
+
+/** The nick + message preview a quote head carries, split out for rendering
+ * (the nick in its own color, per [pm.antani.resentin.ui.common.colorForNick])
+ * instead of one flat dimmed line. */
+data class QuoteHeadParts(val nick: String, val preview: String, val isAction: Boolean)
+
+/** Parses a [head] returned by [splitQuoteHead] into its nick and message
+ * preview. Returns `null` if [head] doesn't actually carry the `<nick> ... << `
+ * / `* nick ... << ` shape — defensive only, since every caller passes a head
+ * [splitQuoteHead] already confirmed matches one of the two. */
+fun quoteHeadParts(head: String): QuoteHeadParts? {
+    val body = head.removeSuffix(QUOTE_TAIL)
+    if (body == head) return null
+    return when {
+        body.startsWith("<") -> {
+            val closeIndex = body.indexOf('>')
+            if (closeIndex <= 1) return null
+            QuoteHeadParts(
+                nick = body.substring(1, closeIndex),
+                preview = body.substring(closeIndex + 1).removePrefix(" "),
+                isAction = false,
+            )
+        }
+        body.startsWith("* ") -> {
+            val rest = body.removePrefix("* ")
+            val spaceIndex = rest.indexOf(' ')
+            if (spaceIndex < 1) return null
+            QuoteHeadParts(
+                nick = rest.substring(0, spaceIndex),
+                preview = rest.substring(spaceIndex + 1),
+                isAction = true,
+            )
+        }
+        else -> null
+    }
+}

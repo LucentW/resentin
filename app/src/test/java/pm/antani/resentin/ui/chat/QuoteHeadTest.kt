@@ -57,4 +57,21 @@ class QuoteHeadTest {
         assertEquals(null to "", splitQuoteHead(""))
         assertEquals(null to "ciao a tutti", splitQuoteHead("ciao a tutti"))
     }
+
+    @Test
+    fun parsesNickAndPreviewFromBracketHead() {
+        val parts = quoteHeadParts("<mario> ciao mondo << ")
+        assertEquals(QuoteHeadParts("mario", "ciao mondo", isAction = false), parts)
+    }
+
+    @Test
+    fun parsesNickAndPreviewFromActionHead() {
+        val parts = quoteHeadParts("* mario fa cose << ")
+        assertEquals(QuoteHeadParts("mario", "fa cose", isAction = true), parts)
+    }
+
+    @Test
+    fun rejectsHeadWithoutTail() {
+        assertNull(quoteHeadParts("<mario> ciao mondo"))
+    }
 }

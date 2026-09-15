@@ -112,6 +112,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
@@ -2440,12 +2441,37 @@ private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 
 // Dimmed reply-quote block above a bubble body (cicchetto scrollback-reply-quote
-// parity): thin bar + quoted head in secondary color, capped at two lines.
+// parity): thin bar + quoted head, capped at two lines. The nick renders in its
+// own color (same rule coloredNicklist applies everywhere else) so the head
+// reads as "who, said what" at a glance instead of one flat dimmed line.
 @Composable
-private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.Color) {
+private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.Color, coloredNicklist: Boolean, lightTheme: Boolean) {
     // Quote heads render as plain text (never mIRC-styled), so stripping here only
     // removes the raw control codes that would otherwise survive as-is.
-    val text = if (LocalStripMircFormatting.current) stripMircCodes(head).trimEnd() else head.trimEnd()
+    val strip = LocalStripMircFormatting.current
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val text = remember(head, strip, coloredNicklist, lightTheme, primaryColor) {
+        val parts = quoteHeadParts(head)
+        if (parts == null) {
+            AnnotatedString((if (strip) stripMircCodes(head) else head).trimEnd())
+        } else {
+            val nick = if (strip) stripMircCodes(parts.nick) else parts.nick
+            val preview = (if (strip) stripMircCodes(parts.preview) else parts.preview).trimEnd()
+            buildAnnotatedString {
+                if (parts.isAction) append("* ")
+                withStyle(
+                    SpanStyle(
+                        color = if (coloredNicklist) colorForNick(nick, lightTheme) else primaryColor,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                ) {
+                    append(nick)
+                }
+                append(if (parts.isAction) " " else "> ")
+                append(preview)
+            }
+        }
+    }
     Row(
         modifier = Modifier.padding(bottom = 4.dp),
         verticalAlignment = Alignment.Top,
@@ -2655,6 +2681,8 @@ private fun BubbleRow(
                                 } else {
                                     MaterialTheme.colorScheme.primary
                                 },
+                                coloredNicklist = coloredNicklist,
+                                lightTheme = lightTheme,
                             )
                         }
                         val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
