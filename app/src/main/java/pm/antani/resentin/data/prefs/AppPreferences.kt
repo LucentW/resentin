@@ -71,6 +71,7 @@ class AppPreferences(private val context: Context) {
     private val keyShowHostmaskInEvents = booleanPreferencesKey("show_hostmask_in_events")
     private val keySmartPresenceFilter = booleanPreferencesKey("smart_presence_filter")
     private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
+    private val keyStripFormatting = booleanPreferencesKey("strip_formatting")
     private val keyReplyStyle = stringPreferencesKey("reply_style")
     private val keyReplyCustomTemplate = stringPreferencesKey("reply_custom_template")
     private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
@@ -253,6 +254,16 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setColoredNicklist(value: Boolean) {
         context.dataStore.edit { it[keyColoredNicklist] = value }
+    }
+
+    /** Local, fast-reading mirror of the server-persisted `DisplayPrefsDto.stripFormatting`
+     * (#2029) — same discipline as [coloredNicklist]: AppSettingsViewModel owns the
+     * server read/write, screens render off this Flow. Kept in sync on every load
+     * and every toggle. */
+    val stripFormatting: Flow<Boolean> = context.dataStore.data.map { it[keyStripFormatting] ?: false }
+
+    suspend fun setStripFormatting(value: Boolean) {
+        context.dataStore.edit { it[keyStripFormatting] = value }
     }
 
     val replyStyle: Flow<ReplyStyle> = context.dataStore.data.map {

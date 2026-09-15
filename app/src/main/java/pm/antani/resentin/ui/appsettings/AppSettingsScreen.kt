@@ -664,6 +664,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     )
                     SettingsRowDivider()
                     SettingsSwitchRow(
+                        title = stringResource(R.string.settings_strip_formatting),
+                        description = stringResource(R.string.settings_strip_formatting_desc),
+                        checked = state.displayPrefs.stripFormatting,
+                        onCheckedChange = { viewModel.toggleStripFormatting() },
+                    )
+                    SettingsRowDivider()
+                    SettingsSwitchRow(
                         title = stringResource(R.string.settings_unread_first),
                         description = stringResource(R.string.settings_unread_first_desc),
                         checked = unreadFirst,

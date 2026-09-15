@@ -149,7 +149,9 @@ import pm.antani.resentin.irc.highestSigil
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.domain.repository.PendingDccOffer
 import pm.antani.resentin.ui.common.LocalDccFileDownloadHandler
+import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.common.MircText
+import pm.antani.resentin.ui.common.stripMircCodes
 import pm.antani.resentin.ui.common.rememberAvatarBitmap
 import pm.antani.resentin.ui.common.ResentinDropdownMenu
 import pm.antani.resentin.ui.common.ResentinDropdownMenuItem
@@ -2256,6 +2258,7 @@ private fun buildNickLine(
     coloredNicklist: Boolean,
     lightTheme: Boolean = false,
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
+    stripFormatting: Boolean = false,
 ) = buildAnnotatedString {
     append(before)
     append(prefix)
@@ -2265,7 +2268,7 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(withClickableLinks(mircAnnotatedString(body, lightTheme), linkStylesFor(lightTheme), onDccFileClick))
+    append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick))
 }
 
 private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
@@ -2277,6 +2280,9 @@ private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 // parity): thin bar + quoted head in secondary color, capped at two lines.
 @Composable
 private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.Color) {
+    // Quote heads render as plain text (never mIRC-styled), so stripping here only
+    // removes the raw control codes that would otherwise survive as-is.
+    val text = if (LocalStripMircFormatting.current) stripMircCodes(head).trimEnd() else head.trimEnd()
     Row(
         modifier = Modifier.padding(bottom = 4.dp),
         verticalAlignment = Alignment.Top,
@@ -2288,7 +2294,7 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
                 .background(barColor, CircleShape),
         )
         Text(
-            text = head.trimEnd(),
+            text = text,
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalResentinChatFontFamily.current),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
@@ -2328,6 +2334,7 @@ private fun BubbleRow(
     }
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
+    val stripFormatting = LocalStripMircFormatting.current
     val timestampStyle = SpanStyle(
         fontSize = 11.sp,
         fontStyle = FontStyle.Normal,
@@ -2340,12 +2347,12 @@ private fun BubbleRow(
     val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }
-    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler) {
+    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
+            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2353,7 +2360,7 @@ private fun BubbleRow(
         }
     }
     val actionWithTime = remember(
-        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler,
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting,
     ) {
         buildAnnotatedString {
             if (continuesGroup) {
@@ -2369,12 +2376,13 @@ private fun BubbleRow(
                         coloredNicklist = coloredNicklist,
                         lightTheme = lightTheme,
                         onDccFileClick = dccFileHandler,
+                        stripFormatting = stripFormatting,
                     ),
                 )
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme), linkStylesFor(lightTheme), dccFileHandler))
+            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -2528,13 +2536,14 @@ private fun IrcLineRow(
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
+    val stripFormatting = LocalStripMircFormatting.current
     val annotated = remember(
-        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler,
+        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting,
     ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting)
         }
     }
     val body: @Composable () -> Unit = {
