@@ -138,6 +138,12 @@ fun mircAnnotatedString(text: String, lightTheme: Boolean = false, stripFormatti
     }
 }
 
+/** Drops generic-URL ranges overlapped by a DCC link (inclusive ranges on both
+ * sides) — a DCC delivery URL is also a plain https URL, and without this the tap
+ * would hit the platform browser instead of the app's save flow. Pure for testability. */
+internal fun withoutDccOverlaps(urls: List<IntRange>, dccRanges: List<IntRange>): List<IntRange> =
+    urls.filter { url -> dccRanges.none { dcc -> url.first <= dcc.last && dcc.first <= url.last } }
+
 /** Layers clickable [LinkAnnotation.Url] ranges on top of an already-built
  * [AnnotatedString] (which may already carry mIRC color/bold/etc. spans) — Text renders
  * a link's default styling and opens it via the platform URI handler automatically, no
@@ -147,8 +153,10 @@ fun withClickableLinks(
     linkStyles: TextLinkStyles = darkLinkStyles,
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
 ): AnnotatedString {
-    val ranges = UrlDetector.find(annotated.text)
     val dccLinks = DccFileLinkDetector.find(annotated.text)
+    // A DCC delivery URL is also a plain https URL — DCC wins over the generic link
+    // on any overlap so the tap opens the app's own save flow, not the browser.
+    val ranges = withoutDccOverlaps(UrlDetector.find(annotated.text), dccLinks.map { it.pathRange })
     if (ranges.isEmpty() && dccLinks.isEmpty()) return annotated
     return AnnotatedString.Builder(annotated).apply {
         ranges.forEach { range ->

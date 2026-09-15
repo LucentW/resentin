@@ -15,8 +15,9 @@ import pm.antani.resentin.domain.repository.AuthRepository
 
 /** Wires [LocalDccFileDownloadHandler] to a real Storage-Access-Framework save flow for
  * the app's whole composition — one instance, mounted once at the root (see
- * `MainActivity`), rather than per-chat: the download path a DCC report embeds
- * (`/networks/{id}/dcc_files/{slug}`) already names its own network, so nothing about
+ * `MainActivity`), rather than per-chat: the absolute URL a DCC report embeds
+ * (`https://<host>/dcc_files/<slug>[.<ext>]`, public since issue 2127 — the slug
+ * IS the credential, no bearer needed) already names everything, so nothing about
  * this needs to know which chat the tap happened in.
  *
  * `application/octet-stream` matches the server's own Content-Type for these bytes
