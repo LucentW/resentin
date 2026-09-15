@@ -309,6 +309,12 @@ class NotificationRouter(
         ensureChannel()
         val conversationId = conversationNotificationId(message.network, bucket)
         val intent = Intent(context, MainActivity::class.java).apply {
+            // Redundant with the constructor above, but CodeQL's Kotlin extractor doesn't
+            // track the (Context, Class) constructor's second argument, so it can't prove
+            // this Intent is explicit from that alone and flags it as a spoofable implicit
+            // PendingIntent target (java/android/implicit-pendingintents) — a known false
+            // positive (github/codeql#20153). setClass() IS recognised by its dataflow.
+            setClass(context, MainActivity::class.java)
             action = Intent.ACTION_VIEW
             putExtra(EXTRA_NETWORK_SLUG, message.network)
             putExtra(EXTRA_CHANNEL_NAME, bucket)
@@ -358,6 +364,12 @@ class NotificationRouter(
     private fun postInviteNotification(invite: PendingInvite) {
         ensureInviteChannel()
         val intent = Intent(context, MainActivity::class.java).apply {
+            // Redundant with the constructor above, but CodeQL's Kotlin extractor doesn't
+            // track the (Context, Class) constructor's second argument, so it can't prove
+            // this Intent is explicit from that alone and flags it as a spoofable implicit
+            // PendingIntent target (java/android/implicit-pendingintents) — a known false
+            // positive (github/codeql#20153). setClass() IS recognised by its dataflow.
+            setClass(context, MainActivity::class.java)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val notificationId = "invite/${invite.networkSlug}/${invite.channel}".hashCode()
@@ -388,6 +400,12 @@ class NotificationRouter(
     private fun postDccOfferNotification(offer: PendingDccOffer) {
         ensureInviteChannel()
         val intent = Intent(context, MainActivity::class.java).apply {
+            // Redundant with the constructor above, but CodeQL's Kotlin extractor doesn't
+            // track the (Context, Class) constructor's second argument, so it can't prove
+            // this Intent is explicit from that alone and flags it as a spoofable implicit
+            // PendingIntent target (java/android/implicit-pendingintents) — a known false
+            // positive (github/codeql#20153). setClass() IS recognised by its dataflow.
+            setClass(context, MainActivity::class.java)
             action = Intent.ACTION_VIEW
             putExtra(EXTRA_NETWORK_SLUG, offer.networkSlug)
             putExtra(EXTRA_CHANNEL_NAME, offer.channel)
@@ -429,6 +447,8 @@ class NotificationRouter(
 
     private fun actionIntent(action: String, message: ScrollbackMessageDto, bucket: String, notificationId: Int): Intent =
         Intent(context, NotificationActionReceiver::class.java).apply {
+            // See the same-reasoned setClass() call in postNotification() above.
+            setClass(context, NotificationActionReceiver::class.java)
             setAction(action)
             putExtra(NotificationActionReceiver.EXTRA_NETWORK_SLUG, message.network)
             putExtra(NotificationActionReceiver.EXTRA_CHANNEL_NAME, bucket)
