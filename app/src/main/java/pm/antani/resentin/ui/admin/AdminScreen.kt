@@ -46,7 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -146,7 +146,7 @@ fun AdminScreen(viewModel: AdminViewModel, onBack: () -> Unit) {
                         )
                     },
                 )
-                TabRow(selectedTabIndex = state.tab.ordinal) {
+                ScrollableTabRow(selectedTabIndex = state.tab.ordinal, edgePadding = 16.dp) {
                     Tab(
                         selected = state.tab == AdminTab.NETWORKS,
                         onClick = { viewModel.selectTab(AdminTab.NETWORKS) },

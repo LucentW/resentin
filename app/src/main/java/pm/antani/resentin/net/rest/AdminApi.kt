@@ -132,7 +132,7 @@ interface AdminApi {
     suspend fun getUploads(): UploadsAdminEnvelopeDto
 
     @DELETE("admin/uploads/{id}")
-    suspend fun deleteUpload(@Path("id") id: Int): Response<ResponseBody>
+    suspend fun deleteUpload(@Path("id") id: String): Response<ResponseBody>
 
     @GET("admin/session_log")
     suspend fun getSessionLog(@Query("limit") limit: Int? = null): SessionLogEnvelopeDto

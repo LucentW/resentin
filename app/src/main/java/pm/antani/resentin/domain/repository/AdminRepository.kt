@@ -208,7 +208,7 @@ class AdminRepository(private val authRepository: AuthRepository) {
 
     suspend fun getUploads(): Result<List<UploadAdminDto>> = runCatching { api().getUploads().uploads }
 
-    suspend fun deleteUpload(id: Int): Result<Unit> = runCatching {
+    suspend fun deleteUpload(id: String): Result<Unit> = runCatching {
         val response = api().deleteUpload(id)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
     }

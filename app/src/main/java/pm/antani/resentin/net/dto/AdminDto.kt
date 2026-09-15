@@ -207,7 +207,7 @@ data class SettingsEnvelopeDto(val settings: SettingsAdminDto = SettingsAdminDto
 
 @Serializable
 data class UploadAdminDto(
-    val id: Int,
+    val id: String,
     val slug: String,
     val mime: String? = null,
     val bytes: Long = 0,
