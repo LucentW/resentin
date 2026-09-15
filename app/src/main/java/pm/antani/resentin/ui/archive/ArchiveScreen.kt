@@ -47,7 +47,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import pm.antani.resentin.R
-import pm.antani.resentin.net.dto.ArchiveEntryDto
+import pm.antani.resentin.net.dto.ArchiveEntryWithUnread
 import pm.antani.resentin.ui.common.ResentinHeaderAction
 import pm.antani.resentin.ui.common.LocalDensityScale
 import pm.antani.resentin.ui.theme.ResentinSpacing
@@ -55,6 +55,7 @@ import pm.antani.resentin.ui.common.ResentinEmptyState
 import pm.antani.resentin.ui.common.ResentinErrorState
 import pm.antani.resentin.ui.common.ResentinStateBanner
 import pm.antani.resentin.ui.common.ResentinStateTone
+import pm.antani.resentin.ui.common.UnreadCountBadge
 import pm.antani.resentin.ui.common.ResentinLoadingState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,7 +139,7 @@ fun ArchiveScreen(
                         contentPadding = PaddingValues(start = ResentinSpacing.large, end = ResentinSpacing.large, top = ResentinSpacing.small, bottom = ResentinSpacing.xLarge),
                         verticalArrangement = Arrangement.spacedBy(ResentinSpacing.xSmall * LocalDensityScale.current),
                     ) {
-                        items(state.entries, key = { it.target }) { entry ->
+                        items(state.entries, key = { it.entry.target }) { entry ->
                             ArchiveRow(
                                 entry = entry,
                                 onClick = { viewModel.recover(entry) },
@@ -173,7 +174,7 @@ fun ArchiveScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
             },
-            text = { Text(stringResource(R.string.archive_delete_confirm, entry.target)) },
+            text = { Text(stringResource(R.string.archive_delete_confirm, entry.entry.target)) },
             confirmButton = {
                 TextButton(onClick = viewModel::deleteConfirmed) {
                     Text(
@@ -192,8 +193,10 @@ fun ArchiveScreen(
 }
 
 @Composable
-private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: () -> Unit) {
-    val isQuery = entry.kind == "query"
+private fun ArchiveRow(entry: ArchiveEntryWithUnread, onClick: () -> Unit, onDelete: () -> Unit) {
+    val isQuery = entry.entry.kind == "query"
+    val hasUnread = entry.unreadMessages > 0
+    val hasMentions = entry.unreadMentions > 0
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -231,20 +234,27 @@ private fun ArchiveRow(entry: ArchiveEntryDto, onClick: () -> Unit, onDelete: ()
             Spacer(Modifier.width(ResentinSpacing.medium))
             Column(Modifier.weight(1f)) {
                 Text(
-                    entry.target,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    entry.entry.target,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = if (hasUnread || hasMentions) FontWeight.Bold else FontWeight.Medium,
+                    ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    stringResource(R.string.archive_row_meta, entry.rowCount, formatEpochMillis(entry.lastActivity)),
+                    stringResource(R.string.archive_row_meta, entry.entry.rowCount, formatEpochMillis(entry.entry.lastActivity)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (hasMentions) {
+                UnreadCountBadge(count = entry.unreadMentions, isMention = true)
+                if (hasUnread) Spacer(Modifier.width(ResentinSpacing.xSmall))
+            }
+            if (hasUnread) UnreadCountBadge(count = entry.unreadMessages)
             IconButton(onClick = onDelete) {
                 Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.cd_remove))
             }

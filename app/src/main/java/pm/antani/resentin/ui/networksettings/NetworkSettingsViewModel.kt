@@ -20,6 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pm.antani.resentin.domain.repository.IgnoresRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.net.dto.unreadMentionsRollup
+import pm.antani.resentin.net.dto.unreadMessagesRollup
 import pm.antani.resentin.ui.chat.readUploadFile
 
 data class NetworkSettingsUiState(
@@ -58,6 +60,11 @@ data class NetworkSettingsUiState(
     val notifyLoading: Boolean = true,
     val newNotifyNick: String = "",
     val notifyError: String? = null,
+    // #2099 rollup — total unread across this network's archived windows, shown as
+    // a badge on the archive launcher. Best-effort: a failure just leaves no badge,
+    // the archive itself still loads (and reports its own error) when opened.
+    val archiveUnreadMessages: Int = 0,
+    val archiveUnreadMentions: Int = 0,
 )
 
 class NetworkSettingsViewModel(
@@ -82,6 +89,7 @@ class NetworkSettingsViewModel(
                 .onFailure { error -> _uiState.update { it.copy(ignoreError = error.message) } }
         }
         refreshNotifyList()
+        refreshArchiveUnread()
         viewModelScope.launch {
             networksRepository.observeNetwork(networkSlug).collect { network ->
                 if (network != null) {
@@ -245,6 +253,22 @@ class NetworkSettingsViewModel(
             networksRepository.removeNotify(networkSlug, nick)
                 .onSuccess { refreshNotifyList() }
                 .onFailure { error -> _uiState.update { it.copy(notifyError = error.message) } }
+        }
+    }
+
+    /** #2099 — loads the archive launcher rollup (see [getArchiveWithUnread]).
+     * Silent on failure: no badge beats a blocking error for a count pill. */
+    fun refreshArchiveUnread() {
+        viewModelScope.launch {
+            networksRepository.getArchiveWithUnread(networkSlug)
+                .onSuccess { entries ->
+                    _uiState.update {
+                        it.copy(
+                            archiveUnreadMessages = entries.unreadMessagesRollup(),
+                            archiveUnreadMentions = entries.unreadMentionsRollup(),
+                        )
+                    }
+                }
         }
     }
 
