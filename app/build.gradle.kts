@@ -13,8 +13,8 @@ android {
         applicationId = "pm.antani.resentin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "0.3.13"
+        versionCode = 32
+        versionName = "0.3.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
