@@ -4,15 +4,15 @@ import pm.antani.resentin.ui.common.stripMircCodes
 
 // Visual quote-head detection — cicchetto parity (dimmed `scrollback-reply-quote`).
 //
-// Matches the two built-in reply shapes at the START of a message body:
-//   * `<nick> preview << ` (QUOTE template, cicchetto's own `<nick> body << `)
+// Matches ONLY cicchetto's own QUOTE template at the START of a message body:
+//   * `<nick> preview << ` (cicchetto's `<nick> body << `)
 //   * `* nick preview << ` (same, for /me actions)
-//   * `nick: ` (NICK template / classic reply-to addressing)
-// A manually typed `nick: hello` dims too — per IRC convention it IS a quote,
-// and the styling only ever touches the leading span, never the message itself.
-// Custom templates with other shapes are not detected (unknown shape, no parse
-// guessing — the #91 no-scraping rule applies to foreign text, not to our own
-// two shapes).
+// A plain `nick: hello` is NOT a quote head — that shape is indistinguishable
+// from ordinary prose a person typed on their own (`Nota: ...`, `Errore: ...`,
+// addressing someone by name), and dimming it produced false positives on
+// nearly any sentence with an early colon. Custom templates with other shapes
+// are not detected either (unknown shape, no parse guessing — the #91
+// no-scraping rule applies to foreign text, not to our own shape).
 
 private val QUOTE_TAIL = " << "
 private const val QUOTE_HEAD_MAX_CHARS = 160
@@ -20,10 +20,6 @@ private const val QUOTE_HEAD_MAX_CHARS = 160
 // `!addquote` archive verb (cicchetto #1107): fills the compose box and stops,
 // nothing is sent. Whatever quote bot sits in the channel interprets it.
 const val ADDQUOTE_COMMAND = "!addquote "
-
-// Conservative nick head for the `nick: ` form: no leading space/</<, no
-// colon or newline inside, capped length. Deliberately ASCII-ish like IRC nicks.
-private val NICK_HEAD_RE = Regex("^([^\\s<>:][^:\\n]{0,30}): ")
 
 /** Splits a leading quote head off [text]: `(head, rest)`, or `(null, text)`
  * when the body carries no recognizable reply shape. */
@@ -40,12 +36,6 @@ fun splitQuoteHead(text: String): Pair<String?, String> {
             val rest = text.substring(head.length)
             if (hasVisibleText(rest)) return head to rest
         }
-    }
-    val nickMatch = NICK_HEAD_RE.find(text)
-    if (nickMatch != null) {
-        val head = nickMatch.value
-        val rest = text.substring(head.length)
-        if (hasVisibleText(rest)) return head to rest
     }
     return null to text
 }

@@ -2505,9 +2505,9 @@ private fun BubbleRow(
         fontFamily = LocalResentinChatFontFamily.current,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    // Reply quote head (`<nick> … << ` / `nick: `) renders as a dimmed block
-    // above the body (cicchetto scrollback-reply-quote parity) — actions keep
-    // their third-person grammar untouched.
+    // Reply quote head (`<nick> … << `, cicchetto's own QUOTE template) renders
+    // as a dimmed block above the body (scrollback-reply-quote parity) — actions
+    // keep their third-person grammar untouched.
     val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }

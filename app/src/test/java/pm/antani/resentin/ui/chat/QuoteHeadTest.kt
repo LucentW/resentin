@@ -20,10 +20,13 @@ class QuoteHeadTest {
     }
 
     @Test
-    fun detectsNickColonQuote() {
-        val (head, rest) = splitQuoteHead("mario: hai visto?")
-        assertEquals("mario: ", head)
-        assertEquals("hai visto?", rest)
+    fun rejectsPlainNickColonAddressing() {
+        // Not a quote head: indistinguishable from ordinary prose with an
+        // early colon (`Nota: ...`, `Errore: ...`, addressing someone by name).
+        val text = "mario: hai visto?"
+        val (head, rest) = splitQuoteHead(text)
+        assertNull(head)
+        assertEquals(text, rest)
     }
 
     @Test
@@ -39,22 +42,6 @@ class QuoteHeadTest {
         val (head, rest) = splitQuoteHead("dicevo che poi << boh")
         assertNull(head)
         assertEquals("dicevo che poi << boh", rest)
-    }
-
-    @Test
-    fun rejectsNickOnlyPrefixWithNoReplyText() {
-        val text = "mario: "
-        val (head, rest) = splitQuoteHead(text)
-        assertNull(head)
-        assertEquals(text, rest)
-    }
-
-    @Test
-    fun rejectsNickOnlyPrefixWhenRestIsFormattingOnly() {
-        val text = "mario: " + charArrayOf(3.toChar(), '0', '4').concatToString()
-        val (head, rest) = splitQuoteHead(text)
-        assertNull(head)
-        assertEquals(text, rest)
     }
 
     @Test
