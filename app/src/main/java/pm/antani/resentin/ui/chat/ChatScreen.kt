@@ -112,7 +112,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
@@ -2440,36 +2439,24 @@ private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "
 private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 
-// Dimmed reply-quote block above a bubble body (cicchetto scrollback-reply-quote
-// parity): thin bar + quoted head, capped at two lines. The nick renders in its
-// own color (same rule coloredNicklist applies everywhere else) so the head
-// reads as "who, said what" at a glance instead of one flat dimmed line.
+// Reply-quote block above a bubble body (cicchetto scrollback-reply-quote
+// parity): thin bar + quoted nick/message, laid out the same way the bubble's
+// own header does it — nick (colored, same rule coloredNicklist applies
+// everywhere else) on its own line, the quoted text dimmed underneath.
 @Composable
 private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.Color, coloredNicklist: Boolean, lightTheme: Boolean) {
     // Quote heads render as plain text (never mIRC-styled), so stripping here only
     // removes the raw control codes that would otherwise survive as-is.
     val strip = LocalStripMircFormatting.current
     val primaryColor = MaterialTheme.colorScheme.primary
-    val text = remember(head, strip, coloredNicklist, lightTheme, primaryColor) {
+    val parsed = remember(head, strip) {
         val parts = quoteHeadParts(head)
         if (parts == null) {
-            AnnotatedString((if (strip) stripMircCodes(head) else head).trimEnd())
+            null
         } else {
             val nick = if (strip) stripMircCodes(parts.nick) else parts.nick
             val preview = (if (strip) stripMircCodes(parts.preview) else parts.preview).trimEnd()
-            buildAnnotatedString {
-                if (parts.isAction) append("* ")
-                withStyle(
-                    SpanStyle(
-                        color = if (coloredNicklist) colorForNick(nick, lightTheme) else primaryColor,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                ) {
-                    append(nick)
-                }
-                append(if (parts.isAction) " " else ": ")
-                append(preview)
-            }
+            Triple(if (parts.isAction) "* $nick" else nick, preview, parts.isAction)
         }
     }
     Row(
@@ -2482,14 +2469,36 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
                 .size(width = 2.dp, height = 28.dp)
                 .background(barColor, CircleShape),
         )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalResentinChatFontFamily.current),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        if (parsed == null) {
+            Text(
+                text = (if (strip) stripMircCodes(head) else head).trimEnd(),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalResentinChatFontFamily.current),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        } else {
+            val (nickLabel, preview, isAction) = parsed
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = nickLabel,
+                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = LocalResentinChatFontFamily.current),
+                    color = if (coloredNicklist) colorForNick(nickLabel.removePrefix("* "), lightTheme) else primaryColor,
+                    fontWeight = FontWeight.SemiBold,
+                    fontStyle = if (isAction) FontStyle.Italic else FontStyle.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = LocalResentinChatFontFamily.current),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
