@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Edit
@@ -91,6 +92,7 @@ import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.db.NetworkEntity
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
+import pm.antani.resentin.net.dto.MentionsBundleDto
 import pm.antani.resentin.data.prefs.channelKey
 import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.serverChannelKey
@@ -116,6 +118,7 @@ fun HomeScreen(
     onNetworkSettingsClick: (networkSlug: String) -> Unit,
     onAppSettingsClick: () -> Unit,
     onBrowseDirectory: (networkSlug: String) -> Unit = {},
+    onMentionsClick: (networkSlug: String) -> Unit = {},
 ) {
     // "$server" (MOTD + service notices) is reached by tapping the network header
     // itself rather than listed as a channel row — it's network-level, not a channel.
@@ -136,6 +139,7 @@ fun HomeScreen(
     val identifiedNetworkIds by viewModel.identifiedNetworkIds.collectAsState()
     val registrationWizard by viewModel.registrationWizard.collectAsState()
     val pendingInvites by viewModel.pendingInvites.collectAsState()
+    val mentionsBundles by viewModel.mentionsBundles.collectAsState()
     // NavHost removes Home from the composition while a chat is open. Keep the same
     // scroll position when it comes back instead of rebuilding from the top.
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -276,6 +280,18 @@ fun HomeScreen(
                                     invite = invite,
                                     onAccept = { viewModel.acceptInvite(invite) },
                                     onDecline = { viewModel.declineInvite(invite) },
+                                )
+                            }
+                        }
+                        if (mentionsBundles.isNotEmpty()) {
+                            items(
+                                mentionsBundles.values.toList(),
+                                key = { "mentions-${it.network}" },
+                            ) { bundle ->
+                                MentionsBannerCard(
+                                    bundle = bundle,
+                                    onOpen = { onMentionsClick(bundle.network) },
+                                    onDismiss = { viewModel.dismissMentions(bundle.network) },
                                 )
                             }
                         }
@@ -661,6 +677,58 @@ private fun SheetActionRow(
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
             color = textColor,
         )
+    }
+}
+
+/** Mentions-while-away banner (cicchetto MentionsWindow parity): one card per
+ * network holding a `mentions_bundle` digest, shown above the network list.
+ * Open goes to the mentions pseudo-window; dismiss drops the digest. */
+@Composable
+private fun MentionsBannerCard(
+    bundle: MentionsBundleDto,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val channelCount = remember(bundle) { bundle.messages.map { it.channel }.distinct().size }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.AlternateEmail,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(ResentinSpacing.small))
+                Text(
+                    text = stringResource(
+                        R.string.home_mentions_banner,
+                        bundle.network,
+                        bundle.messages.size,
+                        channelCount,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.home_mentions_dismiss))
+                }
+                TextButton(onClick = onOpen) {
+                    Text(stringResource(R.string.home_mentions_open), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 }
 

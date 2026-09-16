@@ -758,6 +758,12 @@
     <string name="chat_recover_failure_generic">Recovery couldn\'t be completed. Try again.</string>
     <string name="chat_recover_close">Close</string>
     <string name="chat_recover_done">Done</string>
+    <string name="home_mentions_banner">%1$s — %2$d mentions in %3$d channels while you were away</string>
+    <string name="home_mentions_open">Open</string>
+    <string name="home_mentions_dismiss">Dismiss</string>
+    <string name="mentions_title">Mentions on %1$s</string>
+    <string name="mentions_summary">%1$d messages in %2$d channels</string>
+    <string name="mentions_empty">No mentions while you were away</string>
     <string name="chat_multiline_title">Paste as %1$d messages?</string>
     <string name="chat_multiline_body">This will be sent to %1$s as %2$d separate messages (one per line).</string>
     <string name="chat_slash_alias_builtin">Built-in commands cannot be shadowed</string>

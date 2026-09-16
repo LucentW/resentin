@@ -131,6 +131,31 @@ data class RecoverResultDto(
     val reason: String? = null,
 )
 
+/** One mention row of a `mentions_bundle` digest — mirrors cicchetto's
+ * `SessionWireMentionsBundleMessage`. `serverTime` is epoch millis; `kind`
+ * stays a plain string (the row renders like its scrollback twin). */
+@Serializable
+data class MentionsMessageDto(
+    val serverTime: Long,
+    val channel: String,
+    val sender: String,
+    val body: String? = null,
+    val kind: String = "privmsg",
+)
+
+/** Mentions-while-away digest — mirrors cicchetto's `mentions_bundle`
+ * `{network, away_started_at, away_ended_at, away_reason, messages[]}`,
+ * pushed on the back-from-away transition. Timestamps ride as the
+ * upstream ISO strings (display-only, rendered as-is where needed). */
+@Serializable
+data class MentionsBundleDto(
+    val network: String,
+    val awayStartedAt: String? = null,
+    val awayEndedAt: String? = null,
+    val awayReason: String? = null,
+    val messages: List<MentionsMessageDto> = emptyList(),
+)
+
 /** `phx_reply` response of the `watchlist` verb (`add`/`del`/`list`) — mirrors
  * cicchetto's `{patterns: string[]}`. */
 @Serializable

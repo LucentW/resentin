@@ -16,6 +16,7 @@ import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.MentionsBundleDto
 import pm.antani.resentin.net.dto.RecoverProgressDto
 import pm.antani.resentin.net.dto.RecoverResultDto
 import pm.antani.resentin.net.dto.ServerReplyDto
@@ -116,6 +117,9 @@ object WsEventDecoder {
                 )
                 "recover_result" -> WsEvent.RecoverResult(
                     AppJson.decodeFromJsonElement(RecoverResultDto.serializer(), raw),
+                )
+                "mentions_bundle" -> WsEvent.MentionsBundle(
+                    AppJson.decodeFromJsonElement(MentionsBundleDto.serializer(), raw),
                 )
                 "window_invited" -> WsEvent.WindowInvited(
                     AppJson.decodeFromJsonElement(WindowInvitedDto.serializer(), raw),
