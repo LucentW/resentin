@@ -31,6 +31,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import pm.antani.resentin.ui.common.ResentinDropdown
+import pm.antani.resentin.ui.common.ResentinDropdownOption
 import pm.antani.resentin.ui.common.ResentinFilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -261,21 +263,15 @@ fun ChannelSettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(8.dp))
-                        val presenceOptions = listOf(
-                            Triple(stringResource(R.string.channel_settings_presence_show), "show", presencePin == "show"),
-                            Triple(stringResource(R.string.channel_settings_presence_default), null, presencePin == null),
-                            Triple(stringResource(R.string.channel_settings_presence_hide), "hide", presencePin == "hide"),
+                        ResentinDropdown(
+                            selected = presencePin,
+                            options = listOf(
+                                ResentinDropdownOption("show", stringResource(R.string.channel_settings_presence_show)),
+                                ResentinDropdownOption(null, stringResource(R.string.channel_settings_presence_default)),
+                                ResentinDropdownOption("hide", stringResource(R.string.channel_settings_presence_hide)),
+                            ),
+                            onSelected = viewModel::setPresencePin,
                         )
-                        LazyRow {
-                            items(presenceOptions) { (label, pin, selected) ->
-                                ResentinFilterChip(
-                                    selected = selected,
-                                    onClick = { viewModel.setPresencePin(pin) },
-                                    label = { Text(label) },
-                                    modifier = Modifier.padding(end = 8.dp),
-                                )
-                            }
-                        }
                     }
 
                     HorizontalDivider(
