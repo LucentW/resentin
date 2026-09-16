@@ -25,6 +25,9 @@ import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
 import pm.antani.resentin.net.dto.WindowInvitedDto
+import pm.antani.resentin.net.dto.ConnectionProgressDto
+import pm.antani.resentin.net.dto.RecoverProgressDto
+import pm.antani.resentin.net.dto.RecoverResultDto
 
 /**
  * Decodes a raw event-frame payload into a typed [WsEvent], per the additive-only
@@ -51,6 +54,19 @@ object WsEventDecoder {
                 "message" -> WsEvent.MessageReceived(
                     AppJson.decodeFromJsonElement(MessageEventPayloadDto.serializer(), raw).message,
                 )
+                "connection_progress" -> AppJson.decodeFromJsonElement(ConnectionProgressDto.serializer(), raw).let { dto ->
+                    check(dto.state in setOf("connecting", "connected"))
+                    WsEvent.ConnectionProgress(dto)
+                }
+                "recover_progress" -> AppJson.decodeFromJsonElement(RecoverProgressDto.serializer(), raw).let { dto ->
+                    check(dto.step in setOf("identify", "register", "nick", "recover", "release"))
+                    check(dto.status in setOf("running", "ok", "failed"))
+                    WsEvent.RecoverProgress(dto)
+                }
+                "recover_result" -> AppJson.decodeFromJsonElement(RecoverResultDto.serializer(), raw).let { dto ->
+                    check(dto.outcome in setOf("succeeded", "failed"))
+                    WsEvent.RecoverResult(dto)
+                }
                 "isupport_changed" -> WsEvent.IsupportChanged(
                     AppJson.decodeFromJsonElement(IsupportChangedDto.serializer(), raw),
                 )

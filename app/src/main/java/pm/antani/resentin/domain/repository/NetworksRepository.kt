@@ -61,6 +61,16 @@ private const val SERVER_PSEUDO_CHANNEL = "\$server"
  * [pm.antani.resentin.domain.events.WsEvent]. */
 data class PendingInvite(val networkSlug: String, val channel: String, val inviter: String)
 
+/** Transient upstream connection state from the user-topic WebSocket stream. */
+data class NetworkConnectionProgress(val state: String)
+
+/** Current server-driven recovery step and its terminal outcome, when available. */
+data class NetworkRecoveryState(
+    val step: String? = null,
+    val status: String? = null,
+    val reason: String? = null,
+    val outcome: String? = null,
+)
 /** A peer's `DCC SEND` held awaiting Accept/Decline (issue 2089 on grappa-irc) — see
  * `dcc_offer` in [pm.antani.resentin.domain.events.WsEvent]. [offerId] is the unique
  * key (unlike [PendingInvite], several offers can target the same channel at once). */
@@ -79,6 +89,12 @@ class NetworksRepository(
     private val connectionManager: ConnectionManager,
 ) {
     private val unreadSyncMutex = Mutex()
+
+    private val _connectionProgress = MutableStateFlow<Map<String, NetworkConnectionProgress>>(emptyMap())
+    val connectionProgress: StateFlow<Map<String, NetworkConnectionProgress>> = _connectionProgress.asStateFlow()
+
+    private val _recoveryProgress = MutableStateFlow<Map<String, NetworkRecoveryState>>(emptyMap())
+    val recoveryProgress: StateFlow<Map<String, NetworkRecoveryState>> = _recoveryProgress.asStateFlow()
 
     val networksWithChannels: Flow<List<NetworkWithChannels>> = db.networkDao().observeNetworksWithChannels()
 
@@ -148,6 +164,54 @@ class NetworksRepository(
     /** Keeps each channel's stored topic current from `topic_changed` events, which the
      * server pushes unsolicited on channel join — no dedicated REST GET exists for it. */
     fun startListening(connectionManager: ConnectionManager, scope: CoroutineScope) {
+        connectionManager.events
+            .filterIsInstance<WsEvent.ConnectionProgress>()
+            .onEach { event ->
+                val progress = event.progress
+                val previousState = _connectionProgress.value[progress.network]?.state
+                _connectionProgress.update { current ->
+                    current + (progress.network to NetworkConnectionProgress(progress.state))
+                }
+                if (progress.state == "connecting") {
+                    _recoveryProgress.update { current -> current - progress.network }
+                } else if (previousState != progress.state) {
+                    // The progress event is the first authoritative signal that the
+                    // upstream IRC session is back. Refresh nick/state/membership so
+                    // the local database converges without waiting for a manual reload.
+                    refresh()
+                }
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.RecoverProgress>()
+            .onEach { event ->
+                val progress = event.progress
+                _recoveryProgress.update { current ->
+                    current + (progress.network to NetworkRecoveryState(
+                        step = progress.step,
+                        status = progress.status,
+                        reason = progress.reason,
+                    ))
+                }
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.RecoverResult>()
+            .onEach { event ->
+                val result = event.result
+                _recoveryProgress.update { current ->
+                    val previous = current[result.network] ?: NetworkRecoveryState()
+                    current + (result.network to previous.copy(
+                        reason = result.reason,
+                        outcome = result.outcome,
+                    ))
+                }
+                // Recovery can change the effective nick or connection state.
+                refresh()
+            }
+            .launchIn(scope)
         connectionManager.events
             .filterIsInstance<WsEvent.TopicChanged>()
             .map { it.topic }

@@ -20,9 +20,15 @@ import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
 import pm.antani.resentin.net.dto.WindowInvitedDto
+import pm.antani.resentin.net.dto.ConnectionProgressDto
+import pm.antani.resentin.net.dto.RecoverProgressDto
+import pm.antani.resentin.net.dto.RecoverResultDto
 
 sealed interface WsEvent {
     data class MessageReceived(val message: ScrollbackMessageDto) : WsEvent
+    data class ConnectionProgress(val progress: ConnectionProgressDto) : WsEvent
+    data class RecoverProgress(val progress: RecoverProgressDto) : WsEvent
+    data class RecoverResult(val result: RecoverResultDto) : WsEvent
     data class IsupportChanged(val isupport: IsupportChangedDto) : WsEvent
     data class MembersSeeded(val seeded: MembersSeededDto) : WsEvent
     data class WhoisBundle(val whois: WhoisBundleDto) : WsEvent

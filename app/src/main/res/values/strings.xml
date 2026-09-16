@@ -49,6 +49,11 @@
     <string name="home_sign_out_quit">Disconnetti da IRC (quit)</string>
     <string name="home_no_networks">Nessuna rete</string>
     <string name="home_no_networks_title">Nessuna rete collegata</string>
+    <string name="home_network_reconnecting">Riconnessione in corso</string>
+    <string name="home_network_reconnecting_description">La rete sta ristabilendo la connessione.</string>
+    <string name="home_network_recovering">Recupero della connessione</string>
+    <string name="home_network_recovering_description">Passaggio: %1$s</string>
+    <string name="home_network_recovery_failed">Recupero della connessione fallito</string>
     <string name="home_no_networks_description">Aggiungi una rete per iniziare a conversare.</string>
     <string name="home_no_networks_available_description">Non hai reti collegate. Scegli una rete disponibile qui sotto per iniziare.</string>
     <string name="home_available_networks_title">Reti disponibili</string>
@@ -512,6 +517,11 @@
     <string name="network_settings_missing_title">Rete non trovata</string>
     <string name="network_settings_missing_description">La rete potrebbe essere stata rimossa. Torna indietro e scegline un’altra.</string>
     <string name="network_settings_connected">Connesso</string>
+    <string name="network_settings_reconnecting">Connessione in corso</string>
+    <string name="network_settings_reconnecting_description">La rete sta ristabilendo la connessione.</string>
+    <string name="network_settings_recovering">Recupero connessione</string>
+    <string name="network_settings_recovering_description">Passaggio: %1$s</string>
+    <string name="network_settings_recover_failed">Recupero connessione fallito</string>
     <string name="network_settings_nick_label">Nick</string>
     <string name="network_settings_ident_label">Ident</string>
     <string name="network_settings_realname_label">Nome reale</string>
