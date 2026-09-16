@@ -441,6 +441,10 @@
     <string name="settings_auto_away_1h">1 ora</string>
     <string name="settings_auto_away_custom_seconds">Secondi:</string>
     <string name="settings_auto_away_desc">Quando tutti i tuoi dispositivi sono chiusi o in background, il bouncer aspetta questo tempo e poi comunica alla rete che sei assente. Resta comunque connesso: questo cambia solo cosa vedono gli altri. Scegli \"mai\" per disattivare del tutto lo stato di assenza.</string>
+    <string name="settings_quit_part_reason_label">Messaggio di uscita predefinito</string>
+    <string name="settings_quit_part_reason_desc">Usato quando esci senza scriverne uno (/quit, /part). Svuota il campo per tornare al messaggio del server.</string>
+    <string name="settings_auto_away_reason_label">Messaggio di assenza automatica</string>
+    <string name="settings_auto_away_reason_desc">Inviato dal bouncer quando è lui a segnarti assente. Svuota il campo per tornare al messaggio del server.</string>
     <string name="settings_peer_profiles_title">Profili degli altri utenti</string>
     <string name="settings_peer_profiles_desc">Disattivato di default; se attivo, grappa chiede il profilo pubblico a ogni nuova persona che incontri in un canale e mostra il badge del genere e l\'avatar quando risponde. Alimenta anche l\'avatar nelle chat private e nelle notifiche.</string>
     <string name="settings_peer_profiles_switch_label">Richiedi profili degli altri utenti</string>

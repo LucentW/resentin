@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.AutoAwayDebounceDto
+import pm.antani.resentin.net.dto.AutoAwayReasonDto
 import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
@@ -18,6 +19,7 @@ import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.MessageEventPayloadDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
+import pm.antani.resentin.net.dto.QuitPartReasonDto
 import pm.antani.resentin.net.dto.TopicChangedDto
 import pm.antani.resentin.net.dto.WebSessionSeveredDto
 import pm.antani.resentin.net.dto.WhoReplyDto
@@ -77,6 +79,12 @@ object WsEventDecoder {
                 )
                 "auto_away_debounce_changed" -> WsEvent.AutoAwayDebounceChanged(
                     AppJson.decodeFromJsonElement(AutoAwayDebounceDto.serializer(), raw),
+                )
+                "quit_part_reason_changed" -> WsEvent.QuitPartReasonChanged(
+                    AppJson.decodeFromJsonElement(QuitPartReasonDto.serializer(), raw),
+                )
+                "auto_away_reason_changed" -> WsEvent.AutoAwayReasonChanged(
+                    AppJson.decodeFromJsonElement(AutoAwayReasonDto.serializer(), raw),
                 )
                 "query_windows_list" -> WsEvent.QueryWindowsListReceived(
                     AppJson.decodeFromJsonElement(QueryWindowsListDto.serializer(), raw),

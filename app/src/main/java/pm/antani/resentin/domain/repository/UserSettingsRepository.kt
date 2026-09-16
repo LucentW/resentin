@@ -63,10 +63,29 @@ class UserSettingsRepository(
     private val _autoAwayDebounceSeconds = MutableStateFlow<Int?>(null)
     val autoAwayDebounceSeconds: StateFlow<Int?> = _autoAwayDebounceSeconds.asStateFlow()
 
+    // Issue 2150 on grappa-irc — the two remembered leave reasons. `null` covers
+    // both "not loaded yet" and "no default stored": the two render identically
+    // (empty field), same conflation cic's leaveReasons.ts signals make. Same
+    // app-wide landing spot as the debounce above: the live pushes fire for
+    // writes from any device on the subject's account.
+    private val _quitPartReason = MutableStateFlow<String?>(null)
+    val quitPartReason: StateFlow<String?> = _quitPartReason.asStateFlow()
+
+    private val _autoAwayReason = MutableStateFlow<String?>(null)
+    val autoAwayReason: StateFlow<String?> = _autoAwayReason.asStateFlow()
+
     fun startListening(scope: CoroutineScope) {
         connectionManager.events
             .filterIsInstance<WsEvent.AutoAwayDebounceChanged>()
             .onEach { _autoAwayDebounceSeconds.value = it.debounce.autoAwayDebounceSeconds }
+            .launchIn(scope)
+        connectionManager.events
+            .filterIsInstance<WsEvent.QuitPartReasonChanged>()
+            .onEach { _quitPartReason.value = it.reason.quitPartReason }
+            .launchIn(scope)
+        connectionManager.events
+            .filterIsInstance<WsEvent.AutoAwayReasonChanged>()
+            .onEach { _autoAwayReason.value = it.reason.autoAwayReason }
             .launchIn(scope)
     }
 
@@ -120,6 +139,17 @@ class UserSettingsRepository(
     suspend fun getAutoAwayDebounce(): Result<Int?> = runCatching {
         authRepository.api(UserSettingsApi::class.java).getAutoAwayDebounce().autoAwayDebounceSeconds
     }.onSuccess { _autoAwayDebounceSeconds.value = it }
+
+    /** Issue 2150 — QUIT/PART default (`null` = server literal). Load failures stay
+     * silent (fail-open to the empty field, which is what "no default" renders as —
+     * same swallow rule as cicchetto's loader); save failures surface inline. */
+    suspend fun getQuitPartReason(): Result<String?> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).getQuitPartReason().quitPartReason
+    }.onSuccess { _quitPartReason.value = it }
+
+    suspend fun getAutoAwayReason(): Result<String?> = runCatching {
+        authRepository.api(UserSettingsApi::class.java).getAutoAwayReason().autoAwayReason
+    }.onSuccess { _autoAwayReason.value = it }
 
     /** M2 — the peer-avatar/gender-badge opt-in. Off by default; without it grappa never
      * queries another user's CTCP USERINFO/AVATAR at all, so a DM partner's avatar (query
@@ -242,6 +272,21 @@ class UserSettingsRepository(
         }
         authRepository.api(UserSettingsApi::class.java).updateAutoAwayDebounce(body).autoAwayDebounceSeconds
     }.onSuccess { _autoAwayDebounceSeconds.value = it }
+
+    /** Persists the QUIT/PART default and mirrors what the server echoed back —
+     * not what was sent: posting `""` answers `null`, and the control must show
+     * the cleared state rather than an empty string it invented (same echo-back
+     * rule as cicchetto's saver; the 422 message names oversize/CRLF problems). */
+    suspend fun updateQuitPartReason(reason: String): Result<String?> = runCatching {
+        val body = buildJsonObject { put("quit_part_reason", reason) }
+        authRepository.api(UserSettingsApi::class.java).updateQuitPartReason(body).quitPartReason
+    }.onSuccess { _quitPartReason.value = it }
+
+    /** Same echo-back discipline as [updateQuitPartReason]. */
+    suspend fun updateAutoAwayReason(reason: String): Result<String?> = runCatching {
+        val body = buildJsonObject { put("auto_away_reason", reason) }
+        authRepository.api(UserSettingsApi::class.java).updateAutoAwayReason(body).autoAwayReason
+    }.onSuccess { _autoAwayReason.value = it }
 
     // `/hilight` watchlist — highlight keyword patterns stored SERVER-side in
     // `user_settings.highlight_patterns` (NOT the /me/settings/* REST family: the

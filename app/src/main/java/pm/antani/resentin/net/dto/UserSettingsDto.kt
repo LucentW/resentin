@@ -64,6 +64,25 @@ data class AutoAwayDebounceDto(
     val autoAwayDebounceSeconds: Int? = null,
 )
 
+/** Issue 2150 on grappa-irc — the QUIT/PART default message, sent when the subject
+ * leaves without typing one (`/quit`, `/part`, the sidebar ×). `null` = nothing
+ * stored (the server falls back to its own literal — never printed from here).
+ * Decode-only, like [AutoAwayDebounceDto]: the PUT body is hand-built, and an
+ * emptied input posts `""`, which the server normalises to "no default". */
+@Serializable
+data class QuitPartReasonDto(
+    val quitPartReason: String? = null,
+)
+
+/** Issue 2150 on grappa-irc — what the bouncer sends when IT marks the subject away
+ * after the auto-away debounce fires. `null` = the server keeps its own constant,
+ * which this client deliberately does not know. Same decode-only + `""`-clears
+ * discipline as [QuitPartReasonDto]. */
+@Serializable
+data class AutoAwayReasonDto(
+    val autoAwayReason: String? = null,
+)
+
 /** M2 — opt-in to grappa opportunistically querying OTHER users' CTCP USERINFO/AVATAR
  * (JOIN/353-triggered, rate-limited, cache-deduped — see grappa's `EventRouter.
  * maybe_query_peer_profile/2`). Off by default; this is the ONE gate behind both the

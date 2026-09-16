@@ -2,6 +2,7 @@ package pm.antani.resentin.domain.events
 
 import kotlinx.serialization.json.JsonObject
 import pm.antani.resentin.net.dto.AutoAwayDebounceDto
+import pm.antani.resentin.net.dto.AutoAwayReasonDto
 import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
@@ -12,6 +13,7 @@ import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
+import pm.antani.resentin.net.dto.QuitPartReasonDto
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
 import pm.antani.resentin.net.dto.TopicChangedDto
 import pm.antani.resentin.net.dto.WebSessionSeveredDto
@@ -44,6 +46,12 @@ sealed interface WsEvent {
      * write this device just made (the server never lets a client originate this state,
      * only mirror it — same push fires for every device on the subject's account). */
     data class AutoAwayDebounceChanged(val debounce: AutoAwayDebounceDto) : WsEvent
+
+    /** Issue 2150 — the QUIT/PART default moved (same mirror discipline as above). */
+    data class QuitPartReasonChanged(val reason: QuitPartReasonDto) : WsEvent
+
+    /** Issue 2150 — the bouncer-sent auto-away message moved. */
+    data class AutoAwayReasonChanged(val reason: AutoAwayReasonDto) : WsEvent
     data class QueryWindowsListReceived(val windows: QueryWindowsListDto) : WsEvent
 
     /** The `away` verb landed — explicit away set or cleared for one network

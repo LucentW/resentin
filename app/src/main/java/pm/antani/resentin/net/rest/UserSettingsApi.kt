@@ -3,8 +3,10 @@ package pm.antani.resentin.net.rest
 import kotlinx.serialization.json.JsonObject
 import pm.antani.resentin.net.dto.AliasesEnvelopeDto
 import pm.antani.resentin.net.dto.AutoAwayDebounceDto
+import pm.antani.resentin.net.dto.AutoAwayReasonDto
 import pm.antani.resentin.net.dto.NotificationPrefsEnvelopeDto
 import pm.antani.resentin.net.dto.DisplayPrefsEnvelopeDto
+import pm.antani.resentin.net.dto.QuitPartReasonDto
 import pm.antani.resentin.net.dto.ShowPeerProfilesDto
 import pm.antani.resentin.net.dto.UploadConfirmEnabledDto
 import pm.antani.resentin.net.dto.UploadTtlSecondsDto
@@ -59,6 +61,27 @@ interface UserSettingsApi {
      * [pm.antani.resentin.net.rest.AdminApi.updateNetwork]). */
     @PUT("me/settings/auto-away-debounce-seconds")
     suspend fun updateAutoAwayDebounce(@Body body: JsonObject): AutoAwayDebounceDto
+
+    /** Issue 2150 — the QUIT/PART default message (`null` = server literal).
+     * See [QuitPartReasonDto]. */
+    @GET("me/settings/quit-part-reason")
+    suspend fun getQuitPartReason(): QuitPartReasonDto
+
+    /** Body is a hand-built [JsonObject] carrying the field's raw contents —
+     * including an emptied input: the server normalises `""` to "no default",
+     * so clearing needs no second verb (same posture as [updateAutoAwayDebounce],
+     * where `null` is the meaningful state instead). */
+    @PUT("me/settings/quit-part-reason")
+    suspend fun updateQuitPartReason(@Body body: JsonObject): QuitPartReasonDto
+
+    /** Issue 2150 — the bouncer-sent auto-away message (`null` = server constant).
+     * See [AutoAwayReasonDto]. */
+    @GET("me/settings/auto-away-reason")
+    suspend fun getAutoAwayReason(): AutoAwayReasonDto
+
+    /** Same raw-contents hand-built body as [updateQuitPartReason]. */
+    @PUT("me/settings/auto-away-reason")
+    suspend fun updateAutoAwayReason(@Body body: JsonObject): AutoAwayReasonDto
 
     /** M2 — the peer-avatar/gender-badge opt-in. See [ShowPeerProfilesDto]. */
     @GET("me/settings/show-peer-profiles")
