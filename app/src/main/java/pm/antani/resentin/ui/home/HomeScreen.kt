@@ -95,6 +95,8 @@ import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.net.dto.MentionsBundleDto
 import pm.antani.resentin.data.prefs.channelKey
 import pm.antani.resentin.domain.repository.PendingInvite
+import pm.antani.resentin.domain.repository.NetworkConnectionProgress
+import pm.antani.resentin.domain.repository.NetworkRecoveryState
 import pm.antani.resentin.domain.repository.serverChannelKey
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.LocalDensityScale
@@ -140,6 +142,8 @@ fun HomeScreen(
     val registrationWizard by viewModel.registrationWizard.collectAsState()
     val pendingInvites by viewModel.pendingInvites.collectAsState()
     val mentionsBundles by viewModel.mentionsBundles.collectAsState()
+    val connectionProgress by viewModel.connectionProgress.collectAsState()
+    val recoveryProgress by viewModel.recoveryProgress.collectAsState()
     // NavHost removes Home from the composition while a chat is open. Keep the same
     // scroll position when it comes back instead of rebuilding from the top.
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -333,6 +337,8 @@ fun HomeScreen(
                                     pinMutedOf = pinMutedOf,
                                     draftChannels = draftChannels,
                                     latestMessages = latestMessages,
+                                    connectionProgress = connectionProgress[network.slug],
+                                    recoveryProgress = recoveryProgress[network.slug],
                                     fetchAvatarBytes = viewModel::fetchAvatarBytes,
                                     canRegisterNick = canRegister,
                                     onRegisterNickClick = {
@@ -884,6 +890,8 @@ private fun NetworkGroupCard(
     pinMutedOf: (networkSlug: String, channel: ChannelEntity) -> Pair<Boolean, Boolean>,
     draftChannels: Set<String>,
     latestMessages: Map<String, MessageEntity>,
+    connectionProgress: NetworkConnectionProgress?,
+    recoveryProgress: NetworkRecoveryState?,
     fetchAvatarBytes: suspend (String) -> ByteArray?,
     canRegisterNick: Boolean = false,
     onRegisterNickClick: () -> Unit = {},
@@ -912,6 +920,26 @@ private fun NetworkGroupCard(
                 onAddClick = onAddClick,
                 onBrowseDirectory = onBrowseDirectory,
             )
+            when {
+                connectionProgress?.state == "connecting" -> ResentinStateBanner(
+                    icon = Icons.Outlined.Refresh,
+                    title = stringResource(R.string.home_network_reconnecting),
+                    description = stringResource(R.string.home_network_reconnecting_description),
+                    tone = ResentinStateTone.INFO,
+                )
+                recoveryProgress?.status == "running" -> ResentinStateBanner(
+                    icon = Icons.Outlined.Refresh,
+                    title = stringResource(R.string.home_network_recovering),
+                    description = stringResource(R.string.home_network_recovering_description, recoveryProgress.step.orEmpty()),
+                    tone = ResentinStateTone.INFO,
+                )
+                recoveryProgress?.outcome == "failed" -> ResentinStateBanner(
+                    icon = Icons.Outlined.WifiOff,
+                    title = stringResource(R.string.home_network_recovery_failed),
+                    description = recoveryProgress.reason,
+                    tone = ResentinStateTone.ERROR,
+                )
+            }
             if (canRegisterNick) {
                 RegisterNickButton(onClick = onRegisterNickClick)
             }

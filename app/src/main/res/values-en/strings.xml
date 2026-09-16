@@ -50,6 +50,11 @@
     <string name="home_sign_out_quit">Quit IRC</string>
     <string name="home_no_networks">No networks</string>
     <string name="home_no_networks_title">No connected networks</string>
+    <string name="home_network_reconnecting">Reconnecting</string>
+    <string name="home_network_reconnecting_description">The network connection is being restored.</string>
+    <string name="home_network_recovering">Recovering connection</string>
+    <string name="home_network_recovering_description">Step: %1$s</string>
+    <string name="home_network_recovery_failed">Connection recovery failed</string>
     <string name="home_no_networks_description">Add a network to start chatting.</string>
     <string name="home_connection_error_title">Connection failed</string>
     <string name="home_connection_error_description">I couldn\'t load your networks. Check your connection and try again.</string>
@@ -511,6 +516,11 @@
     <string name="network_settings_missing_title">Network not found</string>
     <string name="network_settings_missing_description">This network may have been removed. Go back and choose another network.</string>
     <string name="network_settings_connected">Connected</string>
+    <string name="network_settings_reconnecting">Reconnecting</string>
+    <string name="network_settings_reconnecting_description">The network connection is being restored.</string>
+    <string name="network_settings_recovering">Recovering connection</string>
+    <string name="network_settings_recovering_description">Step: %1$s</string>
+    <string name="network_settings_recover_failed">Connection recovery failed</string>
     <string name="network_settings_nick_label">Nick</string>
     <string name="network_settings_ident_label">Ident</string>
     <string name="network_settings_realname_label">Real name</string>

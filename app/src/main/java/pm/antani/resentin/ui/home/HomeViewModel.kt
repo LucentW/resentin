@@ -33,6 +33,8 @@ import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.domain.repository.NetworkConnectionProgress
+import pm.antani.resentin.domain.repository.NetworkRecoveryState
 import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.AvailableNetworkDto
@@ -128,6 +130,10 @@ class HomeViewModel(
      * [NetworksRepository.identifiedNetworkIds]) — the register-nick launcher
      * gate + wizard step-6 auto-complete signal. */
     val identifiedNetworkIds: StateFlow<Set<Int>> = networksRepository.identifiedNetworkIds
+
+    /** Transient upstream connection/recovery state for the Home network rows. */
+    val connectionProgress: StateFlow<Map<String, NetworkConnectionProgress>> = networksRepository.connectionProgress
+    val recoveryProgress: StateFlow<Map<String, NetworkRecoveryState>> = networksRepository.recoveryProgress
 
     /** Inbound INVITEs awaiting Join/Decline (passthrough of
      * [NetworksRepository.pendingInvites]) — rendered as a dismissible banner. */

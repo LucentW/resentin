@@ -34,9 +34,11 @@ import pm.antani.resentin.net.dto.ArchivePurgedDto
 import pm.antani.resentin.net.dto.JoinFailedDto
 import pm.antani.resentin.net.dto.KickedDto
 import pm.antani.resentin.net.dto.PeerAwayDto
+import pm.antani.resentin.net.dto.ConnectionProgressDto
 
 sealed interface WsEvent {
     data class MessageReceived(val message: ScrollbackMessageDto) : WsEvent
+    data class ConnectionProgress(val progress: ConnectionProgressDto) : WsEvent
     /** Live own-nick confirmation after POST /networks/:slug/nick. */
     data class OwnNickChanged(val networkId: Int, val nick: String) : WsEvent
     /** User-topic membership heartbeat; refreshes the authoritative channel list. */

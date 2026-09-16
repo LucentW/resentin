@@ -39,6 +39,7 @@ import pm.antani.resentin.net.dto.ArchivePurgedDto
 import pm.antani.resentin.net.dto.JoinFailedDto
 import pm.antani.resentin.net.dto.KickedDto
 import pm.antani.resentin.net.dto.PeerAwayDto
+import pm.antani.resentin.net.dto.ConnectionProgressDto
 
 /**
  * Decodes a raw event-frame payload into a typed [WsEvent], per the additive-only
@@ -91,6 +92,10 @@ object WsEventDecoder {
                 "archive_purged" -> WsEvent.ArchivePurged(
                     AppJson.decodeFromJsonElement(ArchivePurgedDto.serializer(), raw),
                 )
+                "connection_progress" -> AppJson.decodeFromJsonElement(ConnectionProgressDto.serializer(), raw).let { dto ->
+                    check(dto.state in setOf("connecting", "connected"))
+                    WsEvent.ConnectionProgress(dto)
+                }
                 "isupport_changed" -> WsEvent.IsupportChanged(
                     AppJson.decodeFromJsonElement(IsupportChangedDto.serializer(), raw),
                 )
@@ -151,12 +156,15 @@ object WsEventDecoder {
                 "server_reply" -> WsEvent.ServerReply(
                     AppJson.decodeFromJsonElement(ServerReplyDto.serializer(), raw),
                 )
-                "recover_progress" -> WsEvent.RecoverProgress(
-                    AppJson.decodeFromJsonElement(RecoverProgressDto.serializer(), raw),
-                )
-                "recover_result" -> WsEvent.RecoverResult(
-                    AppJson.decodeFromJsonElement(RecoverResultDto.serializer(), raw),
-                )
+                "recover_progress" -> AppJson.decodeFromJsonElement(RecoverProgressDto.serializer(), raw).let { dto ->
+                    check(dto.step in setOf("identify", "register", "nick", "recover", "release"))
+                    check(dto.status in setOf("running", "ok", "failed"))
+                    WsEvent.RecoverProgress(dto)
+                }
+                "recover_result" -> AppJson.decodeFromJsonElement(RecoverResultDto.serializer(), raw).let { dto ->
+                    check(dto.outcome in setOf("succeeded", "failed"))
+                    WsEvent.RecoverResult(dto)
+                }
                 "mentions_bundle" -> WsEvent.MentionsBundle(
                     AppJson.decodeFromJsonElement(MentionsBundleDto.serializer(), raw),
                 )
