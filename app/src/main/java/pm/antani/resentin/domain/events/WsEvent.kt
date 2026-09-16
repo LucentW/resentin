@@ -9,7 +9,13 @@ import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.RecoverProgressDto
+import pm.antani.resentin.net.dto.RecoverResultDto
+import pm.antani.resentin.net.dto.ServerReplyDto
+import pm.antani.resentin.net.dto.SupportedUmodesChangedDto
+import pm.antani.resentin.net.dto.UmodeChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
@@ -55,6 +61,27 @@ sealed interface WsEvent {
 
     /** Reply to a `who` verb query — the folded 352 burst for one target. */
     data class WhoReply(val who: WhoReplyDto) : WsEvent
+
+    /** Reply to a `links` verb query — the folded 364 burst for one mask.
+     * An empty bundle is still a snapshot (restricted topology vs no-match,
+     * told apart by `mask`), same ephemeral last-write-wins discipline as who. */
+    data class LinksBundle(val links: LinksBundleDto) : WsEvent
+
+    /** Operator's own umodes for one network (221 + self-MODE echoes). */
+    data class UmodeChanged(val umodes: UmodeChangedDto) : WsEvent
+
+    /** Server-text reply to an info/version/motd/admin query (one modal
+     * surface for all four sources, last-write-wins per network). */
+    data class ServerReply(val reply: ServerReplyDto) : WsEvent
+
+    /** One recover step transition (opens the modal on first arrival). */
+    data class RecoverProgress(val progress: RecoverProgressDto) : WsEvent
+
+    /** Terminal recover outcome (dropped when the modal is closed). */
+    data class RecoverResult(val result: RecoverResultDto) : WsEvent
+
+    /** Server-advertised supported umodes for one network (004). */
+    data class SupportedUmodesChanged(val supported: SupportedUmodesChangedDto) : WsEvent
 
     /** Reply to an `lusers` verb query — the RFC 2812 §3.4.2 counters. The
      * server also auto-emits one on connect welcome, which receivers must drop

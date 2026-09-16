@@ -32,7 +32,13 @@ import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.RecoverProgressDto
+import pm.antani.resentin.net.dto.RecoverResultDto
+import pm.antani.resentin.net.dto.ServerReplyDto
+import pm.antani.resentin.net.dto.SupportedUmodesChangedDto
+import pm.antani.resentin.net.dto.UmodeChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
 import pm.antani.resentin.net.dto.UserhostDto
@@ -59,6 +65,10 @@ class MembersRepository(
                 is WsEvent.MembersSeeded -> recordMembers(event.seeded)
                 is WsEvent.MessageReceived -> applyPresenceEvent(event.message)
                 is WsEvent.AwayConfirmed -> recordAway(event.away)
+                is WsEvent.UmodeChanged -> _umodesByNetworkId.value += (event.umodes.networkId to event.umodes.modes)
+                is WsEvent.SupportedUmodesChanged -> _supportedUmodesByNetworkId.value += (event.supported.networkId to event.supported.modes)
+                is WsEvent.RecoverProgress -> applyRecoverProgress(event.progress)
+                is WsEvent.RecoverResult -> applyRecoverResult(event.result)
                 else -> Unit
             }
         }.launchIn(scope)
@@ -158,6 +168,133 @@ class MembersRepository(
     val lusersEvents: Flow<LusersBundleDto> = connectionManager.events
         .filterIsInstance<WsEvent.LusersBundle>()
         .map { it.lusers }
+
+    /** `/links [mask]` — the server folds the 364 burst and the reply arrives
+     * as a [linksEvents] bundle, not a push ack. An empty bundle is still a
+     * snapshot (restricted topology vs mask-matched-nothing). */
+    suspend fun requestLinks(subject: String, networkId: Int, mask: String? = null) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "links",
+            buildJsonObject {
+                put("network_id", networkId)
+                mask?.let { put("mask", it) }
+            },
+        )
+    }
+
+    val linksEvents: Flow<LinksBundleDto> = connectionManager.events
+        .filterIsInstance<WsEvent.LinksBundle>()
+        .map { it.links }
+
+    // Operator's own umodes per network id (221 + self-MODE echoes) — the
+    // UmodeModal's ACTIVE set. Harmlessly overwritten on the next seed.
+    private val _umodesByNetworkId = MutableStateFlow<Map<Int, List<String>>>(emptyMap())
+    val umodesByNetworkId: StateFlow<Map<Int, List<String>>> = _umodesByNetworkId.asStateFlow()
+
+    // Server-advertised supported umodes per network id (004) — the modal's
+    // AVAILABILITY set. Empty = unseeded -> static fallback table.
+    private val _supportedUmodesByNetworkId = MutableStateFlow<Map<Int, List<String>>>(emptyMap())
+    val supportedUmodesByNetworkId: StateFlow<Map<Int, List<String>>> = _supportedUmodesByNetworkId.asStateFlow()
+
+    /** `/umode <modes>` — user-mode on own nick, same `umode` WS verb cicchetto
+     * pushes (one feature, one code path as the modal toggles). */
+    suspend fun setUmode(subject: String, networkId: Int, modes: String) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "umode",
+            buildJsonObject {
+                put("network_id", networkId)
+                put("modes", modes)
+            },
+        )
+    }
+
+    /** No-arg server-text queries — each primes a server accumulator and the
+     * reply drains as a `serverReplyEvents` bundle (one modal surface). */
+    suspend fun requestInfo(subject: String, networkId: Int) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "info",
+            buildJsonObject { put("network_id", networkId) },
+        )
+    }
+
+    suspend fun requestVersion(subject: String, networkId: Int) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "version",
+            buildJsonObject { put("network_id", networkId) },
+        )
+    }
+
+    suspend fun requestMotd(subject: String, networkId: Int, target: String? = null) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "motd",
+            buildJsonObject {
+                put("network_id", networkId)
+                target?.let { put("target", it) }
+            },
+        )
+    }
+
+    suspend fun requestAdmin(subject: String, networkId: Int, target: String? = null) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "admin",
+            buildJsonObject {
+                put("network_id", networkId)
+                target?.let { put("target", it) }
+            },
+        )
+    }
+
+    val serverReplyEvents: Flow<ServerReplyDto> = connectionManager.events
+        .filterIsInstance<WsEvent.ServerReply>()
+        .map { it.reply }
+
+    // "Recover my identity" progress — cicchetto recoverProgress.ts parity.
+    // Server-driven only: the first progress OPENS the state, later events
+    // upsert steps, the terminal result concludes it. A result arriving while
+    // closed is dropped (no resurrect after dismiss).
+    private val _recoverState = MutableStateFlow<RecoverState?>(null)
+    val recoverState: StateFlow<RecoverState?> = _recoverState.asStateFlow()
+
+    fun dismissRecover() { _recoverState.value = null }
+
+    private fun applyRecoverProgress(dto: RecoverProgressDto) {
+        val current = _recoverState.value
+        if (current == null) {
+            _recoverState.value = RecoverState(
+                networkSlug = dto.network,
+                steps = listOf(RecoverStepEntry(dto.step, dto.status)),
+            )
+            return
+        }
+        // Per-network isolation: another network's event never mixes into the
+        // open modal's steps.
+        if (!dto.network.equals(current.networkSlug, ignoreCase = true)) return
+        _recoverState.value = current.copy(steps = upsertRecoverStep(current.steps, dto.step, dto.status))
+    }
+
+    private fun applyRecoverResult(dto: RecoverResultDto) {
+        val current = _recoverState.value ?: return
+        if (!dto.network.equals(current.networkSlug, ignoreCase = true)) return
+        _recoverState.value = current.copy(outcome = dto.outcome, reason = dto.reason)
+    }
+
+    /** `/recover` — the server runs the NickServ recovery sequence and streams
+     * progress/result events (which open/conclude the modal above). Never
+     * opened optimistically here. Rejections (nothing_to_recover /
+     * already_identified / recovery_in_progress / forbidden) throw. */
+    suspend fun requestRecover(subject: String, networkId: Int) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "recover",
+            buildJsonObject { put("network_id", networkId) },
+        )
+    }
 
     /** `/kb` step one — resolves a nick to `user@host` from the server's userhost
      * cache via an awaited push reply. Returns null on `not_cached` (cicchetto's

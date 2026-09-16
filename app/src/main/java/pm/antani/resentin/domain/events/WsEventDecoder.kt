@@ -14,7 +14,13 @@ import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.RecoverProgressDto
+import pm.antani.resentin.net.dto.RecoverResultDto
+import pm.antani.resentin.net.dto.ServerReplyDto
+import pm.antani.resentin.net.dto.SupportedUmodesChangedDto
+import pm.antani.resentin.net.dto.UmodeChangedDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.MessageEventPayloadDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
@@ -92,6 +98,24 @@ object WsEventDecoder {
                 )
                 "lusers_bundle" -> WsEvent.LusersBundle(
                     AppJson.decodeFromJsonElement(LusersBundleDto.serializer(), raw),
+                )
+                "links_bundle" -> WsEvent.LinksBundle(
+                    AppJson.decodeFromJsonElement(LinksBundleDto.serializer(), raw),
+                )
+                "umode_changed" -> WsEvent.UmodeChanged(
+                    AppJson.decodeFromJsonElement(UmodeChangedDto.serializer(), raw),
+                )
+                "supported_umodes_changed" -> WsEvent.SupportedUmodesChanged(
+                    AppJson.decodeFromJsonElement(SupportedUmodesChangedDto.serializer(), raw),
+                )
+                "server_reply" -> WsEvent.ServerReply(
+                    AppJson.decodeFromJsonElement(ServerReplyDto.serializer(), raw),
+                )
+                "recover_progress" -> WsEvent.RecoverProgress(
+                    AppJson.decodeFromJsonElement(RecoverProgressDto.serializer(), raw),
+                )
+                "recover_result" -> WsEvent.RecoverResult(
+                    AppJson.decodeFromJsonElement(RecoverResultDto.serializer(), raw),
                 )
                 "window_invited" -> WsEvent.WindowInvited(
                     AppJson.decodeFromJsonElement(WindowInvitedDto.serializer(), raw),
