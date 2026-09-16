@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pm.antani.resentin.R
@@ -145,6 +146,57 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                             shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                    }
+                    ResentinSectionCard {
+                        Text(
+                            stringResource(R.string.network_settings_credentials_label).uppercase(),
+                            style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 0.8.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = state.nickservPassword,
+                            onValueChange = viewModel::onNickservPasswordChange,
+                            label = { Text(stringResource(R.string.network_settings_nickserv_password_label)) },
+                            placeholder = { Text(stringResource(R.string.network_settings_password_unchanged)) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.network_settings_nickserv_password_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = state.serverPass,
+                            onValueChange = viewModel::onServerPassChange,
+                            label = { Text(stringResource(R.string.network_settings_server_pass_label)) },
+                            placeholder = { Text(stringResource(R.string.network_settings_password_unchanged)) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            stringResource(R.string.network_settings_server_pass_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (state.serverPassSet) {
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = viewModel::clearServerPass,
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Text(stringResource(R.string.network_settings_server_pass_remove))
+                            }
+                        }
                     }
                     ResentinSectionCard {
                         Text(

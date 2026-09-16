@@ -4,9 +4,13 @@ import okhttp3.MultipartBody
 import okhttp3.ResponseBody
 import pm.antani.resentin.net.dto.ConnectionStateUpdateDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
+import pm.antani.resentin.net.dto.NickUpdateDto
+import pm.antani.resentin.net.dto.NetworkPasswordUpdateDto
 import pm.antani.resentin.net.dto.PerformDto
 import pm.antani.resentin.net.dto.PerformUpdateDto
 import pm.antani.resentin.net.dto.ProfileUpdateDto
+import pm.antani.resentin.net.dto.ServerPassDto
+import pm.antani.resentin.net.dto.ServerPassUpdateDto
 import pm.antani.resentin.net.dto.TopicUpdateDto
 import retrofit2.Response
 import retrofit2.http.Body
@@ -21,8 +25,23 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface NetworkSettingsApi {
+    /** Live IRC NICK command, without changing the configured identity. */
+    @POST("networks/{slug}/nick")
+    suspend fun postNick(@Path("slug") slug: String, @Body body: NickUpdateDto): Response<ResponseBody>
+
     @PATCH("networks/{slug}/identity")
     suspend fun updateIdentity(@Path("slug") slug: String, @Body body: IdentityUpdateDto): Response<ResponseBody>
+
+    /** Write-only NickServ password; the response never contains the secret. */
+    @PUT("networks/{slug}/password")
+    suspend fun updatePassword(@Path("slug") slug: String, @Body body: NetworkPasswordUpdateDto): Response<ResponseBody>
+
+    /** Server PASS set-ness; the secret itself is never returned. */
+    @GET("networks/{slug}/server_pass")
+    suspend fun getServerPass(@Path("slug") slug: String): ServerPassDto
+
+    @PUT("networks/{slug}/server_pass")
+    suspend fun updateServerPass(@Path("slug") slug: String, @Body body: ServerPassUpdateDto): ServerPassDto
 
     // KVIrc-style CTCP USERINFO profile (age/gender/location/languages/custom) — never
     // bounces the live connection, unlike /identity above.

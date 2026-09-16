@@ -725,7 +725,7 @@ class ChatViewModel(
                 setDraft("")
             }
             "nick" -> {
-                networksRepository.updateIdentity(networkSlug, requireNotNull(argument), null, null).getOrThrow()
+                networksRepository.changeNick(networkSlug, requireNotNull(argument)).getOrThrow()
                 setDraft("")
             }
             "msg" -> {

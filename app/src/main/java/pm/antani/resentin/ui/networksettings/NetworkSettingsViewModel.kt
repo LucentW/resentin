@@ -29,6 +29,11 @@ data class NetworkSettingsUiState(
     val nick: String = "",
     val ident: String = "",
     val realname: String = "",
+    // Both credential fields are write-only. Blank means "leave unchanged".
+    val nickservPassword: String = "",
+    val serverPass: String = "",
+    val serverPassSet: Boolean = false,
+    val serverPassClearRequested: Boolean = false,
     val connected: Boolean = true,
     val performList: String = "",
     // KVIrc-style CTCP USERINFO profile — `gender` is one of "", "male", "female",
@@ -121,6 +126,11 @@ class NetworkSettingsViewModel(
             networksRepository.getPerform(networkSlug)
                 .onSuccess { perform -> _uiState.update { it.copy(performList = perform.performList.orEmpty()) } }
         }
+        viewModelScope.launch {
+            networksRepository.getServerPassSet(networkSlug)
+                .onSuccess { configured -> _uiState.update { it.copy(serverPassSet = configured) } }
+                .onFailure { failure -> _uiState.update { it.copy(error = failure.message) } }
+        }
     }
 
     private fun loadAvatarBitmap(url: String?) {
@@ -138,6 +148,13 @@ class NetworkSettingsViewModel(
 
     fun onNickChange(value: String) = _uiState.update { it.copy(nick = value, saved = false) }
     fun onIdentChange(value: String) = _uiState.update { it.copy(ident = value, saved = false) }
+    fun onNickservPasswordChange(value: String) = _uiState.update { it.copy(nickservPassword = value, saved = false) }
+    fun onServerPassChange(value: String) = _uiState.update {
+        it.copy(serverPass = value, serverPassClearRequested = false, saved = false)
+    }
+    fun clearServerPass() = _uiState.update {
+        it.copy(serverPass = "", serverPassClearRequested = true, saved = false)
+    }
     fun onRealnameChange(value: String) = _uiState.update { it.copy(realname = value, saved = false) }
     fun onPerformChange(value: String) = _uiState.update { it.copy(performList = value, saved = false) }
     fun onProfileAgeChange(value: String) = _uiState.update { it.copy(profileAge = value, saved = false) }
@@ -173,8 +190,35 @@ class NetworkSettingsViewModel(
                 languages = state.profileLanguages.trim(),
                 custom = state.profileCustom.trim(),
             )
-            val failure = identityResult.exceptionOrNull() ?: performResult.exceptionOrNull() ?: profileResult.exceptionOrNull()
-            _uiState.update { it.copy(isSaving = false, error = failure?.message, saved = failure == null) }
+            val passwordResult: Result<Unit> =
+                if (state.nickservPassword.isBlank()) {
+                    Result.success(Unit)
+                } else {
+                    networksRepository.updateNetworkPassword(networkSlug, state.nickservPassword)
+                }
+            val serverPassResult: Result<Boolean> = when {
+                state.serverPassClearRequested -> networksRepository.updateServerPass(networkSlug, "")
+                state.serverPass.isNotBlank() -> networksRepository.updateServerPass(networkSlug, state.serverPass)
+                else -> Result.success(state.serverPassSet)
+            }
+            val failure = listOf(
+                identityResult.exceptionOrNull(),
+                performResult.exceptionOrNull(),
+                profileResult.exceptionOrNull(),
+                passwordResult.exceptionOrNull(),
+                serverPassResult.exceptionOrNull(),
+            ).firstOrNull { it != null }
+            _uiState.update {
+                it.copy(
+                    isSaving = false,
+                    error = failure?.message,
+                    saved = failure == null,
+                    nickservPassword = if (passwordResult.isSuccess) "" else it.nickservPassword,
+                    serverPass = if (serverPassResult.isSuccess) "" else it.serverPass,
+                    serverPassSet = serverPassResult.getOrNull() ?: it.serverPassSet,
+                    serverPassClearRequested = if (serverPassResult.isSuccess) false else it.serverPassClearRequested,
+                )
+            }
         }
     }
 

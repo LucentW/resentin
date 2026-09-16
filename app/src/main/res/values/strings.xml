@@ -520,6 +520,13 @@
     <string name="network_settings_nick_label">Nick</string>
     <string name="network_settings_ident_label">Ident</string>
     <string name="network_settings_realname_label">Nome reale</string>
+    <string name="network_settings_credentials_label">Credenziali IRC</string>
+    <string name="network_settings_nickserv_password_label">Password NickServ</string>
+    <string name="network_settings_nickserv_password_hint">Lascia vuoto per non cambiarla. Viene usata per l’identificazione automatica.</string>
+    <string name="network_settings_server_pass_label">Password del server IRC</string>
+    <string name="network_settings_server_pass_hint">Password richiesta dalla rete prima della registrazione. Lascia vuoto per non cambiarla.</string>
+    <string name="network_settings_password_unchanged">Nessuna modifica</string>
+    <string name="network_settings_server_pass_remove">Rimuovi password server</string>
     <string name="network_settings_perform_label">Perform list (comandi eseguiti alla connessione)</string>
     <string name="network_settings_perform_placeholder">Un comando IRC per riga</string>
     <string name="network_settings_saved">Salvato</string>
