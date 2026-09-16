@@ -29,6 +29,9 @@ interface NetworkDao {
     @Query("SELECT nick FROM networks WHERE slug = :slug")
     suspend fun nickForSlug(slug: String): String?
 
+    @Query("UPDATE networks SET nick = :nick WHERE id = :networkId")
+    suspend fun updateNickById(networkId: Int, nick: String)
+
     @Query("SELECT * FROM networks WHERE slug = :slug")
     fun observeNetwork(slug: String): Flow<NetworkEntity?>
 }

@@ -51,6 +51,10 @@ object WsEventDecoder {
                 "message" -> WsEvent.MessageReceived(
                     AppJson.decodeFromJsonElement(MessageEventPayloadDto.serializer(), raw).message,
                 )
+                "own_nick_changed" -> WsEvent.OwnNickChanged(
+                    networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),
+                    nick = raw.getValue("nick").jsonPrimitive.content,
+                )
                 "isupport_changed" -> WsEvent.IsupportChanged(
                     AppJson.decodeFromJsonElement(IsupportChangedDto.serializer(), raw),
                 )

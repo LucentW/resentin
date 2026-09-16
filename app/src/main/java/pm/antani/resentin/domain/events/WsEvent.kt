@@ -23,6 +23,8 @@ import pm.antani.resentin.net.dto.WindowInvitedDto
 
 sealed interface WsEvent {
     data class MessageReceived(val message: ScrollbackMessageDto) : WsEvent
+    /** Live own-nick confirmation after POST /networks/:slug/nick. */
+    data class OwnNickChanged(val networkId: Int, val nick: String) : WsEvent
     data class IsupportChanged(val isupport: IsupportChangedDto) : WsEvent
     data class MembersSeeded(val seeded: MembersSeededDto) : WsEvent
     data class WhoisBundle(val whois: WhoisBundleDto) : WsEvent

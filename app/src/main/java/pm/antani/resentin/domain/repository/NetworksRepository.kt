@@ -40,6 +40,8 @@ import pm.antani.resentin.net.dto.DirectoryPageDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.net.dto.IdentityUpdateDto
 import pm.antani.resentin.net.dto.JoinChannelRequestDto
+import pm.antani.resentin.net.dto.NickUpdateDto
+import pm.antani.resentin.net.dto.NetworkPasswordUpdateDto
 import pm.antani.resentin.net.dto.NetworkDto
 import pm.antani.resentin.net.dto.SessionNetworkRequestDto
 import pm.antani.resentin.net.dto.NotifyRequestDto
@@ -47,6 +49,7 @@ import pm.antani.resentin.net.dto.PerformDto
 import pm.antani.resentin.net.dto.PerformUpdateDto
 import pm.antani.resentin.net.dto.ProfileUpdateDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
+import pm.antani.resentin.net.dto.ServerPassUpdateDto
 import pm.antani.resentin.net.dto.TopicUpdateDto
 import pm.antani.resentin.net.rest.NetworkSettingsApi
 import pm.antani.resentin.net.rest.NetworksApi
@@ -148,6 +151,11 @@ class NetworksRepository(
     /** Keeps each channel's stored topic current from `topic_changed` events, which the
      * server pushes unsolicited on channel join — no dedicated REST GET exists for it. */
     fun startListening(connectionManager: ConnectionManager, scope: CoroutineScope) {
+        connectionManager.events
+            .filterIsInstance<WsEvent.OwnNickChanged>()
+            .onEach { event -> db.networkDao().updateNickById(event.networkId, event.nick) }
+            .launchIn(scope)
+
         connectionManager.events
             .filterIsInstance<WsEvent.TopicChanged>()
             .map { it.topic }
@@ -404,6 +412,32 @@ class NetworksRepository(
             check(response.isSuccessful) { "HTTP ${response.code()}" }
             refresh().getOrThrow()
         }
+
+    /** Sends a live NICK command without overwriting the configured identity. */
+    suspend fun changeNick(slug: String, nick: String): Result<Unit> = runCatching {
+        val response = authRepository.api(NetworkSettingsApi::class.java)
+            .postNick(slug, NickUpdateDto(nick))
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
+
+    /** Stores the NickServ password. Blank input is rejected by the server; the
+     * settings UI only calls this when the user supplied a value. */
+    suspend fun updateNetworkPassword(slug: String, password: String): Result<Unit> = runCatching {
+        val response = authRepository.api(NetworkSettingsApi::class.java)
+            .updatePassword(slug, NetworkPasswordUpdateDto(password))
+        check(response.isSuccessful) { "HTTP ${response.code()}" }
+    }
+
+    suspend fun getServerPassSet(slug: String): Result<Boolean> = runCatching {
+        authRepository.api(NetworkSettingsApi::class.java).getServerPass(slug).serverPassSet
+    }
+
+    /** Updates or clears the upstream IRC PASS secret. The response only carries
+     * the resulting set-ness, never the password itself. */
+    suspend fun updateServerPass(slug: String, serverPass: String): Result<Boolean> = runCatching {
+        authRepository.api(NetworkSettingsApi::class.java)
+            .updateServerPass(slug, ServerPassUpdateDto(serverPass)).serverPassSet
+    }
 
     suspend fun updateProfile(
         slug: String,

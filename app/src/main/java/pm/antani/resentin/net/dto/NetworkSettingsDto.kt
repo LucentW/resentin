@@ -9,6 +9,32 @@ data class IdentityUpdateDto(
     val realname: String? = null,
 )
 
+/** Live nick command payload. */
+@Serializable
+data class NickUpdateDto(
+    val nick: String,
+)
+
+/** Write-only NickServ credential update payload. */
+@Serializable
+data class NetworkPasswordUpdateDto(
+    val password: String,
+)
+
+/** The server password endpoint never returns the secret itself. */
+@Serializable
+data class ServerPassDto(
+    @kotlinx.serialization.SerialName("server_pass_set")
+    val serverPassSet: Boolean = false,
+)
+
+/** Server PASS update; an explicit empty string clears it. */
+@Serializable
+data class ServerPassUpdateDto(
+    @kotlinx.serialization.SerialName("server_pass")
+    val serverPass: String,
+)
+
 @Serializable
 data class ConnectionStateUpdateDto(
     val connectionState: String,
