@@ -19,6 +19,12 @@ class SlashCommandTest {
     }
 
     @Test
+    fun parsesLinksWithAnOptionalMask() {
+        assertParsed("/links", "links", emptyList())
+        assertParsed("/links *.example", "links", listOf("*.example"))
+    }
+
+    @Test
     fun recognizesQueryAlias() {
         assertParsed("/q mario", "query", listOf("mario"))
     }

@@ -65,6 +65,23 @@ data class LusersBundleDto(
     val maxGlobal: Int? = null,
 )
 
+/** One row returned by the IRC `LINKS` command. */
+@Serializable
+data class LinksEntryDto(
+    val server: String,
+    val linkedTo: String? = null,
+    val hopcount: Int? = null,
+    val description: String? = null,
+)
+
+/** Reply to `/links [mask]` — mirrors cicchetto's `links_bundle`. */
+@Serializable
+data class LinksBundleDto(
+    val network: String,
+    val mask: String? = null,
+    val entries: List<LinksEntryDto> = emptyList(),
+)
+
 /** `phx_reply` response of the `watchlist` verb (`add`/`del`/`list`) — mirrors
  * cicchetto's `{patterns: string[]}`. */
 @Serializable

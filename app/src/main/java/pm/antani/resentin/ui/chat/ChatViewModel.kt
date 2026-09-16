@@ -47,6 +47,7 @@ import pm.antani.resentin.irc.MessageLines
 import pm.antani.resentin.irc.presenceVisible
 import pm.antani.resentin.irc.serviceNickFor
 import pm.antani.resentin.net.RateLimitException
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
@@ -166,6 +167,12 @@ class ChatViewModel(
     val lusers: StateFlow<LusersBundleDto?> = _lusers.asStateFlow()
     private var lusersRequested = false
     fun dismissLusers() { _lusers.value = null }
+
+    // Ephemeral `/links` result card. The server only replies to an explicit request.
+    private val _links = MutableStateFlow<LinksBundleDto?>(null)
+    val links: StateFlow<LinksBundleDto?> = _links.asStateFlow()
+    private var linksRequested = false
+    fun dismissLinks() { _links.value = null }
 
     // `/hilight` add/del confirmation ("highlight (N): ..."), dismissible.
     private val _highlightNotice = MutableStateFlow<String?>(null)
@@ -392,6 +399,14 @@ class ChatViewModel(
                 if (lusersRequested && dto.network.equals(networkSlug, ignoreCase = true)) {
                     lusersRequested = false
                     _lusers.value = dto
+                }
+            }
+        }
+        viewModelScope.launch {
+            membersRepository.linksEvents.collect { dto ->
+                if (linksRequested && dto.network.equals(networkSlug, ignoreCase = true)) {
+                    linksRequested = false
+                    _links.value = dto
                 }
             }
         }
@@ -715,6 +730,12 @@ class ChatViewModel(
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
                 lusersRequested = true
                 membersRepository.requestLusers(subject, networkId, args.getOrNull(0), args.getOrNull(1))
+                setDraft("")
+            }
+            "links" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                linksRequested = true
+                membersRepository.requestLinks(subject, networkId, args.joinToString(" ").ifBlank { null })
                 setDraft("")
             }
             "names" -> {

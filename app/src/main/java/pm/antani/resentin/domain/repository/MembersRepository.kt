@@ -32,6 +32,7 @@ import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.ScrollbackMessageDto
@@ -158,6 +159,22 @@ class MembersRepository(
     val lusersEvents: Flow<LusersBundleDto> = connectionManager.events
         .filterIsInstance<WsEvent.LusersBundle>()
         .map { it.lusers }
+
+    /** `/links [mask]` — the reply arrives as a [linksEvents] topology bundle. */
+    suspend fun requestLinks(subject: String, networkId: Int, mask: String? = null) {
+        connectionManager.sendVerb(
+            "grappa:user:$subject",
+            "links",
+            buildJsonObject {
+                put("network_id", networkId)
+                mask?.takeIf { it.isNotBlank() }?.let { put("mask", it) }
+            },
+        )
+    }
+
+    val linksEvents: Flow<LinksBundleDto> = connectionManager.events
+        .filterIsInstance<WsEvent.LinksBundle>()
+        .map { it.links }
 
     /** `/kb` step one — resolves a nick to `user@host` from the server's userhost
      * cache via an awaited push reply. Returns null on `not_cached` (cicchetto's

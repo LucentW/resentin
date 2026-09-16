@@ -148,6 +148,7 @@ import pm.antani.resentin.irc.SystemEventFormatter
 import pm.antani.resentin.irc.containsMention
 import pm.antani.resentin.irc.matchesHighlight
 import pm.antani.resentin.irc.MessageLines
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
@@ -393,6 +394,7 @@ fun ChatScreen(
     val whowas by viewModel.whowas.collectAsState()
     val whoReply by viewModel.whoReply.collectAsState()
     val lusers by viewModel.lusers.collectAsState()
+    val links by viewModel.links.collectAsState()
     val highlightNotice by viewModel.highlightNotice.collectAsState()
     val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
@@ -1305,6 +1307,11 @@ fun ChatScreen(
                     Spacer(Modifier.size(8.dp))
                     LusersCard(bundle = lusersValue, onDismiss = viewModel::dismissLusers)
                 }
+                val linksValue = links
+                if (linksValue != null) {
+                    Spacer(Modifier.size(8.dp))
+                    LinksCard(bundle = linksValue, onDismiss = viewModel::dismissLinks)
+                }
                 val highlightNoticeValue = highlightNotice
                 if (highlightNoticeValue != null) {
                     Spacer(Modifier.size(8.dp))
@@ -1930,6 +1937,36 @@ private fun LusersCard(bundle: LusersBundleDto, onDismiss: () -> Unit) {
                     bundle.maxGlobal?.toString().orEmpty(),
                 ),
             )
+        }
+    }
+}
+
+/** `/links` result — a textual view of the current IRC server topology. */
+@Composable
+private fun LinksCard(bundle: LinksBundleDto, onDismiss: () -> Unit) {
+    EphemeralResultCard(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.chat_links_title, bundle.network),
+    ) {
+        bundle.mask?.takeIf { it.isNotBlank() }?.let {
+            EphemeralResultLine(stringResource(R.string.chat_links_mask, it))
+        }
+        if (bundle.entries.isEmpty()) {
+            EphemeralResultLine(stringResource(R.string.chat_links_empty))
+        } else {
+            bundle.entries.forEach { entry ->
+                EphemeralResultLine(
+                    stringResource(
+                        R.string.chat_links_entry,
+                        entry.server,
+                        entry.linkedTo ?: "—",
+                        entry.hopcount?.toString() ?: "?",
+                    ),
+                )
+                entry.description?.takeIf { it.isNotBlank() }?.let {
+                    EphemeralResultLine(stringResource(R.string.chat_links_description, it))
+                }
+            }
         }
     }
 }

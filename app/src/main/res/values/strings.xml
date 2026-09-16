@@ -643,6 +643,7 @@
     <string name="chat_slash_syntax_who">/who &lt;#canale-o-mask&gt;</string>
     <string name="chat_slash_syntax_names">/names &lt;#canale&gt;</string>
     <string name="chat_slash_syntax_lusers">/lusers</string>
+    <string name="chat_slash_syntax_links">/links [mask]</string>
     <string name="chat_slash_syntax_privilege">/op|/deop|/voice|/devoice &lt;nick&gt;…</string>
     <string name="chat_slash_syntax_kick">/kick &lt;nick&gt; [motivo]</string>
     <string name="chat_slash_syntax_kickban">/kb|/kickban &lt;nick&gt; [motivo]</string>
@@ -671,6 +672,7 @@
     <string name="chat_slash_description_whowas">Mostra le informazioni storiche di un nick</string>
     <string name="chat_slash_description_who">Cerca utenti sul server</string>
     <string name="chat_slash_description_names">Richiedi la lista dei nick</string>
+    <string name="chat_slash_description_links">Mostra i server collegati della rete</string>
     <string name="chat_slash_description_lusers">Mostra le statistiche del server</string>
     <string name="chat_slash_description_op">Concede il privilegio operatore</string>
     <string name="chat_slash_description_deop">Rimuove il privilegio operatore</string>
@@ -707,6 +709,11 @@
     <string name="chat_whowas_not_found">Nessuna informazione su %1$s</string>
     <string name="chat_who_title">WHO %1$s</string>
     <string name="chat_who_empty">Nessun utente trovato</string>
+    <string name="chat_links_title">Links %1$s</string>
+    <string name="chat_links_mask">Mask: %1$s</string>
+    <string name="chat_links_empty">Nessun server collegato</string>
+    <string name="chat_links_entry">%1$s → %2$s (hop %3$s)</string>
+    <string name="chat_links_description">Descrizione: %1$s</string>
     <string name="chat_lusers_title">Lusers %1$s</string>
     <string name="chat_lusers_users_line">Utenti: %1$s</string>
     <string name="chat_lusers_invisible_line">Invisibili: %1$s</string>

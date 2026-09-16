@@ -9,6 +9,7 @@ import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.QueryWindowsListDto
@@ -60,6 +61,9 @@ sealed interface WsEvent {
      * server also auto-emits one on connect welcome, which receivers must drop
      * unless they asked (same consume-once gate as cicchetto's lusersBundle). */
     data class LusersBundle(val lusers: LusersBundleDto) : WsEvent
+
+    /** Reply to `/links [mask]` — the current IRC server topology. */
+    data class LinksBundle(val links: LinksBundleDto) : WsEvent
 
     /** `read_cursor_set` carries no network/channel in its payload — only in the topic
      * it arrives on (`grappa:user:{u}/network:{slug}/channel:{chan}`), so [topic] is

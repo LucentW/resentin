@@ -14,6 +14,7 @@ import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
 import pm.antani.resentin.net.dto.MessageEventPayloadDto
@@ -92,6 +93,9 @@ object WsEventDecoder {
                 )
                 "lusers_bundle" -> WsEvent.LusersBundle(
                     AppJson.decodeFromJsonElement(LusersBundleDto.serializer(), raw),
+                )
+                "links_bundle" -> WsEvent.LinksBundle(
+                    AppJson.decodeFromJsonElement(LinksBundleDto.serializer(), raw),
                 )
                 "window_invited" -> WsEvent.WindowInvited(
                     AppJson.decodeFromJsonElement(WindowInvitedDto.serializer(), raw),

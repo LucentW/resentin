@@ -4,7 +4,7 @@ import pm.antani.resentin.R
 
 enum class SlashArgumentKind { NONE, TEXT, CHANNEL, NICK, NICKS, NETWORK, MODES, MASK, COMMAND, ALIAS }
 enum class SlashCommandAvailability { SUPPORTED, RECOGNIZED_UNSUPPORTED }
-enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, IGNORE, UNIGNORE, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
+enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, LINKS, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, IGNORE, UNIGNORE, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
 
 data class SlashCommandSpec(
     val name: String,
@@ -60,6 +60,7 @@ val slashCommandCatalog: List<SlashCommandSpec> = listOf(
     supported("who", R.string.chat_slash_syntax_who, R.string.chat_slash_description_who, argumentKind = SlashArgumentKind.CHANNEL, handler = SlashCommandHandler.WHO),
     supported("names", R.string.chat_slash_syntax_names, R.string.chat_slash_description_names, argumentKind = SlashArgumentKind.CHANNEL, minArguments = 1, handler = SlashCommandHandler.NAMES),
     supported("lusers", R.string.chat_slash_syntax_lusers, R.string.chat_slash_description_lusers, handler = SlashCommandHandler.LUSERS),
+    supported("links", R.string.chat_slash_syntax_links, R.string.chat_slash_description_links, argumentKind = SlashArgumentKind.MASK, handler = SlashCommandHandler.LINKS),
     supported("op", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_op, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
     supported("deop", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_deop, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
     supported("voice", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_voice, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
