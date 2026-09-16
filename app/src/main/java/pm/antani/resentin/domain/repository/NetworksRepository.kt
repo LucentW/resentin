@@ -534,19 +534,21 @@ class NetworksRepository(
 
     /** Consents to a held DCC offer. 202 means admission only — the delivered file
      * arrives later as a normal scrollback row (`Grappa.Dcc.Report`), not from this
-     * call, so this just drops the offer's own banner optimistically. */
+     * call. Never drops the banner here: the effect arrives back as
+     * `dcc_offer_resolved` on every device (cicchetto `dccConsent` parity — an
+     * optimistic drop would report an unobserved success and split phone/laptop). */
     suspend fun acceptDccOffer(slug: String, offerId: String): Result<Unit> = runCatching {
         val api = authRepository.api(NetworksApi::class.java)
         val response = api.acceptDccOffer(slug, offerId)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
-        _pendingDccOffers.update { current -> current.filterNot { it.offerId == offerId } }
     }
 
+    /** Refuses a held DCC offer — same no-local-drop rule as accept: the banner
+     * goes only on `dcc_offer_resolved`, so every device agrees. */
     suspend fun declineDccOffer(slug: String, offerId: String): Result<Unit> = runCatching {
         val api = authRepository.api(NetworksApi::class.java)
         val response = api.declineDccOffer(slug, offerId)
         check(response.isSuccessful) { "HTTP ${response.code()}" }
-        _pendingDccOffers.update { current -> current.filterNot { it.offerId == offerId } }
     }
 
     suspend fun getDirectory(slug: String, sort: String, q: String? = null, cursor: String? = null): Result<DirectoryPageDto> =
