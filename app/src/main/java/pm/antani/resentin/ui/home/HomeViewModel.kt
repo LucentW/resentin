@@ -37,6 +37,8 @@ import pm.antani.resentin.domain.repository.NetworkConnectionProgress
 import pm.antani.resentin.domain.repository.NetworkRecoveryState
 import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
+import pm.antani.resentin.domain.update.AvailableUpdate
+import pm.antani.resentin.domain.update.UpdateChecker
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
 import pm.antani.resentin.net.dto.MentionsBundleDto
@@ -48,6 +50,7 @@ class HomeViewModel(
     private val authRepository: AuthRepository,
     private val userSettingsRepository: UserSettingsRepository,
     private val appPreferences: AppPreferences,
+    private val updateChecker: UpdateChecker,
     private val subject: String,
     val isVisitor: Boolean,
     private val context: Context,
@@ -91,6 +94,19 @@ class HomeViewModel(
     private val _optimisticallyJoinedFeaturedChannels = MutableStateFlow<Set<String>>(emptySet())
     val optimisticallyJoinedFeaturedChannels: StateFlow<Set<String>> =
         _optimisticallyJoinedFeaturedChannels.asStateFlow()
+
+    /** GitHub release banner — null once the running build is current, or once the
+     * user has dismissed this specific version (see [dismissUpdate]). */
+    val availableUpdate: StateFlow<AvailableUpdate?> = combine(
+        updateChecker.available,
+        appPreferences.dismissedUpdateVersion,
+    ) { update, dismissedVersion ->
+        update?.takeIf { it.version != dismissedVersion }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun dismissUpdate(version: String) {
+        viewModelScope.launch { appPreferences.setDismissedUpdateVersion(version) }
+    }
 
     /** Server mute keys (muted_targets) — unexpired only, so the mute icon never
      * outlives a snooze the server already dropped. */
@@ -514,6 +530,7 @@ class HomeViewModel(
             authRepository: AuthRepository,
             userSettingsRepository: UserSettingsRepository,
             appPreferences: AppPreferences,
+            updateChecker: UpdateChecker,
             subject: String,
             isVisitor: Boolean,
             context: Context,
@@ -528,6 +545,7 @@ class HomeViewModel(
                         authRepository,
                         userSettingsRepository,
                         appPreferences,
+                        updateChecker,
                         subject,
                         isVisitor,
                         context.applicationContext,

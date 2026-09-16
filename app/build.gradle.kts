@@ -13,10 +13,15 @@ android {
         applicationId = "pm.antani.resentin"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "0.3.17"
+        versionCode = 36
+        versionName = "0.3.18"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Gates the GitHub-releases update check/banner. True for this GitHub-distributed
+        // build; a future Play Store (or F-Droid) flavor must override this to false via
+        // a product flavor, since those stores handle updates themselves.
+        buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
     }
 
     signingConfigs {

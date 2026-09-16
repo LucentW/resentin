@@ -91,8 +91,18 @@ class AppPreferences(private val context: Context) {
     private val keyMessageDensity = stringPreferencesKey("message_density")
     private val keyLineSpacing = stringPreferencesKey("line_spacing")
     private val keyLineHeightScale = floatPreferencesKey("line_height_scale")
+    private val keyDismissedUpdateVersion = stringPreferencesKey("dismissed_update_version")
 
     val pinnedChannels: Flow<Set<String>> = context.dataStore.data.map { it[keyPinnedChannels] ?: emptySet() }
+
+    /** Newest update version the home banner (see [pm.antani.resentin.domain.update.UpdateChecker])
+     * was told to stop offering — cleared implicitly the moment a newer release ships,
+     * since that's a different version string. */
+    val dismissedUpdateVersion: Flow<String?> = context.dataStore.data.map { it[keyDismissedUpdateVersion] }
+
+    suspend fun setDismissedUpdateVersion(version: String) {
+        context.dataStore.edit { it[keyDismissedUpdateVersion] = version }
+    }
 
     /** Featured network channels hidden from Home on this device. */
     val dismissedFeaturedChannels: Flow<Set<String>> = context.dataStore.data.map {

@@ -791,6 +791,9 @@
     <string name="home_mentions_banner">%1$s — %2$d mention in %3$d canali mentre eri away</string>
     <string name="home_mentions_open">Apri</string>
     <string name="home_mentions_dismiss">Ignora</string>
+    <string name="home_update_available">È disponibile Resentin %1$s</string>
+    <string name="home_update_download">Scarica</string>
+    <string name="home_update_dismiss">Ignora</string>
     <string name="mentions_title">Mention su %1$s</string>
     <string name="mentions_summary">%1$d messaggi in %2$d canali</string>
     <string name="mentions_empty">Nessuna mention mentre eri away</string>

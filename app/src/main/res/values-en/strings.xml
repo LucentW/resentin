@@ -778,6 +778,9 @@
     <string name="home_mentions_banner">%1$s — %2$d mentions in %3$d channels while you were away</string>
     <string name="home_mentions_open">Open</string>
     <string name="home_mentions_dismiss">Dismiss</string>
+    <string name="home_update_available">Resentin %1$s is available</string>
+    <string name="home_update_download">Download</string>
+    <string name="home_update_dismiss">Dismiss</string>
     <string name="mentions_title">Mentions on %1$s</string>
     <string name="mentions_summary">%1$d messages in %2$d channels</string>
     <string name="mentions_empty">No mentions while you were away</string>

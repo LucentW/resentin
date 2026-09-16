@@ -36,12 +36,14 @@ import pm.antani.resentin.net.auth.TokenStore
 import pm.antani.resentin.net.ws.SocketState
 import pm.antani.resentin.service.ConnectionForegroundService
 import pm.antani.resentin.service.NotificationRouter
+import pm.antani.resentin.domain.update.UpdateChecker
 
 class AppContainer(private val context: Context) {
     val tokenStore = TokenStore(context.applicationContext)
     val database = AppDatabase.build(context)
     val appPreferences = AppPreferences(context.applicationContext)
     val connectionManager = ConnectionManager(tokenStore)
+    val updateChecker = UpdateChecker()
     val authRepository = AuthRepository(tokenStore, database, appPreferences, connectionManager, context.applicationContext)
     val networksRepository = NetworksRepository(authRepository, database, connectionManager)
     val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
@@ -76,6 +78,8 @@ class AppContainer(private val context: Context) {
         notificationRouter.startListening(appScope)
 
         appScope.launch { chatRepository.pruneOldMessages() }
+
+        appScope.launch { updateChecker.check() }
 
         // Warms the server notification-prefs cache the live WS notification path
         // gates server mutes on — refreshed again on every push wake-up, so a

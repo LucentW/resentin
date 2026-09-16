@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.HowToReg
 import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
@@ -76,6 +77,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -98,6 +100,7 @@ import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.NetworkConnectionProgress
 import pm.antani.resentin.domain.repository.NetworkRecoveryState
 import pm.antani.resentin.domain.repository.serverChannelKey
+import pm.antani.resentin.domain.update.AvailableUpdate
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.LocalDensityScale
 import pm.antani.resentin.ui.common.rememberAvatarBitmap
@@ -144,6 +147,8 @@ fun HomeScreen(
     val mentionsBundles by viewModel.mentionsBundles.collectAsState()
     val connectionProgress by viewModel.connectionProgress.collectAsState()
     val recoveryProgress by viewModel.recoveryProgress.collectAsState()
+    val availableUpdate by viewModel.availableUpdate.collectAsState()
+    val uriHandler = LocalUriHandler.current
     // NavHost removes Home from the composition while a chat is open. Keep the same
     // scroll position when it comes back instead of rebuilding from the top.
     val homeListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
@@ -275,6 +280,15 @@ fun HomeScreen(
                         contentPadding = PaddingValues(start = ResentinSpacing.large, end = ResentinSpacing.large, top = ResentinSpacing.small, bottom = ResentinSpacing.xLarge),
                         verticalArrangement = Arrangement.spacedBy(ResentinSpacing.medium * LocalDensityScale.current),
                     ) {
+                        availableUpdate?.let { update ->
+                            item(key = "update-available") {
+                                UpdateAvailableCard(
+                                    update = update,
+                                    onDownload = { uriHandler.openUri(update.releaseUrl) },
+                                    onDismiss = { viewModel.dismissUpdate(update.version) },
+                                )
+                            }
+                        }
                         if (pendingInvites.isNotEmpty()) {
                             items(
                                 pendingInvites,
@@ -732,6 +746,52 @@ private fun MentionsBannerCard(
                 }
                 TextButton(onClick = onOpen) {
                     Text(stringResource(R.string.home_mentions_open), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+}
+
+/** Banner for a newer GitHub release than the running build — see [pm.antani.resentin.domain.update.UpdateChecker].
+ * "Scarica" opens the release page in the browser rather than downloading/installing
+ * the APK in-app, since a sideloaded build has no update mechanism of its own to hook into. */
+@Composable
+private fun UpdateAvailableCard(
+    update: AvailableUpdate,
+    onDownload: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(ResentinSpacing.small))
+                Text(
+                    text = stringResource(R.string.home_update_available, update.version),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.home_update_dismiss))
+                }
+                TextButton(onClick = onDownload) {
+                    Text(stringResource(R.string.home_update_download), fontWeight = FontWeight.SemiBold)
                 }
             }
         }
