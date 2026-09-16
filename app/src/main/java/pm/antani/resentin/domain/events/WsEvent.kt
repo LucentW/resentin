@@ -8,6 +8,9 @@ import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
+import pm.antani.resentin.net.dto.DirectoryCompleteDto
+import pm.antani.resentin.net.dto.DirectoryFailedDto
+import pm.antani.resentin.net.dto.DirectoryProgressDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LusersBundleDto
 import pm.antani.resentin.net.dto.MembersSeededDto
@@ -100,6 +103,10 @@ sealed interface WsEvent {
 
     /** A held DCC offer left the held set (accepted, declined, or expired) — drop its banner. */
     data class DccOfferResolved(val resolved: DccOfferResolvedDto) : WsEvent
+
+    data class DirectoryProgress(val progress: DirectoryProgressDto) : WsEvent
+    data class DirectoryComplete(val complete: DirectoryCompleteDto) : WsEvent
+    data class DirectoryFailed(val failed: DirectoryFailedDto) : WsEvent
 
     data class Unknown(val kind: String?, val raw: JsonObject) : WsEvent
 }

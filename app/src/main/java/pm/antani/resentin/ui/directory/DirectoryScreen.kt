@@ -168,6 +168,7 @@ fun DirectoryScreen(
             DirectoryStatusLine(
                 status = state.status,
                 capturedAt = state.capturedAt,
+                refreshProgress = state.refreshProgress,
                 error = if (hasContent) state.error ?: state.featuredError else null,
             )
             Box(Modifier.fillMaxSize()) {
@@ -350,6 +351,7 @@ private fun FeaturedChannelRow(
 private fun DirectoryStatusLine(
     status: String,
     capturedAt: String?,
+    refreshProgress: Int?,
     error: String?,
 ) {
     when {
@@ -360,6 +362,10 @@ private fun DirectoryStatusLine(
             tone = ResentinStateTone.ERROR,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
+        status == "refreshing" || refreshProgress != null -> ResentinInlineLoadingState(
+            title = refreshProgress?.let { stringResource(R.string.directory_refresh_progress, it) }
+                ?: stringResource(R.string.directory_refreshing),
+        )
         status == "stale" -> ResentinStateBanner(
             icon = Icons.Outlined.WifiOff,
             title = stringResource(R.string.directory_stale_title),
@@ -367,9 +373,6 @@ private fun DirectoryStatusLine(
                 ?: stringResource(R.string.ui_show_saved_content_description),
             tone = ResentinStateTone.OFFLINE,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
-        status == "refreshing" -> ResentinInlineLoadingState(
-            title = stringResource(R.string.directory_refreshing),
         )
         capturedAt != null -> Text(
             stringResource(R.string.directory_captured_at_label, formatIsoTimestamp(capturedAt)),
