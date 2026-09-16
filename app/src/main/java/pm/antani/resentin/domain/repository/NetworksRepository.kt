@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -73,12 +74,19 @@ data class PendingDccOffer(
     val size: Long,
 )
 
+/** A server-side archive mutation that must invalidate open archive views. */
+data class ArchiveInvalidation(val networkSlug: String, val purgedTarget: String? = null)
+
 class NetworksRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
     private val connectionManager: ConnectionManager,
 ) {
     private val unreadSyncMutex = Mutex()
+    private val refreshMutex = Mutex()
+
+    private val _archiveChanges = MutableSharedFlow<ArchiveInvalidation>(extraBufferCapacity = 16)
+    val archiveChanges: SharedFlow<ArchiveInvalidation> = _archiveChanges.asSharedFlow()
 
     val networksWithChannels: Flow<List<NetworkWithChannels>> = db.networkDao().observeNetworksWithChannels()
 
@@ -148,6 +156,43 @@ class NetworksRepository(
     /** Keeps each channel's stored topic current from `topic_changed` events, which the
      * server pushes unsolicited on channel join — no dedicated REST GET exists for it. */
     fun startListening(connectionManager: ConnectionManager, scope: CoroutineScope) {
+        // The user-topic heartbeat is deliberately payload-free: REST remains the
+        // authoritative source for channel membership and joined state.
+        connectionManager.events
+            .filterIsInstance<WsEvent.ChannelsChanged>()
+            .onEach { refresh() }
+            .launchIn(scope)
+
+        // These terminal window states also arrive on the user topic. Refreshing
+        // converges joined=false and lets AppContainer drop stale channel topics.
+        connectionManager.events
+            .filterIsInstance<WsEvent.Joined>()
+            .onEach { refresh() }
+            .launchIn(scope)
+        connectionManager.events
+            .filterIsInstance<WsEvent.JoinFailed>()
+            .onEach { refresh() }
+            .launchIn(scope)
+        connectionManager.events
+            .filterIsInstance<WsEvent.Kicked>()
+            .onEach { refresh() }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.ArchiveChanged>()
+            .onEach { event -> _archiveChanges.tryEmit(ArchiveInvalidation(event.changed.networkSlug)) }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.ArchivePurged>()
+            .onEach { event ->
+                val purge = event.purged
+                db.messageDao().deleteChannel(purge.networkSlug, purge.target)
+                _archiveChanges.tryEmit(ArchiveInvalidation(purge.networkSlug, purge.target))
+            }
+            .launchIn(scope)
+
+
         connectionManager.events
             .filterIsInstance<WsEvent.TopicChanged>()
             .map { it.topic }
@@ -328,6 +373,7 @@ class NetworksRepository(
     }
 
     suspend fun refresh(): Result<Unit> = runCatching {
+        refreshMutex.withLock {
         val api = authRepository.api(NetworksApi::class.java)
         val networks = api.getNetworks()
 
@@ -355,6 +401,7 @@ class NetworksRepository(
         // may have just re-created the networks the snapshot previously missed.
         lastQueryWindows?.let { applyQueryWindows(it) }
         syncUnreadCountsFromMe()
+        }
     }
 
     /** Membership-only sync: inserts unknown channels, refreshes source/joined on the

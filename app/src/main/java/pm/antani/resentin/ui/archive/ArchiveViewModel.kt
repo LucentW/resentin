@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pm.antani.resentin.R
@@ -41,6 +42,11 @@ class ArchiveViewModel(
     val uiState: StateFlow<ArchiveUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            networksRepository.archiveChanges
+                .filter { it.networkSlug == networkSlug }
+                .collect { load() }
+        }
         load()
     }
 

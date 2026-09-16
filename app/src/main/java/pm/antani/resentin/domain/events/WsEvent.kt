@@ -20,9 +20,22 @@ import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
 import pm.antani.resentin.net.dto.WindowInvitedDto
+import pm.antani.resentin.net.dto.ArchiveChangedDto
+import pm.antani.resentin.net.dto.ArchivePurgedDto
+import pm.antani.resentin.net.dto.JoinFailedDto
+import pm.antani.resentin.net.dto.KickedDto
+import pm.antani.resentin.net.dto.PeerAwayDto
 
 sealed interface WsEvent {
     data class MessageReceived(val message: ScrollbackMessageDto) : WsEvent
+    /** User-topic membership heartbeat; refreshes the authoritative channel list. */
+    data object ChannelsChanged : WsEvent
+    data class PeerAway(val away: PeerAwayDto) : WsEvent
+    data class Joined(val network: String, val channel: String) : WsEvent
+    data class JoinFailed(val failed: JoinFailedDto) : WsEvent
+    data class Kicked(val kicked: KickedDto) : WsEvent
+    data class ArchiveChanged(val changed: ArchiveChangedDto) : WsEvent
+    data class ArchivePurged(val purged: ArchivePurgedDto) : WsEvent
     data class IsupportChanged(val isupport: IsupportChangedDto) : WsEvent
     data class MembersSeeded(val seeded: MembersSeededDto) : WsEvent
     data class WhoisBundle(val whois: WhoisBundleDto) : WsEvent

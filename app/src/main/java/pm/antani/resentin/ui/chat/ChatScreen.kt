@@ -389,6 +389,7 @@ fun ChatScreen(
     val smartPresenceFilter by viewModel.smartPresenceFilter.collectAsState()
     val myNick by viewModel.myNick.collectAsState()
     val awayState by viewModel.awayState.collectAsState()
+    val peerAwayMessage by viewModel.peerAwayMessage.collectAsState()
     val highlightPatterns by viewModel.highlightPatterns.collectAsState()
     val whowas by viewModel.whowas.collectAsState()
     val whoReply by viewModel.whoReply.collectAsState()
@@ -932,6 +933,31 @@ fun ChatScreen(
                                 contentDescription = stringResource(R.string.cd_collapse_topic),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+            if (isQuery && peerAwayMessage != null && !searchOpen) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.chat_peer_away_message, channelName, peerAwayMessage.orEmpty()),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        IconButton(onClick = viewModel::dismissPeerAway, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.cd_cancel),
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer)
                         }
                     }
                 }

@@ -60,6 +60,9 @@ interface MessageDao {
     /** Startup retention sweep (see ChatRepository.pruneOldMessages) — server backfill
      * can always refetch anything actually needed again, so an old, already-read row is
      * safe to drop locally rather than let the cache grow forever. */
+    @Query("DELETE FROM messages WHERE networkSlug = :networkSlug AND channelName COLLATE NOCASE = :channelName")
+    suspend fun deleteChannel(networkSlug: String, channelName: String)
+
     @Query("DELETE FROM messages WHERE serverTime < :cutoffMillis")
     suspend fun deleteOlderThan(cutoffMillis: Long)
 

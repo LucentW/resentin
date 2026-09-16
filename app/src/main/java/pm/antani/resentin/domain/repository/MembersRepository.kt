@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -27,6 +28,7 @@ import pm.antani.resentin.data.db.MemberEntity
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
 import pm.antani.resentin.domain.session.VerbException
+import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.net.dto.AwayConfirmedDto
 import pm.antani.resentin.net.dto.BanlistBundleDto
@@ -52,6 +54,19 @@ class MembersRepository(
     private val connectionManager: ConnectionManager,
     private val db: AppDatabase,
 ) {
+    /** Last standalone 301 away notice per network and peer, mirroring cicchetto. */
+    private val _peerAwayByNetwork = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
+    val peerAwayByNetwork: StateFlow<Map<String, Map<String, String>>> = _peerAwayByNetwork.asStateFlow()
+
+    fun dismissPeerAway(networkSlug: String, peer: String) {
+        val key = canonicalTarget(peer)
+        _peerAwayByNetwork.update { current ->
+            val network = current[networkSlug].orEmpty()
+            val nextNetwork = network - key
+            if (nextNetwork.isEmpty()) current - networkSlug else current + (networkSlug to nextNetwork)
+        }
+    }
+
     fun startListening(scope: CoroutineScope) {
         connectionManager.events.onEach { event ->
             when (event) {
@@ -59,6 +74,7 @@ class MembersRepository(
                 is WsEvent.MembersSeeded -> recordMembers(event.seeded)
                 is WsEvent.MessageReceived -> applyPresenceEvent(event.message)
                 is WsEvent.AwayConfirmed -> recordAway(event.away)
+                is WsEvent.PeerAway -> recordPeerAway(event.away)
                 else -> Unit
             }
         }.launchIn(scope)
@@ -70,6 +86,13 @@ class MembersRepository(
     // needs an app-wide landing spot, same as the other WS-fed state in this repo.
     private val _awayByNetwork = MutableStateFlow<Map<String, String>>(emptyMap())
     val awayByNetwork: StateFlow<Map<String, String>> = _awayByNetwork.asStateFlow()
+
+    private fun recordPeerAway(dto: pm.antani.resentin.net.dto.PeerAwayDto) {
+        val key = canonicalTarget(dto.peer)
+        _peerAwayByNetwork.update { current ->
+            current + (dto.network to (current[dto.network].orEmpty() + (key to dto.message)))
+        }
+    }
 
     private fun recordAway(dto: AwayConfirmedDto) {
         _awayByNetwork.value = if (dto.state == "away") {

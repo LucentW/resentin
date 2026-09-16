@@ -131,6 +131,11 @@ class ConnectionManager(private val tokenStore: TokenStore) {
      * e.g. a channel join's `read_cursor`/`window_counts` seed. */
     suspend fun joinAll(topics: List<String>, onJoined: suspend (String, JsonObject?) -> Unit = { _, _ -> }) {
         desiredTopics = topics
+        // Membership changes arrive as a user-topic heartbeat. Drop subscriptions
+        // that are no longer authoritative before joining the new set; otherwise a
+        // kicked/parted channel would keep receiving events until reconnect.
+        val desired = topics.toSet()
+        channels.keys.filter { it !in desired }.toList().forEach { leaveChannel(it) }
         topics.forEach { topic -> onJoined(topic, joinChannel(topic)) }
     }
 
