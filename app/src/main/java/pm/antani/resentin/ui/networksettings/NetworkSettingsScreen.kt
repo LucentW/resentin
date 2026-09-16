@@ -50,7 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pm.antani.resentin.R
-import pm.antani.resentin.ui.common.ResentinFilterChip
+import pm.antani.resentin.ui.common.ResentinDropdown
+import pm.antani.resentin.ui.common.ResentinDropdownOption
 import pm.antani.resentin.ui.common.UnreadCountBadge
 import pm.antani.resentin.ui.common.ResentinErrorState
 import pm.antani.resentin.ui.common.ResentinHeaderAction
@@ -168,21 +169,16 @@ fun NetworkSettingsScreen(viewModel: NetworkSettingsViewModel, onBack: () -> Uni
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val genderOptions = listOf(
-                                "" to R.string.network_settings_profile_gender_unset,
-                                "male" to R.string.network_settings_profile_gender_male,
-                                "female" to R.string.network_settings_profile_gender_female,
-                                "nonbinary" to R.string.network_settings_profile_gender_nonbinary,
-                            )
-                            genderOptions.forEach { (value, labelRes) ->
-                                ResentinFilterChip(
-                                    selected = state.profileGender == value,
-                                    onClick = { viewModel.onProfileGenderChange(value) },
-                                    label = { Text(stringResource(labelRes)) },
-                                )
-                            }
-                        }
+                        ResentinDropdown(
+                            selected = state.profileGender,
+                            options = listOf(
+                                ResentinDropdownOption("", stringResource(R.string.network_settings_profile_gender_unset)),
+                                ResentinDropdownOption("male", stringResource(R.string.network_settings_profile_gender_male)),
+                                ResentinDropdownOption("female", stringResource(R.string.network_settings_profile_gender_female)),
+                                ResentinDropdownOption("nonbinary", stringResource(R.string.network_settings_profile_gender_nonbinary)),
+                            ),
+                            onSelected = viewModel::onProfileGenderChange,
+                        )
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(
                             value = state.profileLocation,

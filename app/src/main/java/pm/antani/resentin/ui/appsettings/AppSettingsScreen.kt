@@ -1,6 +1,8 @@
 package pm.antani.resentin.ui.appsettings
 
 import pm.antani.resentin.ui.theme.ResentinSpacing
+import pm.antani.resentin.ui.common.ResentinDropdown
+import pm.antani.resentin.ui.common.ResentinDropdownOption
 
 import android.Manifest
 import android.app.LocaleManager
@@ -14,10 +16,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,10 +33,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
@@ -52,16 +49,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import pm.antani.resentin.ui.common.ResentinFilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -80,11 +74,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
@@ -118,6 +110,13 @@ private val AUTO_AWAY_PRESETS = listOf(
     3600 to R.string.settings_auto_away_1h,
 )
 private val AUTO_AWAY_PRESET_SECONDS = AUTO_AWAY_PRESETS.map { it.first }.toSet()
+
+/** Dropdown value for the auto-away picker: a preset (site default/off/seconds)
+ * saves immediately, Custom only opens the seconds input below. */
+private sealed interface AutoAwayDropdownValue {
+    data class Preset(val seconds: Int?) : AutoAwayDropdownValue
+    data object Custom : AutoAwayDropdownValue
+}
 
 // Text-size ladder for the slider below — labels need no translation (XXS–XXL are
 // universal), the scale applies app-wide through ResentinTheme.
@@ -174,7 +173,7 @@ private fun SettingsSection.description(): String = when (this) {
     SettingsSection.DATA -> stringResource(R.string.settings_group_data_desc)
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdminClick: () -> Unit = {}) {
     val state by viewModel.uiState.collectAsState()
@@ -388,12 +387,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         icon = Icons.Outlined.Palette,
                     )
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    SettingsDropdown(
+                    ResentinDropdown(
                         selected = themeMode,
                         options = listOf(
-                            SettingsDropdownOption(ThemeMode.SYSTEM, stringResource(R.string.settings_theme_system)),
-                            SettingsDropdownOption(ThemeMode.LIGHT, stringResource(R.string.settings_theme_light)),
-                            SettingsDropdownOption(ThemeMode.DARK, stringResource(R.string.settings_theme_dark)),
+                            ResentinDropdownOption(ThemeMode.SYSTEM, stringResource(R.string.settings_theme_system)),
+                            ResentinDropdownOption(ThemeMode.LIGHT, stringResource(R.string.settings_theme_light)),
+                            ResentinDropdownOption(ThemeMode.DARK, stringResource(R.string.settings_theme_dark)),
                         ),
                         onSelected = viewModel::setThemeMode,
                     )
@@ -403,12 +402,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         icon = Icons.Outlined.Language,
                     )
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    SettingsDropdown(
+                    ResentinDropdown(
                         selected = currentLanguageTag,
                         options = listOf(
-                            SettingsDropdownOption(null, stringResource(R.string.settings_language_system)),
-                            SettingsDropdownOption("it", stringResource(R.string.settings_language_italian)),
-                            SettingsDropdownOption("en", stringResource(R.string.settings_language_english)),
+                            ResentinDropdownOption(null, stringResource(R.string.settings_language_system)),
+                            ResentinDropdownOption("it", stringResource(R.string.settings_language_italian)),
+                            ResentinDropdownOption("en", stringResource(R.string.settings_language_english)),
                         ),
                         onSelected = ::setLanguage,
                     )
@@ -423,7 +422,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    SettingsDropdown(
+                    ResentinDropdown(
                         selected = fontFamily,
                         options = fontFamilyOptions,
                         onSelected = viewModel::setFontFamily,
@@ -439,7 +438,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    SettingsDropdown(
+                    ResentinDropdown(
                         selected = chatFontFamily,
                         options = fontFamilyOptions,
                         onSelected = viewModel::setChatFontFamily,
@@ -530,26 +529,15 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     SettingsRowDivider()
                     SettingsBlockLabel(text = stringResource(R.string.settings_density))
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        ResentinFilterChip(
-                            selected = messageDensity == MessageDensity.COMPACT,
-                            onClick = { viewModel.setMessageDensity(MessageDensity.COMPACT) },
-                            label = { Text(stringResource(R.string.settings_density_compact)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = messageDensity == MessageDensity.NORMAL,
-                            onClick = { viewModel.setMessageDensity(MessageDensity.NORMAL) },
-                            label = { Text(stringResource(R.string.settings_density_normal)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = messageDensity == MessageDensity.COMFORTABLE,
-                            onClick = { viewModel.setMessageDensity(MessageDensity.COMFORTABLE) },
-                            label = { Text(stringResource(R.string.settings_density_comfortable)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                    }
+                    ResentinDropdown(
+                        selected = messageDensity,
+                        options = listOf(
+                            ResentinDropdownOption(MessageDensity.COMPACT, stringResource(R.string.settings_density_compact)),
+                            ResentinDropdownOption(MessageDensity.NORMAL, stringResource(R.string.settings_density_normal)),
+                            ResentinDropdownOption(MessageDensity.COMFORTABLE, stringResource(R.string.settings_density_comfortable)),
+                        ),
+                        onSelected = viewModel::setMessageDensity,
+                    )
                 }
             }
             }
@@ -563,20 +551,14 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 ) {
                     SettingsBlockLabel(text = stringResource(R.string.settings_chat_display))
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        ResentinFilterChip(
-                            selected = chatDisplayMode == ChatDisplayMode.BUBBLES,
-                            onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.BUBBLES) },
-                            label = { Text(stringResource(R.string.settings_display_bubbles)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = chatDisplayMode == ChatDisplayMode.IRC_LINE,
-                            onClick = { viewModel.setChatDisplayMode(ChatDisplayMode.IRC_LINE) },
-                            label = { Text(stringResource(R.string.settings_display_irc_line)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                    }
+                    ResentinDropdown(
+                        selected = chatDisplayMode,
+                        options = listOf(
+                            ResentinDropdownOption(ChatDisplayMode.BUBBLES, stringResource(R.string.settings_display_bubbles)),
+                            ResentinDropdownOption(ChatDisplayMode.IRC_LINE, stringResource(R.string.settings_display_irc_line)),
+                        ),
+                        onSelected = viewModel::setChatDisplayMode,
+                    )
                     Text(
                         stringResource(R.string.settings_display_irc_line_desc),
                         style = MaterialTheme.typography.bodySmall,
@@ -585,26 +567,15 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     SettingsRowDivider()
                     SettingsBlockLabel(text = stringResource(R.string.settings_reply_style_title))
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        ResentinFilterChip(
-                            selected = replyStyle == ReplyStyle.NICK,
-                            onClick = { viewModel.setReplyStyle(ReplyStyle.NICK) },
-                            label = { Text(stringResource(R.string.settings_reply_style_nick)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = replyStyle == ReplyStyle.QUOTE,
-                            onClick = { viewModel.setReplyStyle(ReplyStyle.QUOTE) },
-                            label = { Text(stringResource(R.string.settings_reply_style_quote)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = replyStyle == ReplyStyle.CUSTOM,
-                            onClick = { viewModel.setReplyStyle(ReplyStyle.CUSTOM) },
-                            label = { Text(stringResource(R.string.settings_reply_style_custom)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                    }
+                    ResentinDropdown(
+                        selected = replyStyle,
+                        options = listOf(
+                            ResentinDropdownOption(ReplyStyle.NICK, stringResource(R.string.settings_reply_style_nick)),
+                            ResentinDropdownOption(ReplyStyle.QUOTE, stringResource(R.string.settings_reply_style_quote)),
+                            ResentinDropdownOption(ReplyStyle.CUSTOM, stringResource(R.string.settings_reply_style_custom)),
+                        ),
+                        onSelected = viewModel::setReplyStyle,
+                    )
                     if (replyStyle == ReplyStyle.CUSTOM) {
                         Spacer(Modifier.height(ResentinSpacing.small))
                         OutlinedTextField(
@@ -701,17 +672,12 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(ResentinSpacing.small))
-                    FlowRow(modifier = Modifier.fillMaxWidth()) {
-                        uploadTtlSettingOptions().forEach { option ->
-                            ResentinFilterChip(
-                                selected = state.uploadTtlSeconds == option.value,
-                                enabled = !state.uploadTtlSaving,
-                                onClick = { viewModel.setUploadTtl(option.value) },
-                                label = { Text(option.label) },
-                                modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                            )
-                        }
-                    }
+                    ResentinDropdown(
+                        selected = state.uploadTtlSeconds,
+                        options = uploadTtlSettingOptions(),
+                        onSelected = viewModel::setUploadTtl,
+                        enabled = !state.uploadTtlSaving,
+                    )
                     state.uploadTtlError?.let { error ->
                         Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
@@ -791,34 +757,26 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         autoAwayDebounceSeconds != 0 &&
                         autoAwayDebounceSeconds !in AUTO_AWAY_PRESET_SECONDS
                     val autoAwayShowCustom = state.autoAwayCustomMode || autoAwayIsCustomValue
-                    FlowRow {
-                        ResentinFilterChip(
-                            selected = !autoAwayShowCustom && autoAwayDebounceSeconds == null,
-                            onClick = { viewModel.onAutoAwayPresetSelected(null) },
-                            label = { Text(stringResource(R.string.settings_auto_away_site_default)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        ResentinFilterChip(
-                            selected = !autoAwayShowCustom && autoAwayDebounceSeconds == 0,
-                            onClick = { viewModel.onAutoAwayPresetSelected(0) },
-                            label = { Text(stringResource(R.string.settings_auto_away_off)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                        AUTO_AWAY_PRESETS.forEach { (seconds, labelRes) ->
-                            ResentinFilterChip(
-                                selected = !autoAwayShowCustom && autoAwayDebounceSeconds == seconds,
-                                onClick = { viewModel.onAutoAwayPresetSelected(seconds) },
-                                label = { Text(stringResource(labelRes)) },
-                                modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                            )
-                        }
-                        ResentinFilterChip(
-                            selected = autoAwayShowCustom,
-                            onClick = { viewModel.onAutoAwayCustomModeSelected() },
-                            label = { Text(stringResource(R.string.settings_reply_style_custom)) },
-                            modifier = Modifier.padding(end = ResentinSpacing.small, bottom = ResentinSpacing.small),
-                        )
-                    }
+                    val autoAwaySelected: AutoAwayDropdownValue =
+                        if (autoAwayShowCustom) AutoAwayDropdownValue.Custom
+                        else AutoAwayDropdownValue.Preset(autoAwayDebounceSeconds)
+                    ResentinDropdown(
+                        selected = autoAwaySelected,
+                        options = buildList {
+                            add(ResentinDropdownOption(AutoAwayDropdownValue.Preset(null), stringResource(R.string.settings_auto_away_site_default)))
+                            add(ResentinDropdownOption(AutoAwayDropdownValue.Preset(0), stringResource(R.string.settings_auto_away_off)))
+                            AUTO_AWAY_PRESETS.forEach { (seconds, labelRes) ->
+                                add(ResentinDropdownOption(AutoAwayDropdownValue.Preset(seconds), stringResource(labelRes)))
+                            }
+                            add(ResentinDropdownOption(AutoAwayDropdownValue.Custom, stringResource(R.string.settings_reply_style_custom)))
+                        },
+                        onSelected = { choice ->
+                            when (choice) {
+                                is AutoAwayDropdownValue.Custom -> viewModel.onAutoAwayCustomModeSelected()
+                                is AutoAwayDropdownValue.Preset -> viewModel.onAutoAwayPresetSelected(choice.seconds)
+                            }
+                        },
+                    )
                     if (autoAwayShowCustom) {
                         OutlinedTextField(
                             value = if (state.autoAwayCustomMode) {
@@ -1083,76 +1041,10 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     }
 }
 
-private data class SettingsDropdownOption<T>(
-    val value: T,
-    val label: String,
-    val fontFamily: FontFamily? = null,
-)
-
 @Composable
-private fun <T> SettingsDropdown(
-    selected: T,
-    options: List<SettingsDropdownOption<T>>,
-    onSelected: (T) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedOption = options.firstOrNull { it.value == selected } ?: options.first()
-
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = ResentinSpacing.large, vertical = ResentinSpacing.medium),
-        ) {
-            Text(
-                text = selectedOption.label,
-                modifier = Modifier.weight(1f),
-                fontFamily = selectedOption.fontFamily,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.width(maxWidth),
-            properties = PopupProperties(focusable = true),
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label, fontFamily = option.fontFamily) },
-                    onClick = {
-                        onSelected(option.value)
-                        expanded = false
-                    },
-                    trailingIcon = if (option.value == selected) {
-                        {
-                            Icon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun appFontFamilyOptions(): List<SettingsDropdownOption<AppFontFamily>> =
+private fun appFontFamilyOptions(): List<ResentinDropdownOption<AppFontFamily>> =
     AppFontFamily.entries.map { choice ->
-        SettingsDropdownOption(
+        ResentinDropdownOption(
             value = choice,
             label = when (choice) {
                 AppFontFamily.SYSTEM -> stringResource(R.string.settings_font_family_system)
@@ -1170,13 +1062,13 @@ private fun appFontFamilyOptions(): List<SettingsDropdownOption<AppFontFamily>> 
 /** #2095 — stored TTL preference picker: site default (null, clears the key)
  * plus the server's per-upload ladder. */
 @Composable
-private fun uploadTtlSettingOptions(): List<SettingsDropdownOption<Int?>> =
+private fun uploadTtlSettingOptions(): List<ResentinDropdownOption<Int?>> =
     listOf(
-        SettingsDropdownOption(value = null, label = stringResource(R.string.settings_upload_ttl_default)),
-        SettingsDropdownOption(value = 3600, label = stringResource(R.string.chat_upload_ttl_1h)),
-        SettingsDropdownOption(value = 43200, label = stringResource(R.string.chat_upload_ttl_12h)),
-        SettingsDropdownOption(value = 86400, label = stringResource(R.string.chat_upload_ttl_24h)),
-        SettingsDropdownOption(value = 259200, label = stringResource(R.string.chat_upload_ttl_72h)),
+        ResentinDropdownOption(value = null, label = stringResource(R.string.settings_upload_ttl_default)),
+        ResentinDropdownOption(value = 3600, label = stringResource(R.string.chat_upload_ttl_1h)),
+        ResentinDropdownOption(value = 43200, label = stringResource(R.string.chat_upload_ttl_12h)),
+        ResentinDropdownOption(value = 86400, label = stringResource(R.string.chat_upload_ttl_24h)),
+        ResentinDropdownOption(value = 259200, label = stringResource(R.string.chat_upload_ttl_72h)),
     )
 
 /** The hub menu: one row per group, same row language as the home's channel rows

@@ -29,7 +29,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import pm.antani.resentin.ui.common.ResentinFilterChip
+import pm.antani.resentin.ui.common.ResentinDropdown
+import pm.antani.resentin.ui.common.ResentinDropdownOption
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -151,19 +152,15 @@ fun DirectoryScreen(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                ResentinFilterChip(
-                    selected = state.sort == "users",
-                    onClick = { viewModel.setSort("users") },
-                    label = { Text(stringResource(R.string.directory_sort_users)) },
-                )
-                Spacer(Modifier.width(8.dp))
-                ResentinFilterChip(
-                    selected = state.sort == "name",
-                    onClick = { viewModel.setSort("name") },
-                    label = { Text(stringResource(R.string.directory_sort_name)) },
-                )
-            }
+            ResentinDropdown(
+                selected = state.sort,
+                options = listOf(
+                    ResentinDropdownOption("users", stringResource(R.string.directory_sort_users)),
+                    ResentinDropdownOption("name", stringResource(R.string.directory_sort_name)),
+                ),
+                onSelected = viewModel::setSort,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            )
             val hasContent = state.entries.isNotEmpty() || state.featured.isNotEmpty()
             DirectoryStatusLine(
                 status = state.status,

@@ -162,8 +162,10 @@ import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.stripMircCodes
 import pm.antani.resentin.ui.common.rememberAvatarBitmap
+import pm.antani.resentin.ui.common.ResentinDropdown
 import pm.antani.resentin.ui.common.ResentinDropdownMenu
 import pm.antani.resentin.ui.common.ResentinDropdownMenuItem
+import pm.antani.resentin.ui.common.ResentinDropdownOption
 import pm.antani.resentin.ui.common.ResentinFilterChip
 import pm.antani.resentin.ui.common.ResentinHeaderAction
 import pm.antani.resentin.ui.common.ResentinEmptyState
@@ -1752,18 +1754,13 @@ private fun UploadConfirmDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    UPLOAD_TTL_LADDER_SECONDS.forEach { seconds ->
-                        ResentinFilterChip(
-                            selected = pending.ttlSeconds == seconds,
-                            onClick = { onTtlChange(seconds) },
-                            label = { Text(uploadTtlChipLabel(seconds)) },
-                        )
-                    }
-                }
+                ResentinDropdown(
+                    selected = pending.ttlSeconds,
+                    options = UPLOAD_TTL_LADDER_SECONDS.map { seconds ->
+                        ResentinDropdownOption(seconds, uploadTtlDropdownLabel(seconds))
+                    },
+                    onSelected = onTtlChange,
+                )
             }
         },
         confirmButton = {
@@ -1780,7 +1777,7 @@ private fun UploadConfirmDialog(
 }
 
 @Composable
-private fun uploadTtlChipLabel(seconds: Int): String = when (seconds) {
+private fun uploadTtlDropdownLabel(seconds: Int): String = when (seconds) {
     3600 -> stringResource(R.string.chat_upload_ttl_1h)
     43200 -> stringResource(R.string.chat_upload_ttl_12h)
     86400 -> stringResource(R.string.chat_upload_ttl_24h)
