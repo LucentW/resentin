@@ -5,22 +5,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pm.antani.resentin.R
+import pm.antani.resentin.domain.repository.DirectorySyncEvent
+import pm.antani.resentin.domain.repository.NetworksRepository
+import pm.antani.resentin.irc.canonicalTarget
 import pm.antani.resentin.net.dto.DirectoryEntryDto
 import pm.antani.resentin.net.dto.DirectoryPageDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
-import pm.antani.resentin.domain.repository.NetworksRepository
-import pm.antani.resentin.irc.canonicalTarget
 
-private const val REFRESH_POLL_INTERVAL_MS = 2_000L
-private const val REFRESH_POLL_MAX_ATTEMPTS = 8
+private const val DIRECTORY_EVENT_FALLBACK_DELAY_MS = 10_000L
 
 data class DirectoryUiState(
     val entries: List<DirectoryEntryDto> = emptyList(),
@@ -34,6 +36,7 @@ data class DirectoryUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val isRefreshing: Boolean = false,
+    val refreshProgress: Int? = null,
     val isFeaturedLoading: Boolean = false,
     val error: String? = null,
     val featuredError: String? = null,
@@ -49,6 +52,7 @@ class DirectoryViewModel(
     private val _uiState = MutableStateFlow(DirectoryUiState())
     val uiState: StateFlow<DirectoryUiState> = _uiState.asStateFlow()
     private var featuredRequestId = 0
+    private var refreshFallbackJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -62,13 +66,19 @@ class DirectoryViewModel(
                 _uiState.update { it.copy(joinedChannels = joined) }
             }
         }
+        viewModelScope.launch {
+            networksRepository.directoryEvents
+                .filter { it.networkSlug == networkSlug }
+                .collect { event -> handleDirectoryEvent(event) }
+        }
     }
 
     fun load() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             fetchPage(cursor = null).onSuccess { page ->
-                _uiState.update { it.copy(isLoading = false, entries = page.entries, nextCursor = page.nextCursor, status = page.status, capturedAt = page.capturedAt) }
+                applyPage(page)
+                _uiState.update { it.copy(isLoading = false) }
             }.onFailure {
                 _uiState.update { state -> state.copy(isLoading = false, error = it.message ?: context.getString(R.string.home_unknown_error)) }
             }
@@ -124,16 +134,16 @@ class DirectoryViewModel(
         }
     }
 
-    /** Arms a fresh server-side LIST capture, then polls [getDirectory] a few times —
-     * there's no push notification for when the new snapshot lands (see NetworksApi),
-     * so this is the pragmatic client-side wait. Stops early once the status is no
-     * longer "refreshing". */
+    /** Starts a server-side LIST capture. Progress and completion arrive through the
+     * WebSocket; a single delayed GET is kept as a bounded recovery path if an event is lost. */
     fun refresh() {
         if (_uiState.value.isRefreshing) return
+        refreshFallbackJob?.cancel()
         _uiState.update {
             it.copy(
                 isLoading = it.entries.isEmpty() && it.featured.isEmpty(),
                 isRefreshing = true,
+                refreshProgress = 0,
                 error = null,
             )
         }
@@ -141,15 +151,8 @@ class DirectoryViewModel(
         viewModelScope.launch {
             fetchPage(cursor = null)
                 .onSuccess { page ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            entries = page.entries,
-                            nextCursor = page.nextCursor,
-                            status = page.status,
-                            capturedAt = page.capturedAt,
-                        )
-                    }
+                    applyPage(page)
+                    _uiState.update { it.copy(isLoading = false) }
                 }
                 .onFailure { failure ->
                     _uiState.update {
@@ -158,34 +161,84 @@ class DirectoryViewModel(
                 }
 
             networksRepository.refreshDirectory(networkSlug).onFailure { failure ->
+                refreshFallbackJob?.cancel()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isRefreshing = false,
+                        refreshProgress = null,
                         error = failure.message ?: context.getString(R.string.home_unknown_error),
                     )
                 }
                 return@launch
             }
-            repeat(REFRESH_POLL_MAX_ATTEMPTS) {
-                delay(REFRESH_POLL_INTERVAL_MS)
-                val page = fetchPage(cursor = null).getOrNull() ?: return@repeat
+
+            refreshFallbackJob = viewModelScope.launch {
+                delay(DIRECTORY_EVENT_FALLBACK_DELAY_MS)
+                if (!_uiState.value.isRefreshing) return@launch
+                fetchPage(cursor = null)
+                    .onSuccess { page ->
+                        applyPage(page)
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                isRefreshing = false,
+                                refreshProgress = null,
+                                error = if (page.status == "refreshing") {
+                                    context.getString(R.string.directory_refresh_timeout)
+                                } else null,
+                            )
+                        }
+                    }
+                    .onFailure { failure ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                isRefreshing = false,
+                                refreshProgress = null,
+                                error = failure.message ?: context.getString(R.string.home_unknown_error),
+                            )
+                        }
+                    }
+            }
+        }
+    }
+
+    private suspend fun handleDirectoryEvent(event: DirectorySyncEvent) {
+        if (!_uiState.value.isRefreshing) return
+        when (event) {
+            is DirectorySyncEvent.Progress -> {
+                _uiState.update { it.copy(refreshProgress = event.count) }
+            }
+            is DirectorySyncEvent.Complete -> {
+                refreshFallbackJob?.cancel()
+                fetchPage(cursor = null)
+                    .onSuccess { page ->
+                        applyPage(page)
+                        _uiState.update { it.copy(isLoading = false, isRefreshing = false, refreshProgress = null, error = null) }
+                    }
+                    .onFailure { failure ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                isRefreshing = false,
+                                refreshProgress = null,
+                                error = failure.message ?: context.getString(R.string.home_unknown_error),
+                            )
+                        }
+                    }
+            }
+            is DirectorySyncEvent.Failed -> {
+                refreshFallbackJob?.cancel()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        entries = page.entries,
-                        nextCursor = page.nextCursor,
-                        status = page.status,
-                        capturedAt = page.capturedAt,
-                        error = null,
+                        isRefreshing = false,
+                        refreshProgress = null,
+                        error = event.reason.ifBlank { context.getString(R.string.home_unknown_error) },
                     )
                 }
-                if (page.status != "refreshing") {
-                    _uiState.update { it.copy(isRefreshing = false) }
-                    return@launch
-                }
             }
-            _uiState.update { it.copy(isLoading = false, isRefreshing = false) }
         }
     }
 
@@ -205,9 +258,25 @@ class DirectoryViewModel(
         _uiState.update { it.copy(joined = null) }
     }
 
+    private fun applyPage(page: DirectoryPageDto) {
+        _uiState.update {
+            it.copy(
+                entries = page.entries,
+                nextCursor = page.nextCursor,
+                status = page.status,
+                capturedAt = page.capturedAt,
+            )
+        }
+    }
+
     private suspend fun fetchPage(cursor: String?): Result<DirectoryPageDto> {
         val state = _uiState.value
         return networksRepository.getDirectory(networkSlug, state.sort, state.query.ifBlank { null }, cursor)
+    }
+
+    override fun onCleared() {
+        refreshFallbackJob?.cancel()
+        super.onCleared()
     }
 
     companion object {

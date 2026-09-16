@@ -14,6 +14,9 @@ import pm.antani.resentin.net.dto.BanlistBundleDto
 import pm.antani.resentin.net.dto.ChannelModesChangedDto
 import pm.antani.resentin.net.dto.DccOfferDto
 import pm.antani.resentin.net.dto.DccOfferResolvedDto
+import pm.antani.resentin.net.dto.DirectoryCompleteDto
+import pm.antani.resentin.net.dto.DirectoryFailedDto
+import pm.antani.resentin.net.dto.DirectoryProgressDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
@@ -179,6 +182,15 @@ object WsEventDecoder {
                 )
                 "dcc_offer_resolved" -> WsEvent.DccOfferResolved(
                     AppJson.decodeFromJsonElement(DccOfferResolvedDto.serializer(), raw),
+                )
+                "directory_progress" -> WsEvent.DirectoryProgress(
+                    AppJson.decodeFromJsonElement(DirectoryProgressDto.serializer(), raw).also { check(it.count >= 0) },
+                )
+                "directory_complete" -> WsEvent.DirectoryComplete(
+                    AppJson.decodeFromJsonElement(DirectoryCompleteDto.serializer(), raw).also { check(it.total >= 0) },
+                )
+                "directory_failed" -> WsEvent.DirectoryFailed(
+                    AppJson.decodeFromJsonElement(DirectoryFailedDto.serializer(), raw),
                 )
                 "session_identity_changed" -> WsEvent.SessionIdentityChanged(
                     networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),

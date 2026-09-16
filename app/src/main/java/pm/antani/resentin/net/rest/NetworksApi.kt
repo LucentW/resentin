@@ -60,8 +60,8 @@ interface NetworksApi {
     ): DirectoryPageDto
 
     /** Arms a fresh upstream LIST snapshot; both a started refresh and an already-running
-     * one answer 202. The actual page only lands via a subsequent [getDirectory] poll —
-     * there is no server push for directory-refresh completion. */
+     * one answer 202. The server pushes directory_progress/directory_complete (or
+     * directory_failed) on the WebSocket; clients fetch page one once after completion. */
     @GET("networks/{slug}/featured")
     suspend fun getFeaturedChannels(@Path("slug") slug: String): FeaturedChannelsResponseDto
 

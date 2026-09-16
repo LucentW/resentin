@@ -90,6 +90,14 @@ data class PendingDccOffer(
 /** A server-side archive mutation that must invalidate open archive views. */
 data class ArchiveInvalidation(val networkSlug: String, val purgedTarget: String? = null)
 
+sealed interface DirectorySyncEvent {
+    val networkSlug: String
+
+    data class Progress(override val networkSlug: String, val count: Int) : DirectorySyncEvent
+    data class Complete(override val networkSlug: String, val total: Int) : DirectorySyncEvent
+    data class Failed(override val networkSlug: String, val reason: String) : DirectorySyncEvent
+}
+
 class NetworksRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
@@ -141,6 +149,11 @@ class NetworksRepository(
     /** Fires only for a genuinely new offer — same reconnect-dedup reasoning as [newInvites]. */
     private val _newDccOffers = MutableSharedFlow<PendingDccOffer>(extraBufferCapacity = 8)
     val newDccOffers: SharedFlow<PendingDccOffer> = _newDccOffers.asSharedFlow()
+
+    /** Directory refresh lifecycle events pushed by the server. The page itself is
+     * fetched once after completion; progress never triggers a REST request. */
+    private val _directoryEvents = MutableSharedFlow<DirectorySyncEvent>(extraBufferCapacity = 32)
+    val directoryEvents: SharedFlow<DirectorySyncEvent> = _directoryEvents.asSharedFlow()
 
     /** Last query_windows_list snapshot. Re-applied at the end of every REST
      * refresh: the snapshot can win the race against refresh() repopulating the
@@ -265,6 +278,36 @@ class NetworksRepository(
                 refresh()
             }
             .launchIn(scope)
+        connectionManager.events
+            .filterIsInstance<WsEvent.DirectoryProgress>()
+            .map { it.progress }
+            .onEach { payload ->
+                if (payload.network.isNotBlank() && payload.count >= 0) {
+                    _directoryEvents.tryEmit(DirectorySyncEvent.Progress(payload.network, payload.count))
+                }
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.DirectoryComplete>()
+            .map { it.complete }
+            .onEach { payload ->
+                if (payload.network.isNotBlank() && payload.total >= 0) {
+                    _directoryEvents.tryEmit(DirectorySyncEvent.Complete(payload.network, payload.total))
+                }
+            }
+            .launchIn(scope)
+
+        connectionManager.events
+            .filterIsInstance<WsEvent.DirectoryFailed>()
+            .map { it.failed }
+            .onEach { payload ->
+                if (payload.network.isNotBlank()) {
+                    _directoryEvents.tryEmit(DirectorySyncEvent.Failed(payload.network, payload.reason))
+                }
+            }
+            .launchIn(scope)
+
         connectionManager.events
             .filterIsInstance<WsEvent.TopicChanged>()
             .map { it.topic }

@@ -117,6 +117,8 @@
     <string name="directory_sort_name">Name</string>
     <string name="directory_empty">No channels found</string>
     <string name="directory_refreshing">Refreshing…</string>
+    <string name="directory_refresh_progress">Updating: %1$d channels processed</string>
+    <string name="directory_refresh_timeout">The server is taking too long to update the channels. Try again.</string>
     <string name="directory_captured_at_label">Updated: %1$s</string>
     <string name="directory_featured">Featured</string>
     <string name="directory_featured_title">Featured channels</string>

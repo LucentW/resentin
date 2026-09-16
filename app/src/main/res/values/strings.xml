@@ -124,6 +124,8 @@
     <string name="directory_sort_name">Nome</string>
     <string name="directory_empty">Nessun canale trovato</string>
     <string name="directory_refreshing">Aggiornamento in corso…</string>
+    <string name="directory_refresh_progress">Aggiornamento: %1$d canali elaborati</string>
+    <string name="directory_refresh_timeout">Il server sta impiegando troppo tempo per aggiornare i canali. Riprova.</string>
     <string name="directory_captured_at_label">Aggiornato: %1$s</string>
     <string name="directory_featured">In evidenza</string>
     <string name="directory_featured_title">Canali in evidenza</string>
