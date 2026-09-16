@@ -436,6 +436,10 @@
     <string name="settings_auto_away_1h">1 hour</string>
     <string name="settings_auto_away_custom_seconds">Seconds:</string>
     <string name="settings_auto_away_desc">When every device of yours is closed or in the background, the bouncer waits this long and then tells the network you are away. It stays connected either way — this only changes what other people see. Pick \"never\" to keep the away flag off entirely.</string>
+    <string name="settings_quit_part_reason_label">Default leave message</string>
+    <string name="settings_quit_part_reason_desc">Used when you leave without typing one (/quit, /part). Empty the field to go back to the server message.</string>
+    <string name="settings_auto_away_reason_label">Auto-away message</string>
+    <string name="settings_auto_away_reason_desc">Sent by the bouncer when it marks you away itself. Empty the field to go back to the server message.</string>
     <string name="settings_peer_profiles_title">Other users\' profiles</string>
     <string name="settings_peer_profiles_desc">Off by default; when on, grappa asks each new person you meet in a channel for their public profile and shows a gender badge and avatar when they answer. Also feeds the avatar in private chats and notifications.</string>
     <string name="settings_peer_profiles_switch_label">Query other users\' profiles</string>

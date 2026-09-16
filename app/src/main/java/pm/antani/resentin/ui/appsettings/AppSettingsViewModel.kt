@@ -51,6 +51,10 @@ data class AppSettingsUiState(
     val autoAwayCustomMode: Boolean = false,
     val autoAwayCustomDraft: String = "",
     val autoAwaySavingError: String? = null,
+    // Issue 2150 — the two remembered leave reasons. Same save/error discipline
+    // as the auto-away preference above (fail-open load, inline save errors).
+    val quitPartSavingError: String? = null,
+    val autoAwayReasonSavingError: String? = null,
     val newHighlight: String = "",
     val highlightError: String? = null,
     val showPeerProfiles: Boolean = false,
@@ -221,6 +225,7 @@ class AppSettingsViewModel(
         }
         refreshVhostSettings()
         refreshAutoAwayDebounce()
+        refreshLeaveReasons()
         refreshWatchlist()
         refreshShowPeerProfiles()
         refreshUploadSettings()
@@ -371,6 +376,40 @@ class AppSettingsViewModel(
             userSettingsRepository.updateAutoAwayDebounce(seconds)
                 .onSuccess { _uiState.update { it.copy(autoAwaySavingError = null) } }
                 .onFailure { error -> _uiState.update { it.copy(autoAwaySavingError = error.message) } }
+        }
+    }
+
+    // Issue 2150 — cached in the repository (not this ViewModel) so the live
+    // pushes keep them current even while this screen isn't composed; these
+    // StateFlows are just passthroughs, like autoAwayDebounceSeconds above.
+    val quitPartReason: StateFlow<String?> = userSettingsRepository.quitPartReason
+    val autoAwayReason: StateFlow<String?> = userSettingsRepository.autoAwayReason
+
+    // Load failures stay silent (fail-open to the empty field = "no default"),
+    // save failures surface inline with the server's own message (422 names
+    // the oversize/CRLF problem).
+    private fun refreshLeaveReasons() {
+        viewModelScope.launch {
+            userSettingsRepository.getQuitPartReason()
+            userSettingsRepository.getAutoAwayReason()
+        }
+    }
+
+    /** [reason] is the field's raw contents — including `""`, which the server
+     * normalises to "no default", so emptying the input IS the clear gesture. */
+    fun saveQuitPartReason(reason: String) {
+        viewModelScope.launch {
+            userSettingsRepository.updateQuitPartReason(reason)
+                .onSuccess { _uiState.update { it.copy(quitPartSavingError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(quitPartSavingError = error.message) } }
+        }
+    }
+
+    fun saveAutoAwayReason(reason: String) {
+        viewModelScope.launch {
+            userSettingsRepository.updateAutoAwayReason(reason)
+                .onSuccess { _uiState.update { it.copy(autoAwayReasonSavingError = null) } }
+                .onFailure { error -> _uiState.update { it.copy(autoAwayReasonSavingError = error.message) } }
         }
     }
 

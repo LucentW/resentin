@@ -180,6 +180,8 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
     val autoAwayDebounceSeconds by viewModel.autoAwayDebounceSeconds.collectAsState()
+    val quitPartReason by viewModel.quitPartReason.collectAsState()
+    val autoAwayReason by viewModel.autoAwayReason.collectAsState()
     val pushEnabled by viewModel.pushEnabled.collectAsState()
     val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
@@ -849,6 +851,25 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                     state.autoAwaySavingError?.let { error ->
                         Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
+                    // Issue 2150 — the two remembered leave reasons, same presence
+                    // group as the debounce above. Each field renders the stored
+                    // value (empty = server default applies); saving posts the raw
+                    // contents, and emptying the input clears via the server's
+                    // `""`-normalises-to-null rule.
+                    LeaveReasonField(
+                        stored = quitPartReason,
+                        labelRes = R.string.settings_quit_part_reason_label,
+                        descriptionRes = R.string.settings_quit_part_reason_desc,
+                        error = state.quitPartSavingError,
+                        onSave = viewModel::saveQuitPartReason,
+                    )
+                    LeaveReasonField(
+                        stored = autoAwayReason,
+                        labelRes = R.string.settings_auto_away_reason_label,
+                        descriptionRes = R.string.settings_auto_away_reason_desc,
+                        error = state.autoAwayReasonSavingError,
+                        onSave = viewModel::saveAutoAwayReason,
+                    )
                 }
             }
             item {
@@ -1394,6 +1415,45 @@ private fun SettingsBlockLabel(text: String, icon: ImageVector? = null, modifier
             text = text,
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
         )
+    }
+}
+
+/** One remembered leave-reason field (issue 2150): text input rendering the stored
+ * value — `remember(stored)` so a save echo-back or a cross-device push re-seeds
+ * it — plus an explicit save. Emptying the input clears server-side. */
+@Composable
+private fun LeaveReasonField(
+    stored: String?,
+    labelRes: Int,
+    descriptionRes: Int,
+    error: String?,
+    onSave: (String) -> Unit,
+) {
+    var draft by remember(stored) { mutableStateOf(stored.orEmpty()) }
+    Spacer(Modifier.height(ResentinSpacing.small))
+    OutlinedTextField(
+        value = draft,
+        onValueChange = { draft = it },
+        label = { Text(stringResource(labelRes)) },
+        singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(ResentinSpacing.xSmall))
+    Text(
+        stringResource(descriptionRes),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(ResentinSpacing.small))
+    Button(
+        onClick = { onSave(draft) },
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Text(stringResource(R.string.network_settings_save))
+    }
+    error?.let {
+        Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
     }
 }
 
