@@ -913,8 +913,16 @@ class ChatViewModel(
             }
             "away" -> {
                 val reason = args.joinToString(" ").ifBlank { null }
-                if (reason == null) membersRepository.unsetAway(subject, networkSlug)
-                else membersRepository.setAway(subject, networkSlug, reason)
+                if (reason == null) {
+                    membersRepository.unsetAway(subject, networkSlug)
+                } else {
+                    // Going away clears this network's stale mentions digest HERE,
+                    // on the operator's own action — not on the away_confirmed
+                    // echo (cicchetto #268: a delayed echo could otherwise wipe
+                    // a fresh bundle the return already delivered).
+                    membersRepository.clearMentions(networkSlug)
+                    membersRepository.setAway(subject, networkSlug, reason)
+                }
                 setDraft("")
             }
             "hilight", "dehilight" -> {

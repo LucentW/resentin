@@ -240,6 +240,10 @@ fun ChatScreen(
     onAppSettings: () -> Unit = {},
     onOpenQuery: (networkSlug: String, nick: String) -> Unit,
     onOpenChannel: (networkSlug: String, channelName: String) -> Unit,
+    // Epoch-millis jump target from the mentions pseudo-window (0 = none).
+    // Resolved against loaded rows by serverTime; pages older history while
+    // the target stays above what's cached.
+    jumpToServerTime: Long = 0L,
 ) {
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
@@ -519,6 +523,25 @@ fun ChatScreen(
         val listIndex = rowIndex + if (dividerIndex != null && rowIndex >= dividerIndex) 1 else 0
         listState.animateScrollToItem(listIndex)
         pendingActivityJumpId = null
+    }
+
+    // Mentions-window jump (C8.2): land on the first loaded row at or after the
+    // tapped row's serverTime. The effect re-runs as history loads; while the
+    // target stays older than everything cached, page further back (loadOlder
+    // is self-guarded). Consumed once jumped or proven unreachable (history
+    // exhausted above the target — e.g. pruned rows).
+    var mentionJumpConsumed by remember(jumpToServerTime) { mutableStateOf(false) }
+    LaunchedEffect(jumpToServerTime, messages, initialHistoryReady) {
+        if (jumpToServerTime <= 0L || mentionJumpConsumed || messages.isEmpty()) return@LaunchedEffect
+        val hit = messages.filter { it.serverTime >= jumpToServerTime }.minByOrNull { it.serverTime }
+        if (hit != null) {
+            pendingActivityJumpId = hit.id
+            mentionJumpConsumed = true
+        } else if (initialHistoryReady) {
+            val oldest = messages.minOf { it.serverTime }
+            if (oldest > jumpToServerTime) viewModel.loadOlder()
+            else mentionJumpConsumed = true
+        }
     }
 
     // Land on the first unread message (per the server's read-cursor), not always the

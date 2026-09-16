@@ -11,6 +11,7 @@ import pm.antani.resentin.net.dto.DccOfferResolvedDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.MentionsBundleDto
 import pm.antani.resentin.net.dto.RecoverProgressDto
 import pm.antani.resentin.net.dto.RecoverResultDto
 import pm.antani.resentin.net.dto.ServerReplyDto
@@ -79,6 +80,11 @@ sealed interface WsEvent {
 
     /** Terminal recover outcome (dropped when the modal is closed). */
     data class RecoverResult(val result: RecoverResultDto) : WsEvent
+
+    /** Mentions-while-away digest, pushed on the back-from-away transition.
+     * One bundle per network, last-write-wins — the mentions pseudo-window's
+     * entire content. */
+    data class MentionsBundle(val bundle: MentionsBundleDto) : WsEvent
 
     /** Server-advertised supported umodes for one network (004). */
     data class SupportedUmodesChanged(val supported: SupportedUmodesChangedDto) : WsEvent

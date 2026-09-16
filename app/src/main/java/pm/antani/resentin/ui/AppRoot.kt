@@ -40,12 +40,15 @@ import pm.antani.resentin.ui.login.LoginScreen
 import pm.antani.resentin.ui.login.LoginViewModel
 import pm.antani.resentin.ui.members.MemberListScreen
 import pm.antani.resentin.ui.members.MembersViewModel
+import pm.antani.resentin.ui.mentions.MentionsScreen
+import pm.antani.resentin.ui.mentions.MentionsViewModel
 import pm.antani.resentin.ui.networksettings.NetworkSettingsScreen
 import pm.antani.resentin.ui.networksettings.NetworkSettingsViewModel
 import pm.antani.resentin.ui.sharetarget.ShareTargetScreen
 
 private const val ROUTE_HOME = "home"
-private const val ROUTE_CHAT = "chat/{networkSlug}/{channelName}"
+private const val ROUTE_CHAT = "chat/{networkSlug}/{channelName}?jumpTo={jumpTo}"
+private const val ROUTE_MENTIONS = "mentions/{networkSlug}"
 private const val ROUTE_MEMBERS = "members/{networkSlug}/{channelName}"
 private const val ROUTE_NETWORK_SETTINGS = "networksettings/{networkSlug}"
 private const val ROUTE_CHANNEL_SETTINGS = "channelsettings/{networkSlug}/{channelName}"
@@ -189,6 +192,25 @@ fun AppRoot(
                 },
                 onAppSettingsClick = { navController.navigate(ROUTE_APP_SETTINGS) },
                 onBrowseDirectory = { networkSlug -> navController.navigate("directory/$networkSlug") },
+                onMentionsClick = { networkSlug -> navController.navigate("mentions/$networkSlug") },
+            )
+        }
+        composable(
+            ROUTE_MENTIONS,
+            arguments = listOf(navArgument("networkSlug") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val networkSlug = backStackEntry.arguments?.getString("networkSlug").orEmpty()
+            val viewModel: MentionsViewModel = viewModel(
+                key = "mentions/$networkSlug",
+                factory = MentionsViewModel.factory(container.membersRepository, networkSlug),
+            )
+            MentionsScreen(
+                viewModel = viewModel,
+                networkSlug = networkSlug,
+                onBack = { navController.popBackStack() },
+                onMentionClick = { slug, channel, serverTime ->
+                    navController.navigate("chat/$slug/${encode(channel)}?jumpTo=$serverTime")
+                },
             )
         }
         composable(
@@ -264,6 +286,7 @@ fun AppRoot(
             arguments = listOf(
                 navArgument("networkSlug") { type = NavType.StringType },
                 navArgument("channelName") { type = NavType.StringType },
+                navArgument("jumpTo") { type = NavType.LongType; defaultValue = 0L },
             ),
             // Telegram-style navigation: a single horizontal movement, no alpha
             // blending. The previous screen stays visible underneath the new one,
@@ -295,6 +318,7 @@ fun AppRoot(
         ) { backStackEntry ->
             val networkSlug = backStackEntry.arguments?.getString("networkSlug").orEmpty()
             val channelName = decode(backStackEntry.arguments?.getString("channelName").orEmpty())
+            val jumpToServerTime = backStackEntry.arguments?.getLong("jumpTo") ?: 0L
             val viewModel: ChatViewModel = viewModel(
                 key = "$networkSlug/$channelName",
                 factory = ChatViewModel.factory(
@@ -323,6 +347,7 @@ fun AppRoot(
                 viewerUsername = currentSession.username,
                 isQuery = isQueryTarget(channelName),
                 isServer = channelName == "\$server",
+                jumpToServerTime = jumpToServerTime,
                 onBack = { navController.popBackStack() },
                 onMembersClick = {
                     navController.navigate("members/$networkSlug/${encode(channelName)}")

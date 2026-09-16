@@ -34,6 +34,7 @@ import pm.antani.resentin.net.dto.AvatarReadyDto
 import pm.antani.resentin.net.dto.IsupportChangedDto
 import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.MentionsBundleDto
 import pm.antani.resentin.net.dto.RecoverProgressDto
 import pm.antani.resentin.net.dto.RecoverResultDto
 import pm.antani.resentin.net.dto.ServerReplyDto
@@ -69,6 +70,7 @@ class MembersRepository(
                 is WsEvent.SupportedUmodesChanged -> _supportedUmodesByNetworkId.value += (event.supported.networkId to event.supported.modes)
                 is WsEvent.RecoverProgress -> applyRecoverProgress(event.progress)
                 is WsEvent.RecoverResult -> applyRecoverResult(event.result)
+                is WsEvent.MentionsBundle -> _mentionsByNetwork.value += (event.bundle.network to event.bundle)
                 else -> Unit
             }
         }.launchIn(scope)
@@ -294,6 +296,20 @@ class MembersRepository(
             "recover",
             buildJsonObject { put("network_id", networkId) },
         )
+    }
+
+    // Mentions-while-away digests per network slug — cicchetto's mentionsBundle
+    // signal parity. Last-write-wins per network; the bundle is the mentions
+    // pseudo-window's entire content. Cleared when the operator goes /away
+    // (the stale digest must never survive into the next away cycle) and on
+    // explicit dismiss — never on the away echo (see ChatViewModel away arm).
+    private val _mentionsByNetwork = MutableStateFlow<Map<String, MentionsBundleDto>>(emptyMap())
+    val mentionsByNetwork: StateFlow<Map<String, MentionsBundleDto>> = _mentionsByNetwork.asStateFlow()
+
+    /** Drops one network's digest (going-away clear + user dismiss share it:
+     * both mean "this digest is no longer current"). */
+    fun clearMentions(networkSlug: String) {
+        _mentionsByNetwork.value = _mentionsByNetwork.value.filterKeys { !it.equals(networkSlug, ignoreCase = true) }
     }
 
     /** `/kb` step one — resolves a nick to `user@host` from the server's userhost

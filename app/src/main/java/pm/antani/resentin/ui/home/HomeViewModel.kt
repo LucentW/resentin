@@ -37,6 +37,7 @@ import pm.antani.resentin.domain.repository.PendingInvite
 import pm.antani.resentin.domain.repository.UserSettingsRepository
 import pm.antani.resentin.net.dto.AvailableNetworkDto
 import pm.antani.resentin.net.dto.FeaturedChannelDto
+import pm.antani.resentin.net.dto.MentionsBundleDto
 
 class HomeViewModel(
     private val networksRepository: NetworksRepository,
@@ -131,6 +132,13 @@ class HomeViewModel(
     /** Inbound INVITEs awaiting Join/Decline (passthrough of
      * [NetworksRepository.pendingInvites]) — rendered as a dismissible banner. */
     val pendingInvites: StateFlow<List<PendingInvite>> = networksRepository.pendingInvites
+
+    /** Mentions-while-away digests per network (passthrough of
+     * [MembersRepository.mentionsByNetwork]) — one banner card per network
+     * holding a bundle, opening the mentions pseudo-window. */
+    val mentionsBundles: StateFlow<Map<String, MentionsBundleDto>> = membersRepository.mentionsByNetwork
+
+    fun dismissMentions(networkSlug: String) = membersRepository.clearMentions(networkSlug)
 
     // Guided NickServ registration wizard state (null = closed). Email + password
     // live here for the dialog's lifetime ONLY — close drops the whole state.
