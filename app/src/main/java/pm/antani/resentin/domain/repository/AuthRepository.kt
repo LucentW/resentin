@@ -86,12 +86,15 @@ class AuthRepository(
      * different nick fixes it immediately, unlike a generic failure. 503 covers the
      * server's own admission caps (`ip_cap_exceeded`/`visitor_cap_exceeded`/
      * `too_many_sessions`) — a busy public bouncer genuinely runs out of anonymous
-     * slots sometimes, so this is worth its own message rather than "HTTP 503". */
+     * slots sometimes, so this is worth its own message rather than "HTTP 503".
+     * 400 is the server's `malformed_nick` (IRC nick grammar: letter-first,
+     * 30 chars max) — same friendly treatment, since the fix is on the input. */
     suspend fun loginAsVisitor(host: String, nick: String): Result<String> = runCatching {
         val retrofit = HttpClients.retrofit(host, HttpClients.okHttpClient())
         val response = retrofit.create(AuthApi::class.java).login(AuthLoginRequestDto(nick))
         when (response.code()) {
             200 -> checkNotNull(response.body()?.token) { context.getString(R.string.auth_error_invalid_response) }
+            400 -> error(context.getString(R.string.login_error_visitor_nick_invalid))
             409 -> error(context.getString(R.string.auth_error_visitor_nick_taken))
             429 -> error(context.getString(R.string.auth_error_too_many_attempts))
             503 -> error(context.getString(R.string.auth_error_visitor_capacity))

@@ -393,6 +393,13 @@ fun ChatScreen(
     val whowas by viewModel.whowas.collectAsState()
     val whoReply by viewModel.whoReply.collectAsState()
     val lusers by viewModel.lusers.collectAsState()
+    val links by viewModel.links.collectAsState()
+    val umodeModalSlug by viewModel.umodeModal.collectAsState()
+    val umodeNetworkId by viewModel.umodeNetworkId.collectAsState()
+    val umodesByNetworkId by viewModel.umodesByNetworkId.collectAsState()
+    val supportedUmodesByNetworkId by viewModel.supportedUmodesByNetworkId.collectAsState()
+    val serverReply by viewModel.serverReply.collectAsState()
+    val recover by viewModel.recover.collectAsState()
     val highlightNotice by viewModel.highlightNotice.collectAsState()
     val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
@@ -1570,8 +1577,11 @@ fun ChatScreen(
 
     // `/who` roster modal — tap a nick to open a query, like cicchetto's WhoModal.
     // Nothing lands in the scrollback; the reply lives only in this modal.
+    // Flags decoded per the bahamut grammar with roster-authoritative membership
+    // (#272) and per-network PREFIX rank (issue 1999); realname via MircText.
     val whoReplyValue = whoReply
     if (whoReplyValue != null) {
+        val whoRank = remember(privilegeModes) { sigilRankFor(privilegeModes) }
         AlertDialog(
             onDismissRequest = viewModel::dismissWho,
             shape = MaterialTheme.shapes.large,
@@ -1579,7 +1589,11 @@ fun ChatScreen(
             tonalElevation = 0.dp,
             title = {
                 Text(
-                    stringResource(R.string.chat_who_title, whoReplyValue.target),
+                    stringResource(
+                        R.string.chat_who_title_count,
+                        whoReplyValue.target,
+                        whoReplyValue.users.size,
+                    ),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -1592,25 +1606,67 @@ fun ChatScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(whoReplyValue.users, key = { it.nick.lowercase() }) { user ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.contactPrivately(user.nick)
-                                        viewModel.dismissWho()
-                                    }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = user.nick,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium,
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                            items(whoReplyValue.users, key = { it.nick.lowercase() }) { user ->
+                                val resolved = remember(user, members, whoRank, privilegeModes) {
+                                    resolveWhoRow(
+                                        user.modes,
+                                        whoRosterFor(user, whoReplyValue.target, channelName, members, whoRank),
+                                        whoRank,
                                     )
-                                    val hostmask = "${user.user}@${user.host}".takeIf { user.user.isNotBlank() || user.host.isNotBlank() }
+                                }
+                                val chips = remember(resolved, privilegeModes) {
+                                    whoChips(resolved, privilegeModes)
+                                }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.contactPrivately(user.nick)
+                                            viewModel.dismissWho()
+                                        }
+                                        .padding(vertical = 8.dp),
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = (resolved.membership ?: "") + user.nick,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
+                                    }
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    ) {
+                                        chips.forEach { chip ->
+                                            Surface(
+                                                shape = MaterialTheme.shapes.small,
+                                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            ) {
+                                                Text(
+                                                    text = chip.label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    user.realname?.takeIf { it.isNotBlank() }?.let {
+                                        MircText(
+                                            text = it,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            enableLinks = false,
+                                        )
+                                    }
+                                    val hostmask =
+                                        "${user.user}@${user.host}".takeIf { user.user.isNotBlank() || user.host.isNotBlank() }
                                     hostmask?.let {
                                         Text(
                                             text = it,
@@ -1618,24 +1674,397 @@ fun ChatScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    user.realname?.takeIf { it.isNotBlank() }?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
+                                    val server = user.server.takeIf { it.isNotBlank() }
+                                    Row {
+                                        server?.let {
+                                            Text(
+                                                text = it,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        user.hops?.let {
+                                            Text(
+                                                text = stringResource(R.string.chat_who_hops, it),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(start = 4.dp),
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                        Text(
+                            text = stringResource(R.string.chat_who_footer, whoReplyValue.users.size),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissWho) {
                     Text(stringResource(R.string.chat_dialog_close))
+                }
+            },
+        )
+    }
+
+    // `/links` topology snapshot — lista nativa (cicchetto renders the same
+    // bundle as an interactive SVG map; same data, same empty states, native
+    // list surface). Ephemeral, last-write-wins, dismiss drops it.
+    val linksValue = links
+    if (linksValue != null) {
+        val sortedLinks = remember(linksValue) {
+            linksValue.entries.sortedWith(
+                compareBy({ it.hopcount ?: Int.MAX_VALUE }, { it.server.lowercase() }),
+            )
+        }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissLinks,
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            title = {
+                Text(
+                    stringResource(R.string.chat_links_title, linksValue.entries.size),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                if (linksValue.entries.isEmpty()) {
+                    Column {
+                        if (linksValue.mask != null) {
+                            Text(
+                                text = stringResource(R.string.chat_links_empty_nomatch, checkNotNull(linksValue.mask)),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.chat_links_empty_nomatch_sub),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.chat_links_empty_restricted),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.chat_links_empty_restricted_sub),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                            items(sortedLinks, key = { it.server.lowercase() }) { entry ->
+                                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = entry.server,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
+                                        entry.hopcount?.let {
+                                            Text(
+                                                text = stringResource(R.string.chat_links_hops, it),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(start = 8.dp),
+                                            )
+                                        }
+                                    }
+                                    val isRoot = entry.linkedTo != null && entry.linkedTo.equals(entry.server, ignoreCase = true)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isRoot) {
+                                            Text(
+                                                text = stringResource(R.string.chat_links_you),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        } else {
+                                            entry.linkedTo?.takeIf { it.isNotBlank() }?.let {
+                                                Text(
+                                                    text = stringResource(R.string.chat_links_uplink, it),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    entry.description?.takeIf { it.isNotBlank() }?.let {
+                                        MircText(
+                                            text = it,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            enableLinks = false,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Text(
+                            text = stringResource(R.string.chat_links_footer, linksValue.entries.size),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissLinks) {
+                    Text(stringResource(R.string.chat_dialog_close))
+                }
+            },
+        )
+    }
+
+    // Umode viewer/editor — cicchetto UmodeModal parity: own umodes as toggle
+    // buttons, server/services-managed ones read-only. Same `umode` verb as
+    // `/umode +x` (one feature, one code path).
+    val umodeSlug = umodeModalSlug
+    if (umodeSlug != null) {
+        val umodeId = umodeNetworkId
+        val activeUmodes = remember(umodesByNetworkId, umodeId) {
+            umodeId?.let { umodesByNetworkId[it] } ?: emptyList()
+        }
+        val serverSet = remember(supportedUmodesByNetworkId, umodeId) {
+            umodeId?.let { supportedUmodesByNetworkId[it] } ?: emptyList()
+        }
+        val toggles = remember(activeUmodes, serverSet) { availableUmodes(activeUmodes, serverSet) }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUmodeModal,
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            title = {
+                Text(
+                    stringResource(R.string.chat_umode_title, umodeSlug),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                    items(toggles, key = { it.letter }) { mode ->
+                        val active = mode.letter in activeUmodes
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (active) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            onClick = { viewModel.toggleUmode(mode, active) },
+                            enabled = mode.settable,
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "+${mode.letter}",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    )
+                                    Text(
+                                        text = mode.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (!mode.settable) {
+                                        Text(
+                                            text = stringResource(R.string.chat_umode_server_set),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = mode.desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissUmodeModal) {
+                    Text(stringResource(R.string.chat_dialog_close))
+                }
+            },
+        )
+    }
+
+    // Server-text reply (`/info`/`/version`/`/motd`/`/admin`) — cicchetto
+    // ServerReplyModal parity: monospace verbatim line list via MircText,
+    // title per source, count footer. Ephemeral, last-write-wins.
+    val serverReplyValue = serverReply
+    if (serverReplyValue != null) {
+        val replyTitle = when (serverReplyValue.source) {
+            "info" -> stringResource(R.string.chat_server_reply_info)
+            "version" -> stringResource(R.string.chat_server_reply_version)
+            "motd" -> stringResource(R.string.chat_server_reply_motd)
+            "admin" -> stringResource(R.string.chat_server_reply_admin)
+            else -> serverReplyValue.source
+        }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissServerReply,
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            title = {
+                Text(
+                    text = replyTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                if (serverReplyValue.lines.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.chat_server_reply_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                            items(serverReplyValue.lines) { line ->
+                                MircText(
+                                    text = line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    enableLinks = false,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (serverReplyValue.lines.size == 1) {
+                                stringResource(R.string.chat_server_reply_footer_one)
+                            } else {
+                                stringResource(R.string.chat_server_reply_footer, serverReplyValue.lines.size)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissServerReply) {
+                    Text(stringResource(R.string.chat_dialog_close))
+                }
+            },
+        )
+    }
+
+    // "Recover my identity" progress — cicchetto RecoverModal parity:
+    // server-driven steps with running/ok/failed marks, terminal success or
+    // reason-localized failure. No retry (re-issue /recover). Shown only for
+    // this chat's network; another network's flight never mixes in.
+    val recoverValue = recover?.takeIf { it.networkSlug.equals(networkSlug, ignoreCase = true) }
+    if (recoverValue != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRecover,
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 0.dp,
+            title = {
+                Text(
+                    text = stringResource(R.string.chat_recover_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.chat_recover_copy, recoverValue.networkSlug),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    recoverValue.steps.forEach { step ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = when (step.status) {
+                                    "ok" -> "✓"
+                                    "failed" -> "✗"
+                                    else -> "…"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = when (step.status) {
+                                    "ok" -> MaterialTheme.colorScheme.primary
+                                    "failed" -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.width(24.dp),
+                            )
+                            Text(
+                                text = when (step.step) {
+                                    "identify" -> stringResource(R.string.chat_recover_step_identify)
+                                    "register" -> stringResource(R.string.chat_recover_step_register)
+                                    "nick" -> stringResource(R.string.chat_recover_step_nick)
+                                    "recover" -> stringResource(R.string.chat_recover_step_recover)
+                                    "release" -> stringResource(R.string.chat_recover_step_release)
+                                    else -> step.step
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                    when (recoverValue.outcome) {
+                        "succeeded" -> {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.chat_recover_success, recoverValue.networkSlug),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        "failed" -> {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = when (recoverValue.reason) {
+                                    "wrong_password" -> stringResource(R.string.chat_recover_failure_wrong_password)
+                                    "nick_unavailable" -> stringResource(R.string.chat_recover_failure_nick_unavailable)
+                                    "services_declined" -> stringResource(R.string.chat_recover_failure_services_declined)
+                                    else -> stringResource(R.string.chat_recover_failure_generic)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissRecover) {
+                    Text(
+                        stringResource(
+                            if (recoverValue.outcome == null) R.string.chat_recover_close
+                            else R.string.chat_recover_done,
+                        ),
+                    )
                 }
             },
         )

@@ -424,7 +424,8 @@ class HomeViewModel(
             WizardStep.CODE -> WizardStep.VERIFY
             WizardStep.VERIFY -> WizardStep.VERIFY
         }
-        _registrationWizard.value = wiz.copy(step = next, error = null, timedOut = false)
+        _registrationWizard.value = wiz.copy(step = next, error = null, timedOut = false, pending = false)
+        cancelWizardTimeout()
         if (next == WizardStep.REGISTER || next == WizardStep.VERIFY) runWizardSendStep()
     }
 
@@ -438,7 +439,11 @@ class HomeViewModel(
             WizardStep.CODE -> WizardStep.REGISTER
             WizardStep.VERIFY -> WizardStep.CODE
         }
-        _registrationWizard.value = wiz.copy(step = prev, error = null, timedOut = false)
+        // Back into a send-step re-fires it (cicchetto re-runs on step entry):
+        // CODE -> REGISTER must show a fresh REGISTER attempt, not a dead mirror.
+        _registrationWizard.value = wiz.copy(step = prev, error = null, timedOut = false, pending = false)
+        cancelWizardTimeout()
+        if (prev == WizardStep.REGISTER) runWizardSendStep()
     }
 
     fun retryWizardSend() = runWizardSendStep()

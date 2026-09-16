@@ -47,7 +47,9 @@ import pm.antani.resentin.irc.MessageLines
 import pm.antani.resentin.irc.presenceVisible
 import pm.antani.resentin.irc.serviceNickFor
 import pm.antani.resentin.net.RateLimitException
+import pm.antani.resentin.net.dto.LinksBundleDto
 import pm.antani.resentin.net.dto.LusersBundleDto
+import pm.antani.resentin.net.dto.ServerReplyDto
 import pm.antani.resentin.net.dto.UPLOAD_TTL_LADDER_SECONDS
 import pm.antani.resentin.net.dto.WhoReplyDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
@@ -166,6 +168,51 @@ class ChatViewModel(
     val lusers: StateFlow<LusersBundleDto?> = _lusers.asStateFlow()
     private var lusersRequested = false
     fun dismissLusers() { _lusers.value = null }
+
+    // Ephemeral `/links` topology snapshot — same last-write-wins discipline
+    // as who (an empty bundle is still a snapshot: restricted vs no-match).
+    private val _links = MutableStateFlow<LinksBundleDto?>(null)
+    val links: StateFlow<LinksBundleDto?> = _links.asStateFlow()
+    fun dismissLinks() { _links.value = null }
+
+    // Ephemeral server-text reply (`info`/`version`/`motd`/`admin`) — one
+    // modal surface for all four sources, last-write-wins per network.
+    private val _serverReply = MutableStateFlow<ServerReplyDto?>(null)
+    val serverReply: StateFlow<ServerReplyDto?> = _serverReply.asStateFlow()
+    fun dismissServerReply() { _serverReply.value = null }
+
+    // Server-driven recover progress (app-wide in MembersRepository; shown
+    // here only when it belongs to this chat's network).
+    val recover = membersRepository.recoverState
+    fun dismissRecover() = membersRepository.dismissRecover()
+
+    // Umode viewer/editor target (network slug, null = closed) — cicchetto
+    // umodeModal parity. Data (active + supported sets) stays server-owned in
+    // MembersRepository; this is only which network the modal is open for.
+    private val _umodeModal = MutableStateFlow<String?>(null)
+    val umodeModal: StateFlow<String?> = _umodeModal.asStateFlow()
+    fun openUmodeModal(networkSlug: String) { _umodeModal.value = networkSlug }
+    fun dismissUmodeModal() { _umodeModal.value = null }
+
+    val umodeNetworkId: StateFlow<Int?> = combine(
+        networksRepository.networksWithChannels,
+        _umodeModal,
+    ) { networks, slug ->
+        slug?.let { s -> networks.firstOrNull { it.network.slug.equals(s, ignoreCase = true) }?.network?.id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun toggleUmode(mode: AvailableUmode, active: Boolean) {
+        if (!mode.settable) return
+        val networkId = umodeNetworkId.value ?: return
+        viewModelScope.launch {
+            runCatching {
+                membersRepository.setUmode(subject, networkId, (if (active) "-" else "+") + mode.letter)
+            }.onFailure { postError(it.message) }
+        }
+    }
+
+    val umodesByNetworkId = membersRepository.umodesByNetworkId
+    val supportedUmodesByNetworkId = membersRepository.supportedUmodesByNetworkId
 
     // `/hilight` add/del confirmation ("highlight (N): ..."), dismissible.
     private val _highlightNotice = MutableStateFlow<String?>(null)
@@ -393,6 +440,16 @@ class ChatViewModel(
                     lusersRequested = false
                     _lusers.value = dto
                 }
+            }
+        }
+        viewModelScope.launch {
+            membersRepository.linksEvents.collect { dto ->
+                if (dto.network.equals(networkSlug, ignoreCase = true)) _links.value = dto
+            }
+        }
+        viewModelScope.launch {
+            membersRepository.serverReplyEvents.collect { dto ->
+                if (dto.network.equals(networkSlug, ignoreCase = true)) _serverReply.value = dto
             }
         }
         // Warm the highlight patterns once the user topic is up — matching stays
@@ -717,6 +774,41 @@ class ChatViewModel(
                 membersRepository.requestLusers(subject, networkId, args.getOrNull(0), args.getOrNull(1))
                 setDraft("")
             }
+            "links" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                membersRepository.requestLinks(subject, networkId, args.joinToString(" ").ifBlank { null })
+                setDraft("")
+            }
+            "info" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                membersRepository.requestInfo(subject, networkId)
+                setDraft("")
+            }
+            "version" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                membersRepository.requestVersion(subject, networkId)
+                setDraft("")
+            }
+            "motd" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                membersRepository.requestMotd(subject, networkId, args.joinToString(" ").ifBlank { null })
+                setDraft("")
+            }
+            "admin" -> {
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                membersRepository.requestAdmin(subject, networkId, args.joinToString(" ").ifBlank { null })
+                setDraft("")
+            }
+            "recover" -> {
+                // Bare /recover uses this chat's network; `/recover <network>`
+                // targets a named one (same resolver shape as connect).
+                val targetSlug = argument?.takeIf { s ->
+                    availableNetworks.value.any { it.equals(s, ignoreCase = true) }
+                } ?: networkSlug
+                val networkId = checkNotNull(networksRepository.networkIdForSlug(targetSlug))
+                membersRepository.requestRecover(subject, networkId)
+                setDraft("")
+            }
             "names" -> {
                 val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
                 membersRepository.requestNames(subject, networkId, requireNotNull(argument))
@@ -781,14 +873,29 @@ class ChatViewModel(
             }
             "umode" -> {
                 if (args.isEmpty()) {
-                    showSlashError(R.string.chat_slash_command_unsupported, "/umode")
+                    openUmodeModal(networkSlug)
+                    setDraft("")
                 } else {
                     val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
-                    membersRepository.setMode(subject, networkId, myNick.value ?: username, args.first(), args.drop(1))
+                    membersRepository.setUmode(subject, networkId, args.joinToString(" "))
                     setDraft("")
                 }
             }
             "mode" -> {
+                // `/mode <ownnick>` with no mode args opens the umode viewer —
+                // there is no viewer for another user's modes.
+                val ownNick = myNick.value ?: username
+                if (args.size == 1 && args[0].equals(ownNick, ignoreCase = true)) {
+                    openUmodeModal(networkSlug)
+                    setDraft("")
+                    return
+                }
+                if (args.size >= 2 && args[0].equals(ownNick, ignoreCase = true)) {
+                    val networkId = checkNotNull(networksRepository.networkIdForSlug(networkSlug))
+                    membersRepository.setUmode(subject, networkId, args.drop(1).joinToString(" "))
+                    setDraft("")
+                    return
+                }
                 if (args.isEmpty()) {
                     _commandEffects.emit(ChatCommandEffect.OpenChannelSettings)
                 } else {

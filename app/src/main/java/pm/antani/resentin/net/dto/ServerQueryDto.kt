@@ -65,6 +65,72 @@ data class LusersBundleDto(
     val maxGlobal: Int? = null,
 )
 
+/** One server node of a `links_bundle` burst — mirrors cicchetto's
+ * `SessionWireLinksEntry`: `server` is the node, `linkedTo` its uplink
+ * (the root self-links), `hopcount` its distance, `description` the 364 info. */
+@Serializable
+data class LinksEntryDto(
+    val server: String,
+    val linkedTo: String? = null,
+    val hopcount: Int? = null,
+    val description: String? = null,
+)
+
+/** Reply to the `links` verb — mirrors cicchetto's `links_bundle`
+ * `{network, mask, entries[]}`. An empty `entries` is still a snapshot:
+ * a restricted topology (null mask) or a mask that matched nothing. */
+@Serializable
+data class LinksBundleDto(
+    val network: String,
+    val mask: String? = null,
+    val entries: List<LinksEntryDto> = emptyList(),
+)
+
+/** Operator's own umodes for one network — mirrors cicchetto's `umode_changed`
+ * `{network_id, modes[]}` (221 RPL_UMODEIS + self-MODE echoes, sign stripped). */
+@Serializable
+data class UmodeChangedDto(
+    val networkId: Int,
+    val modes: List<String> = emptyList(),
+)
+
+/** Server-advertised supported umodes (004 RPL_MYINFO) — mirrors cicchetto's
+ * `supported_umodes_changed`. Empty = unseeded -> static fallback table. */
+@Serializable
+data class SupportedUmodesChangedDto(
+    val networkId: Int,
+    val modes: List<String> = emptyList(),
+)
+
+/** Reply to an `info`/`version`/`motd`/`admin` verb — mirrors cicchetto's
+ * `server_reply` `{network, source, lines[]}`. Monospace server free-text,
+ * rendered verbatim via MircText (may carry mIRC control bytes). */
+@Serializable
+data class ServerReplyDto(
+    val network: String,
+    val source: String,
+    val lines: List<String> = emptyList(),
+)
+
+/** One `recover_progress` step transition — mirrors cicchetto's wire event.
+ * `step`/`status` stay plain strings on the wire arm (additive-only); the
+ * modal localizes the known tokens and renders unknown steps raw, never dropped. */
+@Serializable
+data class RecoverProgressDto(
+    val network: String,
+    val step: String,
+    val status: String,
+    val reason: String? = null,
+)
+
+/** Terminal `recover_result` outcome for one network. */
+@Serializable
+data class RecoverResultDto(
+    val network: String,
+    val outcome: String,
+    val reason: String? = null,
+)
+
 /** `phx_reply` response of the `watchlist` verb (`add`/`del`/`list`) — mirrors
  * cicchetto's `{patterns: string[]}`. */
 @Serializable

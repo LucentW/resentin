@@ -20,8 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import pm.antani.resentin.R
@@ -48,6 +50,8 @@ fun RegistrationWizardDialog(viewModel: HomeViewModel, onDismiss: () -> Unit) {
     val state = wiz ?: return
     val mirror by viewModel.wizardMirror.collectAsState()
     val lines = remember(mirror, state.stepSinceId, state.servicesNick) {
+        // ASCII case-fold: every casemapping variant agrees on A-Z for a
+        // services nick, same pragmatic fold as AppContainer's topic join.
         mirror.filter { message ->
             message.id > state.stepSinceId &&
                 message.kind == "notice" &&
@@ -101,7 +105,11 @@ fun RegistrationWizardDialog(viewModel: HomeViewModel, onDismiss: () -> Unit) {
                             placeholder = { Text("you@example.com") },
                             singleLine = true,
                             shape = MaterialTheme.shapes.medium,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next,
+                            ),
+                            keyboardActions = KeyboardActions(onNext = { viewModel.wizardNext() }),
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -123,7 +131,11 @@ fun RegistrationWizardDialog(viewModel: HomeViewModel, onDismiss: () -> Unit) {
                             singleLine = true,
                             shape = MaterialTheme.shapes.medium,
                             visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Next,
+                            ),
+                            keyboardActions = KeyboardActions(onNext = { viewModel.wizardNext() }),
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -156,6 +168,8 @@ fun RegistrationWizardDialog(viewModel: HomeViewModel, onDismiss: () -> Unit) {
                             placeholder = { Text(stringResource(R.string.registration_wizard_code_placeholder)) },
                             singleLine = true,
                             shape = MaterialTheme.shapes.medium,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { viewModel.wizardNext() }),
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }

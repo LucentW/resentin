@@ -4,7 +4,7 @@ import pm.antani.resentin.R
 
 enum class SlashArgumentKind { NONE, TEXT, CHANNEL, NICK, NICKS, NETWORK, MODES, MASK, COMMAND, ALIAS }
 enum class SlashCommandAvailability { SUPPORTED, RECOGNIZED_UNSUPPORTED }
-enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, IGNORE, UNIGNORE, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
+enum class SlashCommandHandler { ACTION, JOIN, PART, CYCLE, TOPIC, NICK, MESSAGE, QUERY, WHOIS, WHOWAS, WHO, NAMES, LUSERS, LINKS, SERVER_INFO, SERVER_VERSION, SERVER_MOTD, SERVER_ADMIN, RECOVER, PRIVILEGE, KICK, KICKBAN, BAN, UNBAN, BANLIST, INVITE, USER_MODE, CHANNEL_MODE, SERVICE, AWAY, NOTIFY, HILIGHT, IGNORE, UNIGNORE, ALIAS, UNALIAS, CREDITS, CONNECT, DISCONNECT, RECONNECT, QUIT }
 
 data class SlashCommandSpec(
     val name: String,
@@ -60,6 +60,12 @@ val slashCommandCatalog: List<SlashCommandSpec> = listOf(
     supported("who", R.string.chat_slash_syntax_who, R.string.chat_slash_description_who, argumentKind = SlashArgumentKind.CHANNEL, handler = SlashCommandHandler.WHO),
     supported("names", R.string.chat_slash_syntax_names, R.string.chat_slash_description_names, argumentKind = SlashArgumentKind.CHANNEL, minArguments = 1, handler = SlashCommandHandler.NAMES),
     supported("lusers", R.string.chat_slash_syntax_lusers, R.string.chat_slash_description_lusers, handler = SlashCommandHandler.LUSERS),
+    supported("links", R.string.chat_slash_syntax_links, R.string.chat_slash_description_links, argumentKind = SlashArgumentKind.TEXT, handler = SlashCommandHandler.LINKS),
+    supported("info", R.string.chat_slash_syntax_info, R.string.chat_slash_description_info, handler = SlashCommandHandler.SERVER_INFO),
+    supported("version", R.string.chat_slash_syntax_version, R.string.chat_slash_description_version, handler = SlashCommandHandler.SERVER_VERSION),
+    supported("motd", R.string.chat_slash_syntax_motd, R.string.chat_slash_description_motd, argumentKind = SlashArgumentKind.TEXT, handler = SlashCommandHandler.SERVER_MOTD),
+    supported("admin", R.string.chat_slash_syntax_admin, R.string.chat_slash_description_admin, argumentKind = SlashArgumentKind.TEXT, handler = SlashCommandHandler.SERVER_ADMIN),
+    supported("recover", R.string.chat_slash_syntax_recover, R.string.chat_slash_description_recover, argumentKind = SlashArgumentKind.NETWORK, handler = SlashCommandHandler.RECOVER),
     supported("op", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_op, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
     supported("deop", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_deop, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
     supported("voice", R.string.chat_slash_syntax_privilege, R.string.chat_slash_description_voice, argumentKind = SlashArgumentKind.NICKS, minArguments = 1, handler = SlashCommandHandler.PRIVILEGE),
