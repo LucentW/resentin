@@ -124,6 +124,13 @@ class ChatViewModel(
         .map { it[networkSlug] }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /** Standalone 301 away notice for the peer in this query window. */
+    val peerAwayMessage: StateFlow<String?> = membersRepository.peerAwayByNetwork
+        .map { it[networkSlug]?.get(canonicalTarget(channelName)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun dismissPeerAway() = membersRepository.dismissPeerAway(networkSlug, channelName)
+
     /** `/hilight` watchlist patterns (null = never loaded — match nick-only
      * until the first `list` reply lands). Warmed once the user topic is joined. */
     val highlightPatterns: StateFlow<List<String>?> = userSettingsRepository.highlightPatterns

@@ -34,6 +34,11 @@ import pm.antani.resentin.net.dto.WhoisBundleDto
 import pm.antani.resentin.net.dto.WhowasBundleDto
 import pm.antani.resentin.net.dto.WindowInviteDeclinedDto
 import pm.antani.resentin.net.dto.WindowInvitedDto
+import pm.antani.resentin.net.dto.ArchiveChangedDto
+import pm.antani.resentin.net.dto.ArchivePurgedDto
+import pm.antani.resentin.net.dto.JoinFailedDto
+import pm.antani.resentin.net.dto.KickedDto
+import pm.antani.resentin.net.dto.PeerAwayDto
 
 /**
  * Decodes a raw event-frame payload into a typed [WsEvent], per the additive-only
@@ -63,6 +68,28 @@ object WsEventDecoder {
                 "own_nick_changed" -> WsEvent.OwnNickChanged(
                     networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),
                     nick = raw.getValue("nick").jsonPrimitive.content,
+                )
+                "channels_changed" -> WsEvent.ChannelsChanged
+                "peer_away" -> WsEvent.PeerAway(
+                    AppJson.decodeFromJsonElement(PeerAwayDto.serializer(), raw),
+                )
+                "joined" -> WsEvent.Joined(
+                    network = raw.getValue("network").jsonPrimitive.content,
+                    channel = raw.getValue("channel").jsonPrimitive.content,
+                )
+                "join_failed" -> AppJson.decodeFromJsonElement(JoinFailedDto.serializer(), raw).let { dto ->
+                    check(dto.state == "failed")
+                    WsEvent.JoinFailed(dto)
+                }
+                "kicked" -> AppJson.decodeFromJsonElement(KickedDto.serializer(), raw).let { dto ->
+                    check(dto.state == "kicked")
+                    WsEvent.Kicked(dto)
+                }
+                "archive_changed" -> WsEvent.ArchiveChanged(
+                    AppJson.decodeFromJsonElement(ArchiveChangedDto.serializer(), raw),
+                )
+                "archive_purged" -> WsEvent.ArchivePurged(
+                    AppJson.decodeFromJsonElement(ArchivePurgedDto.serializer(), raw),
                 )
                 "isupport_changed" -> WsEvent.IsupportChanged(
                     AppJson.decodeFromJsonElement(IsupportChangedDto.serializer(), raw),

@@ -722,6 +722,7 @@
     <string name="chat_slash_description_quit">Chiude la sessione IRC</string>
     <string name="chat_slash_channel_only">Comando disponibile solo nei canali</string>
     <string name="chat_away_badge">away</string>
+    <string name="chat_peer_away_message">%1$s è assente: %2$s</string>
     <string name="chat_slash_kb_host_unknown">Host di %1$s sconosciuto, espulso comunque</string>
     <string name="chat_slash_hilight_list">highlight (%1$d): %2$s</string>
     <string name="chat_whowas_user_line">%1$s@%2$s</string>
