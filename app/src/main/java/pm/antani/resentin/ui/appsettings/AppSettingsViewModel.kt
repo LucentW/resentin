@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.AppFontFamily
+import pm.antani.resentin.data.prefs.AppLockTimeout
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 import pm.antani.resentin.data.prefs.MessageDensity
 import pm.antani.resentin.data.prefs.ReplyStyle
@@ -186,6 +187,27 @@ class AppSettingsViewModel(
 
     fun setReplyStyle(style: ReplyStyle) {
         viewModelScope.launch { appPreferences.setReplyStyle(style) }
+    }
+
+    val appLockEnabled: StateFlow<Boolean> = appPreferences.appLockEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setAppLockEnabled(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setAppLockEnabled(enabled) }
+    }
+
+    val appLockTimeout: StateFlow<AppLockTimeout> = appPreferences.appLockTimeout
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppLockTimeout.IMMEDIATELY)
+
+    fun setAppLockTimeout(timeout: AppLockTimeout) {
+        viewModelScope.launch { appPreferences.setAppLockTimeout(timeout) }
+    }
+
+    val appLockHidePreview: StateFlow<Boolean> = appPreferences.appLockHidePreview
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setAppLockHidePreview(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setAppLockHidePreview(enabled) }
     }
 
     fun onReplyCustomTemplateChange(value: String) =

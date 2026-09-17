@@ -812,4 +812,24 @@
     <string name="registration_wizard_error_email">Enter a valid email address.</string>
     <string name="registration_wizard_error_password">Password must be %1$d–%2$d characters.</string>
     <string name="registration_wizard_error_code">Paste the confirmation code from your email.</string>
-    <string name="registration_wizard_error_no_template">This network doesn\'t support guided registration.</string></resources>
+    <string name="registration_wizard_error_no_template">This network doesn\'t support guided registration.</string>
+
+    <!-- Security / app lock -->
+    <string name="settings_group_security">Security</string>
+    <string name="settings_group_security_desc">App lock and preview</string>
+    <string name="settings_app_lock">Lock the app</string>
+    <string name="settings_app_lock_desc">Require fingerprint, face or the phone PIN/pattern/password to open Resentin</string>
+    <string name="settings_app_lock_no_screen_lock">Set a screen lock on your phone first (PIN, pattern or password), then try again</string>
+    <string name="settings_app_lock_timeout">Lock after</string>
+    <string name="settings_app_lock_timeout_desc">How long after the app goes to background the lock engages again. On launch the app is always locked.</string>
+    <string name="settings_app_lock_timeout_immediately">Immediately</string>
+    <string name="settings_app_lock_timeout_1min">After 1 minute</string>
+    <string name="settings_app_lock_timeout_5min">After 5 minutes</string>
+    <string name="settings_app_lock_timeout_15min">After 15 minutes</string>
+    <string name="settings_app_lock_hide_preview">Hide preview</string>
+    <string name="settings_app_lock_hide_preview_desc">Blank Resentin in the recent-apps screen</string>
+    <string name="app_lock_title">Resentin is locked</string>
+    <string name="app_lock_subtitle">Unlock with fingerprint, face or your phone PIN/pattern</string>
+    <string name="app_lock_unlock">Unlock</string>
+    <string name="app_lock_auth_title">Unlock Resentin</string>
+    <string name="app_lock_auth_failed">Authentication failed, try again</string></resources>

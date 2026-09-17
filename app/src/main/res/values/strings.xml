@@ -825,4 +825,24 @@
     <string name="registration_wizard_error_email">Inserisci un indirizzo email valido.</string>
     <string name="registration_wizard_error_password">La password deve essere di %1$d–%2$d caratteri.</string>
     <string name="registration_wizard_error_code">Incolla il codice di conferma ricevuto via email.</string>
-    <string name="registration_wizard_error_no_template">Questa rete non supporta la registrazione guidata.</string></resources>
+    <string name="registration_wizard_error_no_template">Questa rete non supporta la registrazione guidata.</string>
+
+    <!-- Sicurezza / blocco app -->
+    <string name="settings_group_security">Sicurezza</string>
+    <string name="settings_group_security_desc">Blocco app e anteprima</string>
+    <string name="settings_app_lock">Blocca l\'app</string>
+    <string name="settings_app_lock_desc">Richiedi impronta digitale, volto oppure PIN/segno del telefono per aprire Resentin</string>
+    <string name="settings_app_lock_no_screen_lock">Imposta prima un blocco schermo sul telefono (PIN, segno o password), poi riprova</string>
+    <string name="settings_app_lock_timeout">Blocca dopo</string>
+    <string name="settings_app_lock_timeout_desc">Quanto tempo dopo che l\'app va in background scatta di nuovo il blocco. All\'avvio l\'app è sempre bloccata.</string>
+    <string name="settings_app_lock_timeout_immediately">Subito</string>
+    <string name="settings_app_lock_timeout_1min">Dopo 1 minuto</string>
+    <string name="settings_app_lock_timeout_5min">Dopo 5 minuti</string>
+    <string name="settings_app_lock_timeout_15min">Dopo 15 minuti</string>
+    <string name="settings_app_lock_hide_preview">Nascondi anteprima</string>
+    <string name="settings_app_lock_hide_preview_desc">Oscura Resentin nella schermata delle app recenti</string>
+    <string name="app_lock_title">Resentin è bloccata</string>
+    <string name="app_lock_subtitle">Sblocca con impronta digitale, volto oppure PIN/segno del telefono</string>
+    <string name="app_lock_unlock">Sblocca</string>
+    <string name="app_lock_auth_title">Sblocca Resentin</string>
+    <string name="app_lock_auth_failed">Autenticazione non riuscita, riprova</string></resources>
