@@ -1177,11 +1177,17 @@ fun ChatScreen(
                     )
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
                 val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
-                Surface(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .onSizeChanged { composerBarHeightPx = it.height },
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 720.dp)
+                            .onSizeChanged { composerBarHeightPx = it.height },
                     shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     border = BorderStroke(
@@ -1376,6 +1382,7 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
                     }
                     }
                 }
