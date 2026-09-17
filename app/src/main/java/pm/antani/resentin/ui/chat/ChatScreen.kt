@@ -306,6 +306,87 @@ private fun ReplyComposerBar(
     }
 
 @Composable
+private fun AttachmentPreviewCard(
+    attachment: PendingUploadConfirm,
+    isUploading: Boolean,
+    onRemove: () -> Unit,
+) {
+    val removeAttachmentLabel = stringResource(R.string.chat_attachment_remove)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+        ),
+        tonalElevation = 1.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.AttachFile,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+            ) {
+                Text(
+                    text = attachment.fileName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOf(attachment.mimeType, formatFileSizeOrUnknown(attachment.sizeBytes))
+                        .joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            IconButton(
+                onClick = onRemove,
+                enabled = !isUploading,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = removeAttachmentLabel
+                    },
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun formatFileSizeOrUnknown(bytes: Long): String =
+    if (bytes >= 0L) formatFileSize(bytes) else "—"
+
+@Composable
 private fun AnimatedReplyComposerBar(
     reply: PendingReply,
     coloredNicklist: Boolean,
@@ -1167,7 +1248,8 @@ fun ChatScreen(
                 }
                 val draftEmpty = draftFieldValue.text.isEmpty()
                 val canSendDraft = draftFieldValue.text.isNotBlank()
-                val hasSendableText = canSendDraft
+                val canSendAttachment = pendingUpload?.requiresConfirmation == false
+                val hasSendableText = canSendDraft || canSendAttachment
                     val sendScale by animateFloatAsState(
                         targetValue = when {
                             isSending -> 0.9f
@@ -1225,6 +1307,21 @@ fun ChatScreen(
                                     reply = reply,
                                     coloredNicklist = coloredNicklist,
                                     onCancel = viewModel::cancelReply,
+                                )
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = pendingUpload != null,
+                            enter = expandVertically(animationSpec = tween(200)) +
+                                fadeIn(animationSpec = tween(160)),
+                            exit = shrinkVertically(animationSpec = tween(160)) +
+                                fadeOut(animationSpec = tween(110)),
+                        ) {
+                            pendingUpload?.let { attachment ->
+                                AttachmentPreviewCard(
+                                    attachment = attachment,
+                                    isUploading = isUploading,
+                                    onRemove = viewModel::dismissPendingUpload,
                                 )
                             }
                         }
@@ -1383,11 +1480,11 @@ fun ChatScreen(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 viewModel.send()
                             },
-                            enabled = !isSending && canSendDraft,
+                            enabled = !isSending && !isUploading && hasSendableText,
                             modifier = Modifier
                                 .size(48.dp)
                                 .background(
-                                    color = if (canSendDraft) MaterialTheme.colorScheme.primary
+                                    color = if (hasSendableText) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.surfaceContainer,
                                     shape = CircleShape,
                                 )
@@ -1415,7 +1512,7 @@ fun ChatScreen(
                                     Icon(
                                         Icons.AutoMirrored.Outlined.Send,
                                         contentDescription = stringResource(R.string.cd_send),
-                                        tint = if (canSendDraft) MaterialTheme.colorScheme.onPrimary
+                                        tint = if (hasSendableText) MaterialTheme.colorScheme.onPrimary
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -2443,7 +2540,7 @@ fun ChatScreen(
     // #1883 — pre-upload confirm (opt-in, server-side). The staged file goes out
     // only on Send, with the TTL picked here (a per-batch choice, not saved).
     val stagedUpload = pendingUpload
-    if (stagedUpload != null) {
+    if (stagedUpload?.requiresConfirmation == true && !isUploading) {
         UploadConfirmDialog(
             pending = stagedUpload,
             channelName = channelName,
