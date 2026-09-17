@@ -76,6 +76,12 @@ data class PendingUploadConfirm(
     /** TTL choice in seconds, preselected with the effective default. */
     val ttlSeconds: Int,
 )
+/** A reply selected in the composer, kept separate from the text being written. */
+data class PendingReply(
+    val nick: String,
+    val messageBody: String,
+)
+
 class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val networksRepository: NetworksRepository,
@@ -368,6 +374,9 @@ class ChatViewModel(
     private val _replyFocusRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val replyFocusRequests: SharedFlow<Unit> = _replyFocusRequests.asSharedFlow()
 
+    private val _pendingReply = MutableStateFlow<PendingReply?>(null)
+    val pendingReply: StateFlow<PendingReply?> = _pendingReply.asStateFlow()
+
     private val _commandEffects = MutableSharedFlow<ChatCommandEffect>(extraBufferCapacity = 1)
     val commandEffects: SharedFlow<ChatCommandEffect> = _commandEffects.asSharedFlow()
 
@@ -532,20 +541,17 @@ class ChatViewModel(
         }
     }
 
-    /** Swipe-to-reply: prefills the draft using the active reply-style template
-     * (Settings) — plain `nick: ` by default, optionally a quoted preview of the
-     * original message, or a fully custom template. IRC has no real threaded replies,
-     * this is just the addressing/quoting convention most bouncers highlight on. */
+    /** Selects a message for the visual reply bar. The configured reply template is
+     * expanded only at send time, so the user's draft stays plain and editable. */
     fun reply(nick: String, messageBody: String) {
-        viewModelScope.launch {
-            val style = appPreferences.replyStyle.first()
-            val customTemplate = appPreferences.replyCustomTemplate.first()
-            val prefix = buildReplyPrefix(style, customTemplate, nick, messageBody)
-            if (!_draft.value.startsWith(prefix)) setDraft(prefix + _draft.value)
-            _replyFocusRequests.tryEmit(Unit)
-        }
+        if (messageBody.isBlank()) return
+        _pendingReply.value = PendingReply(nick = nick, messageBody = messageBody)
+        _replyFocusRequests.tryEmit(Unit)
     }
 
+    fun cancelReply() {
+        _pendingReply.value = null
+    }
     /** Message-menu `!addquote`: appends the archive command for [messageBody] to
      * the draft and stops — nothing is sent, whatever quote bot sits in the
      * channel interprets it (cicchetto #1107 parity). The payload carries the
@@ -566,36 +572,31 @@ class ChatViewModel(
     }
 
     fun send() {
-        val rawText = _draft.value
-        val text = rawText.trim()
-        if (text.isBlank()) return
-        if (!rawText.startsWith("/")) {
-            // Paste flood guard: a multi-line draft becomes one PRIVMSG per line,
-            // so a block taller than the threshold is a burst the operator did not
-            // compose by hand. Ask before it goes out; 1–3 lines stay frictionless.
-            val lines = MessageLines.splitMessageLines(text)
-            if (lines.size > MULTI_LINE_CONFIRM_MESSAGES) {
-                _pendingMultiLineSend.value = text
-                return
-            }
-            // Anything multi-line — confirmed or not — must still fan out per line:
-            // the server rejects a body carrying CR/LF (invalid_line), so the
-            // unconfirmed 1–3-line carve-out cannot go out as one frame.
-            if (lines.size > 1) {
-                sendMultiline(text)
-                return
-            }
-            sendMessage(text)
-            return
-        }
-        if (_isSending.value) return
-        _isSending.value = true
         viewModelScope.launch {
+            val rawText = _draft.value
+            val text = composeOutgoingText(rawText)
+            if (text.isBlank()) return@launch
+            if (!rawText.trimStart().startsWith("/")) {
+                val lines = MessageLines.splitMessageLines(text)
+                if (lines.size > MULTI_LINE_CONFIRM_MESSAGES) {
+                    _pendingMultiLineSend.value = text
+                    return@launch
+                }
+                if (lines.size > 1) {
+                    sendMultiline(text, rawText)
+                    return@launch
+                }
+                sendMessage(text, rawText)
+                return@launch
+            }
+            _pendingReply.value = null
+            if (_isSending.value) return@launch
+            _isSending.value = true
             try {
                 val aliases = userSettingsRepository.getAliases().getOrDefault(emptyMap())
                 val expanded = expandUserSlashAlias(rawText, aliases) ?: rawText
                 when (val parsed = parseSlashCommand(expanded)) {
-                    SlashCommandParseResult.NotACommand -> sendMessage(text)
+                    SlashCommandParseResult.NotACommand -> sendMessage(text, rawText)
                     SlashCommandParseResult.Incomplete -> showSlashError(R.string.chat_slash_command_incomplete)
                     is SlashCommandParseResult.Invalid -> showSlashError(
                         when (parsed.error) {
@@ -603,10 +604,10 @@ class ChatViewModel(
                             SlashCommandError.MissingArgument -> R.string.chat_slash_command_missing_argument
                             SlashCommandError.InvalidArgument -> R.string.chat_slash_command_invalid_argument
                         },
-                        "/${parsed.token}",
+                        "/" + parsed.token,
                     )
                     is SlashCommandParseResult.Parsed -> runCatching { executeSlashCommand(parsed.command) }
-                        .onFailure { failure -> postError(failure.message ?: appContext.getString(R.string.chat_slash_command_unsupported, "/${parsed.command.name}")) }
+                        .onFailure { failure -> postError(failure.message ?: appContext.getString(R.string.chat_slash_command_unsupported, "/" + parsed.command.name)) }
                 }
             } finally {
                 _isSending.value = false
@@ -614,7 +615,16 @@ class ChatViewModel(
         }
     }
 
-    private fun sendMessage(text: String) {
+    private suspend fun composeOutgoingText(rawText: String): String {
+        if (rawText.trimStart().startsWith("/")) return rawText.trim()
+        val pending = _pendingReply.value ?: return rawText.trim()
+        val style = appPreferences.replyStyle.first()
+        val customTemplate = appPreferences.replyCustomTemplate.first()
+        val prefix = buildReplyPrefix(style, customTemplate, pending.nick, pending.messageBody)
+        return (prefix + rawText).trim()
+    }
+
+    private fun sendMessage(text: String, draftSnapshot: String = _draft.value) {
         // Set this synchronously before launching: a second tap can otherwise enqueue
         // another identical request while the first one awaits the network response.
         if (_isSending.value) return
@@ -626,7 +636,10 @@ class ChatViewModel(
                     chatRepository.sendMessage(networkSlug, channelName, text).getOrThrow()
                 }.onSuccess {
                     _scrollToLatestAfterSend.tryEmit(Unit)
-                    if (_draft.value.trim() == text) setDraft("")
+                    if (_draft.value.trim() == draftSnapshot.trim()) {
+                        setDraft("")
+                        _pendingReply.value = null
+                    }
                 }.onFailure { postError(it.message) }
             } finally {
                 _isSending.value = false
@@ -638,7 +651,7 @@ class ChatViewModel(
     fun confirmMultiLineSend() {
         val text = _pendingMultiLineSend.value ?: return
         _pendingMultiLineSend.value = null
-        sendMultiline(text)
+        sendMultiline(text, _draft.value)
     }
 
     /** User cancelled the multi-line dialog — the draft stays untouched for editing. */
@@ -651,7 +664,7 @@ class ChatViewModel(
     // same line is retried after the server's retry-after; on any other failure
     // the unsent remainder (the failed line onward) is mirrored back into the
     // draft so the operator loses nothing that has not gone out.
-    private fun sendMultiline(text: String) {
+    private fun sendMultiline(text: String, draftSnapshot: String = _draft.value) {
         if (_isSending.value) return
         val lines = MessageLines.splitMessageLines(text)
         _isSending.value = true
@@ -677,8 +690,10 @@ class ChatViewModel(
                 val residue = lines.drop(sent)
                 if (residue.isNotEmpty()) {
                     setDraft(residue.joinToString("\n"))
-                } else if (_draft.value.trim() == text) {
+                    if (sent > 0) _pendingReply.value = null
+                } else if (_draft.value.trim() == draftSnapshot.trim()) {
                     setDraft("")
+                    _pendingReply.value = null
                 }
             } finally {
                 _isSending.value = false
