@@ -1118,6 +1118,7 @@ fun ChatScreen(
                     ),
                     tonalElevation = 0.dp,
                 ) {
+                    Column {
                     ComposerTools(
                         visible = composerToolsOpen,
                         value = draftFieldValue,
@@ -1269,6 +1270,7 @@ fun ChatScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
             }
