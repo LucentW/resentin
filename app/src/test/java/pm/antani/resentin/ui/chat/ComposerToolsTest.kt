@@ -25,4 +25,24 @@ class ComposerToolsTest {
         assertEquals("h🙂o", result.text)
         assertEquals(TextRange(3), result.selection)
     }
+
+    @Test
+    fun `apply colors supports foreground and background`() {
+        val value = TextFieldValue("hello", TextRange(0, 5))
+
+        val result = applyIrcColors(value, foreground = 42, background = 98)
+
+        assertEquals("\u000342,98hello\u000f", result.text)
+        assertEquals(TextRange(12), result.selection)
+    }
+
+    @Test
+    fun `remove colors preserves other formatting`() {
+        val value = TextFieldValue("\u000342,98hello\u0002", TextRange(0, 12))
+
+        val result = clearIrcColors(value)
+
+        assertEquals("hello\u0002", result.text)
+        assertEquals(TextRange(6), result.selection)
+    }
 }
