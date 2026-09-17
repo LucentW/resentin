@@ -45,4 +45,23 @@ class ComposerToolsTest {
         assertEquals("hello\u0002", result.text)
         assertEquals(TextRange(6), result.selection)
     }
+
+    @Test
+    fun `style can be toggled off before typing`() {
+        val active = toggleIrcStyle(TextFieldValue("hello", TextRange(0)), codePoint = 2)
+        val inactive = toggleIrcStyle(active, codePoint = 2)
+
+        assertEquals("\u0002\u0002hello", inactive.text)
+        assertEquals(TextRange(2), inactive.selection)
+    }
+
+    @Test
+    fun `clear formatting inserts reset at cursor`() {
+        val value = TextFieldValue("\u0002hello", TextRange(1))
+
+        val result = clearIrcFormatting(value)
+
+        assertEquals("\u0002\u000fhello", result.text)
+        assertEquals(TextRange(2), result.selection)
+    }
 }
