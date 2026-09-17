@@ -1,9 +1,12 @@
 package pm.antani.resentin.ui.chat
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import pm.antani.resentin.data.db.MessageEntity
+import java.time.LocalDate
+import java.time.ZoneId
 
 class ChatTimelineTest {
     @Test
@@ -126,6 +129,56 @@ class ChatTimelineTest {
 
     private fun assertTrueAllMessages(rows: List<ChatTimelineRow>) {
         assertEquals(rows.size, rows.filterIsInstance<ChatTimelineRow.Message>().size)
+    }
+
+    @Test
+    fun sameDayHoldsWithinOneCalendarDay() {
+        val zone = ZoneId.systemDefault()
+        val midnight = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        assertTrue(isSameDay(midnight, midnight + 3_600_000))
+        assertTrue(isSameDay(midnight - 1_000, midnight - 1))
+        assertFalse(isSameDay(midnight - 1, midnight))
+        assertFalse(isSameDay(midnight, midnight + 24 * 3_600_000))
+    }
+
+    @Test
+    fun groupContinuesForSameSenderWithinWindow() {
+        val first = event(1, "privmsg", 1_000_000)
+        val second = event(2, "privmsg", 1_000_000 + 60_000)
+
+        assertTrue(continuesMessageGroup(first, second))
+    }
+
+    @Test
+    fun groupBreaksOnSenderChangeGapSystemAndAction() {
+        val base = event(1, "privmsg", 1_000_000)
+
+        assertFalse(continuesMessageGroup(null, base))
+        assertFalse(continuesMessageGroup(base, event(2, "privmsg", 1_060_000, sender = "Other")))
+        assertFalse(continuesMessageGroup(base, event(2, "privmsg", 1_000_000 + MESSAGE_GROUP_WINDOW_MS + 1)))
+        assertFalse(continuesMessageGroup(base, event(2, "join", 1_060_000)))
+        assertFalse(continuesMessageGroup(event(1, "join", 1_000_000), event(2, "privmsg", 1_060_000)))
+        assertFalse(continuesMessageGroup(base, event(2, "action", 1_060_000)))
+        assertFalse(continuesMessageGroup(event(1, "action", 1_000_000), event(2, "privmsg", 1_060_000)))
+    }
+
+    @Test
+    fun groupBreaksAcrossMidnightEvenWithinWindow() {
+        val zone = ZoneId.systemDefault()
+        val midnight = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val before = event(1, "privmsg", midnight - 60_000)
+        val after = event(2, "privmsg", midnight + 60_000)
+
+        assertFalse(continuesMessageGroup(before, after))
+    }
+
+    @Test
+    fun groupIgnoresSenderCase() {
+        val first = event(1, "privmsg", 1_000_000, sender = "Nick")
+        val second = event(2, "privmsg", 1_060_000, sender = "nICK")
+
+        assertTrue(continuesMessageGroup(first, second))
     }
 
     private fun event(id: Long, kind: String, time: Long, sender: String = "Nick") = MessageEntity(
