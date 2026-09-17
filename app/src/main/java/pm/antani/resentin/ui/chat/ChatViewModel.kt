@@ -65,9 +65,10 @@ sealed interface ChatCommandEffect {
     data object OpenAppSettings : ChatCommandEffect
 }
 
-/** #1883 — a picked/shared file staged behind the pre-upload confirm dialog.
- * Non-null while the dialog is up; the bytes are read only on confirm, so a
- * declined pick never pays the read. */
+/** A picked file kept in the composer until the user sends or removes it.
+ * The bytes are read only when the upload starts, so removing a preview never
+ * pays the file-read cost. [requiresConfirmation] keeps the existing optional
+ * pre-upload confirmation flow intact. */
 data class PendingUploadConfirm(
     val uri: Uri,
     val fileName: String,
@@ -75,6 +76,7 @@ data class PendingUploadConfirm(
     val mimeType: String,
     /** TTL choice in seconds, preselected with the effective default. */
     val ttlSeconds: Int,
+    val requiresConfirmation: Boolean = true,
 )
 /** A reply selected in the composer, kept separate from the text being written. */
 data class PendingReply(
@@ -392,7 +394,7 @@ class ChatViewModel(
         // before navigating in) — upload each one now, exactly like tapping the attach
         // button once per file. Consumed once so re-entering this chat later doesn't
         // re-upload the same share.
-        pendingShareHolder.consume().forEach { uploadFile(it) }
+        pendingShareHolder.consume().forEach { uploadFile(it, sendImmediately = true) }
         viewModelScope.launch {
             userCard.error.collect { message -> message?.let { postError(it) } }
         }
@@ -575,7 +577,10 @@ class ChatViewModel(
         viewModelScope.launch {
             val rawText = _draft.value
             val text = composeOutgoingText(rawText)
-            if (text.isBlank()) return@launch
+            if (text.isBlank()) {
+                sendPendingAttachmentIfAny()
+                return@launch
+            }
             if (!rawText.trimStart().startsWith("/")) {
                 val lines = MessageLines.splitMessageLines(text)
                 if (lines.size > MULTI_LINE_CONFIRM_MESSAGES) {
@@ -584,9 +589,11 @@ class ChatViewModel(
                 }
                 if (lines.size > 1) {
                     sendMultiline(text, rawText)
+                    sendPendingAttachmentIfAny()
                     return@launch
                 }
                 sendMessage(text, rawText)
+                sendPendingAttachmentIfAny()
                 return@launch
             }
             _pendingReply.value = null
@@ -615,6 +622,13 @@ class ChatViewModel(
         }
     }
 
+    private fun sendPendingAttachmentIfAny() {
+        val pending = _pendingUpload.value?.takeUnless { it.requiresConfirmation } ?: return
+        sendUpload(
+            pending.uri,
+            uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS },
+        )
+    }
     private suspend fun composeOutgoingText(rawText: String): String {
         if (rawText.trimStart().startsWith("/")) return rawText.trim()
         val pending = _pendingReply.value ?: return rawText.trim()
@@ -652,6 +666,7 @@ class ChatViewModel(
         val text = _pendingMultiLineSend.value ?: return
         _pendingMultiLineSend.value = null
         sendMultiline(text, _draft.value)
+        sendPendingAttachmentIfAny()
     }
 
     /** User cancelled the multi-line dialog — the draft stays untouched for editing. */
@@ -1060,24 +1075,21 @@ class ChatViewModel(
         }
     }
 
-    fun uploadFile(uri: Uri) {
+    fun uploadFile(uri: Uri, sendImmediately: Boolean = false) {
         viewModelScope.launch {
             runCatching { channelReady.await() }
                 .onFailure { postError(it.message); return@launch }
             val meta = readUploadMeta(appContext, uri)
                 ?: run { postError(appContext.getString(R.string.chat_upload_failed)); return@launch }
-            if (uploadConfirmEnabled && _pendingUpload.value == null) {
-                // #1883 — stage behind the confirm dialog instead of sending.
-                // A second pick arriving while one is staged (e.g. a multi-file
-                // OS share) goes straight out: the dialog holds a single file.
-                _pendingUpload.value = PendingUploadConfirm(
-                    uri = meta.uri,
-                    fileName = meta.fileName,
-                    sizeBytes = meta.sizeBytes,
-                    mimeType = meta.mimeType,
-                    ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
-                )
-            } else {
+            _pendingUpload.value = PendingUploadConfirm(
+                uri = meta.uri,
+                fileName = meta.fileName,
+                sizeBytes = meta.sizeBytes,
+                mimeType = meta.mimeType,
+                ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
+                requiresConfirmation = uploadConfirmEnabled && !sendImmediately,
+            )
+            if (sendImmediately) {
                 sendUpload(meta.uri, uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS })
             }
         }
@@ -1092,7 +1104,6 @@ class ChatViewModel(
      * preference (same as cicchetto: a one-off stays a one-off). */
     fun confirmPendingUpload() {
         val pending = _pendingUpload.value ?: return
-        _pendingUpload.value = null
         sendUpload(pending.uri, pending.ttlSeconds)
     }
 
@@ -1101,15 +1112,20 @@ class ChatViewModel(
     }
 
     private fun sendUpload(uri: Uri, expireSeconds: Int?) {
+        if (_isUploading.value) return
         viewModelScope.launch {
-            runCatching {
+            val result = runCatching {
                 _isUploading.value = true
                 val pending = readUploadFile(appContext, uri)
                     ?: error(appContext.getString(R.string.chat_upload_failed))
                 chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType, expireSeconds)
                     .getOrThrow()
-            }.onFailure { postError(it.message) }
+            }
+            result.onFailure { postError(it.message) }
             _isUploading.value = false
+            if (result.isSuccess && _pendingUpload.value?.uri == uri) {
+                _pendingUpload.value = null
+            }
         }
     }
 

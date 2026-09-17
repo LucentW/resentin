@@ -267,6 +267,7 @@
     <string name="cd_channel_menu">Azioni canale</string>
     <string name="chat_channel_members_action">Lista utenti</string>
     <string name="cd_attach_file">Allega file</string>
+    <string name="chat_attachment_remove">Rimuovi allegato</string>
     <string name="cd_slash_commands">Comandi IRC</string>
     <string name="chat_message_placeholder">Messaggio</string>
     <string name="cd_send">Invia</string>

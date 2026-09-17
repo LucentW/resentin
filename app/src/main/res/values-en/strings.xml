@@ -261,6 +261,7 @@
     <string name="cd_channel_menu">Channel actions</string>
     <string name="chat_channel_members_action">User list</string>
     <string name="cd_attach_file">Attach file</string>
+    <string name="chat_attachment_remove">Remove attachment</string>
     <string name="cd_slash_commands">IRC commands</string>
     <string name="chat_message_placeholder">Message</string>
     <string name="cd_send">Send</string>
