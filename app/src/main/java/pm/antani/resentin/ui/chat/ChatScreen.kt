@@ -221,6 +221,63 @@ private suspend fun LazyListState.animateToChatBottom() {
 private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 private val TIME_FORMATTER_WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss")
 
+
+@Composable
+private fun ReplyComposerBar(
+    reply: PendingReply,
+    onCancel: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(36.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_replying_to, reply.nick),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stripMircCodes(reply.messageBody).trim(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.cd_cancel),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
 private fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
     val formatter = if (showSeconds) TIME_FORMATTER_WITH_SECONDS else TIME_FORMATTER
     return Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(formatter)
@@ -260,6 +317,7 @@ fun ChatScreen(
     val peerAvatarUrl by viewModel.peerAvatarUrl.collectAsState()
     val peerAvatarBitmap = rememberAvatarBitmap(peerAvatarUrl, viewModel::fetchAvatarBytes)
     val draft by viewModel.draft.collectAsState()
+    val pendingReply by viewModel.pendingReply.collectAsState()
     // Local TextFieldValue (not just the String from the ViewModel) so an externally
     // triggered draft change — a swipe-to-reply prefill, or send() clearing it — can
     // explicitly place the cursor, instead of leaning on Compose's default "diff the new
@@ -1032,6 +1090,12 @@ fun ChatScreen(
                             }
                         }
                     }
+                }
+                pendingReply?.let { reply ->
+                    ReplyComposerBar(
+                        reply = reply,
+                        onCancel = viewModel::cancelReply,
+                    )
                 }
                 val canSendDraft = draftFieldValue.text.isNotBlank()
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)

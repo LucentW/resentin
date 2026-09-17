@@ -299,6 +299,7 @@
     <string name="chat_date_today">Oggi</string>
     <string name="chat_date_yesterday">Ieri</string>
     <string name="cd_reply">Rispondi</string>
+    <string name="chat_replying_to">Risposta a %1$s</string>
     <string name="chat_upload_failed">Impossibile leggere il file</string>
     <string name="chat_upload_confirm_title">Inviare a %1$s?</string>
     <string name="chat_upload_confirm_body">Il file viene caricato e il link pubblicato lì. Non si può annullare.</string>
