@@ -665,24 +665,34 @@ fun ChatScreen(
     // composer received focus and restore that position after the IME resizes
     // the layout. If the user was reading history, keep their position.
     var shouldScrollToBottomOnIme by remember { mutableStateOf(false) }
+    var shouldScrollToBottomOnComposerTools by remember { mutableStateOf(false) }
     // Track multiline growth too: IME insets stay constant while the composer gets taller.
     var composerHeightPx by remember { mutableStateOf(0) }
+    var composerBarHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
-    LaunchedEffect(listState, composerHeightPx) {
+    LaunchedEffect(listState, composerHeightPx, composerBarHeightPx) {
         snapshotFlow {
             val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             Triple(
                 imeInsets.getBottom(density),
-                shouldScrollToBottomOnIme && positioned,
+                Pair(
+                    shouldScrollToBottomOnIme && positioned,
+                    shouldScrollToBottomOnComposerTools && composerToolsOpen && positioned,
+                ),
                 bottomIndex,
             )
-        }.collectLatest { (imeBottom, shouldFollow, bottomIndex) ->
-            if (imeBottom <= 0 || !shouldFollow || bottomIndex < 0) return@collectLatest
+        }.collectLatest { (imeBottom, follows, bottomIndex) ->
+            val shouldFollowIme = follows.first
+            val shouldFollowTools = follows.second
+            if ((!shouldFollowIme && !shouldFollowTools) || (imeBottom <= 0 && !shouldFollowTools) || bottomIndex < 0) {
+                return@collectLatest
+            }
             // IME insets animate over multiple frames. Keep the tail aligned
             // after each inset change, once the current layout has measured.
             withFrameNanos { }
             listState.scrollToItem(bottomIndex)
+            if (shouldFollowTools) shouldScrollToBottomOnComposerTools = false
         }
     }
 
@@ -1108,7 +1118,8 @@ fun ChatScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .onSizeChanged { composerBarHeightPx = it.height },
                     shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     border = BorderStroke(
@@ -1136,7 +1147,11 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(
-                            onClick = { composerToolsOpen = !composerToolsOpen },
+                            onClick = {
+                                val opening = !composerToolsOpen
+                                shouldScrollToBottomOnComposerTools = opening && positioned && isAtBottom
+                                composerToolsOpen = opening
+                            },
                             modifier = Modifier
                                 .size(40.dp)
                                 .background(
