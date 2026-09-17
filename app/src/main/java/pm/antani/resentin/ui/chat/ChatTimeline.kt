@@ -1,6 +1,8 @@
 package pm.antani.resentin.ui.chat
 
 import pm.antani.resentin.data.db.MessageEntity
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Locale
 
 sealed interface ChatTimelineRow {
@@ -154,3 +156,34 @@ private const val MIN_SUPPRESSED_PRESENCE_SUMMARY_SIZE = 2
 private const val SMART_PRESENCE_ACTIVE_WINDOW_MS = 10 * 60_000L
 private const val PRESENCE_BURST_MAX_GAP_MS = 30_000L
 private const val PRESENCE_BURST_MAX_SPAN_MS = 120_000L
+
+/** Bubble-grouping window: same-sender messages within it render tight. */
+const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
+
+/** True when both timestamps fall on the same calendar day in [zone]. */
+fun isSameDay(aMs: Long, bMs: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean {
+    val a = Instant.ofEpochMilli(aMs).atZone(zone).toLocalDate()
+    val b = Instant.ofEpochMilli(bMs).atZone(zone).toLocalDate()
+    return a == b
+}
+
+/**
+ * Whether [message] continues [previous]'s bubble group (motd's `showsSender`
+ * parity): same sender, within the group window, and no group-breaking
+ * boundary in between — a system/chat kind change, an ACTION (`/me`) on
+ * either side, or a day change. The unread divider is a UI concern and stays
+ * at the call site.
+ */
+fun continuesMessageGroup(
+    previous: MessageEntity?,
+    message: MessageEntity,
+    gapWindowMs: Long = MESSAGE_GROUP_WINDOW_MS,
+): Boolean {
+    if (previous == null) return false
+    if (!previous.sender.equals(message.sender, ignoreCase = true)) return false
+    if (previous.kind in SYSTEM_EVENT_KINDS || message.kind in SYSTEM_EVENT_KINDS) return false
+    if (previous.kind == "action" || message.kind == "action") return false
+    if (!isSameDay(previous.serverTime, message.serverTime)) return false
+    val gap = message.serverTime - previous.serverTime
+    return gap in 0..gapWindowMs
+}
