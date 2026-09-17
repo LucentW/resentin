@@ -57,6 +57,7 @@ class MainActivity : FragmentActivity() {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 }
             }
+            val dynamicColor by container.appPreferences.dynamicColor.collectAsState(initial = false)
             val useDarkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
@@ -64,6 +65,7 @@ class MainActivity : FragmentActivity() {
             }
             ResentinTheme(
                 darkTheme = useDarkTheme,
+                dynamicColor = dynamicColor,
                 fontScale = fontScale,
                 lineHeightScale = lineHeightScale,
                 fontFamilyChoice = fontFamily,

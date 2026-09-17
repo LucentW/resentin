@@ -105,6 +105,7 @@ class AppPreferences(private val context: Context) {
     private val keyAppLockEnabled = booleanPreferencesKey("app_lock_enabled")
     private val keyAppLockTimeout = stringPreferencesKey("app_lock_timeout")
     private val keyAppLockHidePreview = booleanPreferencesKey("app_lock_hide_preview")
+    private val keyDynamicColor = booleanPreferencesKey("dynamic_color")
 
     val pinnedChannels: Flow<Set<String>> = context.dataStore.data.map { it[keyPinnedChannels] ?: emptySet() }
 
@@ -387,5 +388,14 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setAppLockHidePreview(value: Boolean) {
         context.dataStore.edit { it[keyAppLockHidePreview] = value }
+    }
+
+    /** Material You dynamic color (Android 12+): system palette derived from
+     * the wallpaper instead of the hand-tuned Resentin palette. Off by
+     * default to preserve the app's visual identity. */
+    val dynamicColor: Flow<Boolean> = context.dataStore.data.map { it[keyDynamicColor] ?: false }
+
+    suspend fun setDynamicColor(value: Boolean) {
+        context.dataStore.edit { it[keyDynamicColor] = value }
     }
 }

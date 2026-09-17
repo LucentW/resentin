@@ -5,9 +5,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import pm.antani.resentin.data.prefs.AppFontFamily
@@ -108,7 +111,14 @@ fun ResentinTheme(
     chatFontFamilyChoice: AppFontFamily = AppFontFamily.SYSTEM,
     content: @Composable () -> Unit,
 ) {
+    // Material You: palette generata dal sistema dai colori dello sfondo
+    // (Android 12+). Sotto API 31, o a toggle spento, resta la palette
+    // Resentin curata a mano. Forme, tipografia e scale non cambiano mai.
     val colorScheme = when {
+        dynamicColor && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
