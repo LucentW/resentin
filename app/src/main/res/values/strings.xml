@@ -277,8 +277,14 @@
     <string name="composer_tool_italic">Corsivo</string>
     <string name="composer_tool_underline">Sottolineato</string>
     <string name="composer_tool_more">Altri strumenti</string>
-    <string name="composer_tool_color">Colore testo</string>
+    <string name="composer_tool_color">Colori testo e sfondo</string>
     <string name="composer_tool_clear">Rimuovi formattazione</string>
+    <string name="composer_color_title">Colore IRC</string>
+    <string name="composer_color_apply">Applica</string>
+    <string name="composer_color_target_text">Testo</string>
+    <string name="composer_color_target_background">Sfondo</string>
+    <string name="composer_color_remove">Rimuovi colori</string>
+    <string name="composer_color_cancel">Annulla</string>
     <string name="cd_scroll_to_bottom">Vai al fondo</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Salta alla prossima menzione (%1$d sotto)</item>
@@ -309,6 +315,7 @@
     <string name="chat_date_yesterday">Ieri</string>
     <string name="cd_reply">Rispondi</string>
     <string name="chat_replying_to">Risposta a %1$s</string>
+    <string name="chat_replying_to_prefix">Risposta a</string>
     <string name="chat_upload_failed">Impossibile leggere il file</string>
     <string name="chat_upload_confirm_title">Inviare a %1$s?</string>
     <string name="chat_upload_confirm_body">Il file viene caricato e il link pubblicato lì. Non si può annullare.</string>

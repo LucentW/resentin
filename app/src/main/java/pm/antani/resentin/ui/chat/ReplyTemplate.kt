@@ -6,6 +6,16 @@ import pm.antani.resentin.ui.common.stripMircCodes
 private const val QUOTE_PREVIEW_MAX_CHARS = 40
 private const val DEFAULT_CUSTOM_TEMPLATE = "\$nick: "
 
+/** Plain visual preview for the composer reply bar. IRC formatting is removed while
+ * line breaks are preserved, so Compose can apply its two-line ellipsis at layout time. */
+fun buildReplyPreview(messageBody: String): String = messageBody
+    .let(::stripMircCodes)
+    .replace("\r\n", "\n")
+    .replace('\r', '\n')
+    .split('\n')
+    .joinToString("\n") { it.trimEnd() }
+    .trim()
+
 private fun templateFor(style: ReplyStyle, customTemplate: String): String = when (style) {
     ReplyStyle.NICK -> "\$nick: "
     ReplyStyle.QUOTE -> "<\$nick> \$msg << "
