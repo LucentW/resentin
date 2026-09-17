@@ -24,6 +24,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items as lazyItems
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +70,7 @@ import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -204,6 +208,11 @@ internal fun ComposerTools(
     var selectedForeground by remember { mutableStateOf<Int?>(null) }
     var selectedBackground by remember { mutableStateOf<Int?>(null) }
     val formatting = composerFormattingAtCursor(value)
+    val emojiSearchEntries = remember { systemEmojiSearchEntries() }
+    val emojiQuery = activeEmojiQuery(value)
+    val emojiSuggestions = remember(emojiQuery, emojiSearchEntries) {
+        emojiQuery?.let { searchSystemEmojis(emojiSearchEntries, it.query) }.orEmpty()
+    }
     val hapticFeedback = LocalHapticFeedback.current
 
     fun commitToolValue(nextValue: TextFieldValue) {
@@ -304,7 +313,23 @@ internal fun ComposerTools(
     }
 
     AnimatedVisibility(
-        visible = emojiPickerOpen && visible,
+        visible = emojiQuery != null && visible,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        ComposerEmojiAutocompletePanel(
+            suggestions = emojiSuggestions,
+            query = emojiQuery?.query.orEmpty(),
+            onPick = { suggestion ->
+                emojiQuery?.let { query ->
+                    commitToolValue(replaceEmojiQuery(value, query, suggestion.emoji))
+                }
+            },
+        )
+    }
+
+    AnimatedVisibility(
+        visible = emojiPickerOpen && visible && emojiQuery == null,
         enter = expandVertically() + fadeIn(),
         exit = shrinkVertically() + fadeOut(),
     ) {
@@ -365,6 +390,53 @@ private fun ComposerEmojiPanel(onPick: (String) -> Unit) {
                 .fillMaxWidth()
                 .height(260.dp),
         )
+    }
+}
+
+@Composable
+private fun ComposerEmojiAutocompletePanel(
+    suggestions: List<EmojiSearchEntry>,
+    query: String,
+    onPick: (EmojiSearchEntry) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 2.dp,
+    ) {
+        if (suggestions.isEmpty()) {
+            Text(
+                text = stringResource(R.string.composer_emoji_no_results, query),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            )
+        } else {
+            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
+                lazyItems(suggestions, key = { it.emoji }) { suggestion ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(suggestion) }
+                            .height(48.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(suggestion.emoji, fontSize = 24.sp)
+                        Text(
+                            text = suggestion.name.replace('_', ' '),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -69,6 +69,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.History
@@ -1164,9 +1165,15 @@ fun ChatScreen(
                         }
                     }
                 }
+                val draftEmpty = draftFieldValue.text.isEmpty()
                 val canSendDraft = draftFieldValue.text.isNotBlank()
+                val hasSendableText = canSendDraft
                     val sendScale by animateFloatAsState(
-                        targetValue = if (isSending) 0.9f else 1f,
+                        targetValue = when {
+                            isSending -> 0.9f
+                            hasSendableText -> 1.08f
+                            else -> 1f
+                        },
                         animationSpec = spring(),
                         label = "send_button_scale",
                     )
@@ -1176,6 +1183,7 @@ fun ChatScreen(
                         label = "send_button_rotation",
                     )
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
+                val attachFileLabel = stringResource(R.string.cd_attach_file)
                 val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
                 Box(
                     modifier = Modifier
@@ -1309,7 +1317,7 @@ fun ChatScreen(
                             ),
                         )
                         AnimatedVisibility(
-                            visible = draftFieldValue.text.isEmpty(),
+                            visible = draftEmpty,
                             enter = fadeIn(),
                             exit = fadeOut(),
                         ) {
@@ -1336,6 +1344,38 @@ fun ChatScreen(
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                        }
+                        AnimatedVisibility(
+                            visible = draftEmpty && !composerToolsOpen,
+                            enter = fadeIn(animationSpec = tween(150)),
+                            exit = fadeOut(animationSpec = tween(120)),
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    filePicker.launch("*/*")
+                                },
+                                enabled = !isUploading,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainer,
+                                        CircleShape,
+                                    )
+                                    .semantics(mergeDescendants = true) {
+                                        contentDescription = attachFileLabel
+                                    },
+                            ) {
+                                if (isUploading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(
+                                        Icons.Outlined.AttachFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                         IconButton(
