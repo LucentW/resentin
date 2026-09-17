@@ -1187,6 +1187,7 @@ fun ChatScreen(
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontFamily = LocalResentinChatFontFamily.current,
                             ),
+                            visualTransformation = MircComposerVisualTransformation,
                             minLines = 1,
                             maxLines = 4,
                             shape = MaterialTheme.shapes.medium,
