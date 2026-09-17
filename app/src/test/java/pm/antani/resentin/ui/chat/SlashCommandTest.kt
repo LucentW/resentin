@@ -71,6 +71,26 @@ class SlashCommandTest {
             completeSlashCommandInput("/wh mario", whois),
         )
     }
+    @Test
+    fun prioritizesRecentlyUsedNickArguments() {
+        assertEquals(
+            listOf("mario", "luigi", "peach"),
+            suggestSlashArguments(
+                "/msg ",
+                listOf("luigi", "peach", "mario"),
+                emptyList(),
+                emptyList(),
+                recentNicks = listOf("mario"),
+            ).map { it.value },
+        )
+    }
+
+    @Test
+    fun cyclesSuggestionSelectionAndWrapsAround() {
+        assertEquals(2, cycleSuggestionIndex(0, -1, 3))
+        assertEquals(0, cycleSuggestionIndex(2, 1, 3))
+        assertEquals(0, cycleSuggestionIndex(0, 1, 0))
+    }
 
     private fun assertParsed(input: String, name: String, arguments: List<String>) {
         val result = parseSlashCommand(input)

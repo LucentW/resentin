@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.draw.clip
@@ -64,6 +65,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -108,6 +110,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -123,6 +126,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -461,6 +470,8 @@ fun ChatScreen(
     // the caret stayed wherever it last was, not focused, not at the end).
     var draftFieldValue by remember { mutableStateOf(TextFieldValue(draft)) }
     var composerToolsOpen by remember { mutableStateOf(false) }
+    var recentMentionNicks by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var selectedSuggestionIndex by remember { mutableStateOf(0) }
     val draftFocusRequester = remember { FocusRequester() }
     val hapticFeedback = LocalHapticFeedback.current
     LaunchedEffect(draft) {
@@ -526,20 +537,21 @@ fun ChatScreen(
     }
 
     val activeMention = remember(draftFieldValue) { mentionQueryAtCursor(draftFieldValue) }
-    val mentionSuggestions = remember(activeMention, members) {
-        activeMention?.let { findMentionSuggestions(it.query, members) }.orEmpty()
+    val mentionSuggestions = remember(activeMention, members, recentMentionNicks) {
+        activeMention?.let { findMentionSuggestions(it.query, members, recentMentionNicks) }.orEmpty()
     }
     val slashSuggestions = remember(draftFieldValue.text) {
         suggestSlashCommands(draftFieldValue.text)
     }
     val availableChannels by viewModel.availableChannels.collectAsState()
     val availableNetworks by viewModel.availableNetworks.collectAsState()
-    val slashArgumentSuggestions = remember(draftFieldValue.text, members, availableChannels, availableNetworks) {
+    val slashArgumentSuggestions = remember(draftFieldValue.text, members, availableChannels, availableNetworks, recentMentionNicks) {
         suggestSlashArguments(
             draftFieldValue.text,
             members.map { it.nick },
             availableChannels,
             availableNetworks,
+            recentNicks = recentMentionNicks,
         )
     }
 
@@ -553,6 +565,10 @@ fun ChatScreen(
         val newValue = TextFieldValue(newText, TextRange(newCursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(newText)
+        recentMentionNicks = listOf(nick) + recentMentionNicks
+            .filterNot { it.equals(nick, ignoreCase = true) }
+            .take(15)
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
     }
 
@@ -561,6 +577,7 @@ fun ChatScreen(
         val newValue = TextFieldValue(completion.text, TextRange(completion.cursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(completion.text)
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
     }
     fun completeSlashArgument(suggestion: SlashArgumentSuggestion) {
@@ -568,7 +585,34 @@ fun ChatScreen(
         val newValue = TextFieldValue(completion.text, TextRange(completion.cursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(completion.text)
+        if (members.any { it.nick.equals(suggestion.value, ignoreCase = true) }) {
+            recentMentionNicks = listOf(suggestion.value) + recentMentionNicks
+                .filterNot { it.equals(suggestion.value, ignoreCase = true) }
+                .take(15)
+        }
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
+    }
+    val activeSuggestionCount = when {
+        mentionSuggestions.isNotEmpty() -> mentionSuggestions.size
+        slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.size
+        slashSuggestions.isNotEmpty() -> slashSuggestions.size
+        else -> 0
+    }
+    LaunchedEffect(activeMention?.query, draftFieldValue.text, activeSuggestionCount) {
+        selectedSuggestionIndex = 0
+    }
+    fun moveSuggestionSelection(step: Int) {
+        selectedSuggestionIndex = cycleSuggestionIndex(selectedSuggestionIndex, step, activeSuggestionCount)
+    }
+    fun selectActiveSuggestion(): Boolean {
+        when {
+            mentionSuggestions.isNotEmpty() -> mentionSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeMention(it.nick) }
+            slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashArgument(it) }
+            slashSuggestions.isNotEmpty() -> slashSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashCommand(it) }
+            else -> return false
+        }
+        return true
     }
     val openReferencedChannel = remember(channelName, viewModel) {
         { referencedChannel: String ->
@@ -1219,32 +1263,23 @@ fun ChatScreen(
                 if (slashSuggestions.isNotEmpty()) {
                     SlashCommandSuggestions(
                         suggestions = slashSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
                         onSelect = ::completeSlashCommand,
                     )
                 }
                 if (slashArgumentSuggestions.isNotEmpty()) {
                     SlashArgumentSuggestions(
                         suggestions = slashArgumentSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
                         onSelect = ::completeSlashArgument,
                     )
                 }
                 if (mentionSuggestions.isNotEmpty()) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 3.dp,
-                    ) {
-                        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-                            mentionSuggestions.forEach { member ->
-                                item(key = "mention-${member.nick}") {
-                                    DropdownMenuItem(
-                                        text = { Text(member.nick) },
-                                        onClick = { completeMention(member.nick) },
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    MentionSuggestions(
+                        suggestions = mentionSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
+                        onSelect = { completeMention(it.nick) },
+                    )
                 }
                 val draftEmpty = draftFieldValue.text.isEmpty()
                 val canSendDraft = draftFieldValue.text.isNotBlank()
@@ -1388,6 +1423,18 @@ fun ChatScreen(
                                         positioned && isAtBottom
                                     } else {
                                         false
+                                    }
+                                }
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type != KeyEventType.KeyDown || activeSuggestionCount == 0) {
+                                        false
+                                    } else {
+                                        when (event.key) {
+                                            Key.DirectionDown -> { moveSuggestionSelection(1); true }
+                                            Key.DirectionUp -> { moveSuggestionSelection(-1); true }
+                                            Key.Enter, Key.Tab -> if (event.key == Key.Enter && event.isShiftPressed) false else selectActiveSuggestion()
+                                            else -> false
+                                        }
                                     }
                                 },
                             placeholder = {
@@ -2785,8 +2832,46 @@ private fun LusersCard(bundle: LusersBundleDto, onDismiss: () -> Unit) {
 }
 
 @Composable
+internal fun MentionSuggestions(
+    suggestions: List<MemberEntity>,
+    selectedIndex: Int = -1,
+    onSelect: (MemberEntity) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("mention-suggestions"),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp,
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, member -> "mention-${member.nick}" }) { index, member ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("mention-${member.nick}"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    text = { Text(member.nick, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(member) },
+                )
+            }
+        }
+    }
+}
+@Composable
 internal fun SlashCommandSuggestions(
     suggestions: List<SlashCommandSpec>,
+    selectedIndex: Int = -1,
     onSelect: (SlashCommandSpec) -> Unit,
 ) {
     Surface(
@@ -2794,22 +2879,32 @@ internal fun SlashCommandSuggestions(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 3.dp,
     ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-            suggestions.forEach { command ->
-                item(key = "slash-command-${command.name}") {
-                    DropdownMenuItem(
-                        modifier = Modifier.testTag("slash-command-${command.name}"),
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, command -> "slash-command-${command.name}" }) { index, command ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("slash-command-${command.name}"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         text = {
-                            Column {
-                                Text("/${command.name}", fontWeight = FontWeight.Medium)
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    stringResource(command.syntaxRes),
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = "/${command.name} - ${stringResource(command.syntaxRes)}",
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    stringResource(command.descriptionRes),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = stringResource(command.descriptionRes),
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         },
@@ -2819,11 +2914,11 @@ internal fun SlashCommandSuggestions(
             }
         }
     }
-}
 
 @Composable
 internal fun SlashArgumentSuggestions(
     suggestions: List<SlashArgumentSuggestion>,
+    selectedIndex: Int = -1,
     onSelect: (SlashArgumentSuggestion) -> Unit,
 ) {
     Surface(
@@ -2831,15 +2926,21 @@ internal fun SlashArgumentSuggestions(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 3.dp,
     ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-            suggestions.forEach { suggestion ->
-                item(key = "slash-argument-${suggestion.value}") {
-                    DropdownMenuItem(
-                        modifier = Modifier.testTag("slash-argument-${suggestion.value}"),
-                        text = { Text(suggestion.label) },
-                        onClick = { onSelect(suggestion) },
-                    )
-                }
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, suggestion -> "slash-argument-${suggestion.value}" }) { index, suggestion ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("slash-argument-${suggestion.value}"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    text = { Text(suggestion.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(suggestion) },
+                )
             }
         }
     }
@@ -2885,12 +2986,12 @@ private fun mentionQueryAtCursor(value: TextFieldValue): MentionQuery? {
     return MentionQuery(start = atIndex, end = cursor, query = query)
 }
 
-private fun findMentionSuggestions(query: String, members: List<MemberEntity>): List<MemberEntity> =
+private fun findMentionSuggestions(query: String, members: List<MemberEntity>, recentNicks: List<String>): List<MemberEntity> =
     members
         .asSequence()
         .filter { query.isBlank() || it.nick.contains(query, ignoreCase = true) }
         .distinctBy { it.nick.lowercase() }
-        .sortedWith(compareBy<MemberEntity>({ !it.nick.startsWith(query, ignoreCase = true) }, { it.nick.lowercase() }))
+        .sortedWith(compareBy<MemberEntity>({ recentSuggestionRank(it.nick, recentNicks) }, { !it.nick.startsWith(query, ignoreCase = true) }, { it.nick.lowercase() }))
         .take(8)
         .toList()
 
