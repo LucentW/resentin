@@ -149,12 +149,23 @@ fun suggestSlashCommands(input: String, catalog: List<SlashCommandSpec> = slashC
 
 data class SlashArgumentSuggestion(val value: String, val label: String = value)
 
+internal fun recentSuggestionRank(value: String, recentNicks: List<String>): Int {
+    val index = recentNicks.indexOfFirst { it.equals(value, ignoreCase = true) }
+    return if (index >= 0) index else Int.MAX_VALUE
+}
+
+internal fun cycleSuggestionIndex(current: Int, step: Int, count: Int): Int {
+    if (count <= 0) return 0
+    return (current + step).mod(count)
+}
+
 fun suggestSlashArguments(
     input: String,
     members: List<String>,
     channels: List<String>,
     networks: List<String>,
     catalog: List<SlashCommandSpec> = slashCommandCatalog,
+    recentNicks: List<String> = emptyList(),
 ): List<SlashArgumentSuggestion> {
     if (!input.startsWith('/')) return emptyList()
     val firstSpace = input.indexOfFirst(Char::isWhitespace)
@@ -170,7 +181,13 @@ fun suggestSlashArguments(
     return source.asSequence()
         .filter { prefix.isBlank() || it.contains(prefix, ignoreCase = true) }
         .distinctBy { it.lowercase() }
-        .sortedWith(compareBy({ !it.startsWith(prefix, ignoreCase = true) }, { it.lowercase() }))
+        .sortedWith(
+            compareBy<String>(
+                { recentSuggestionRank(it, recentNicks) },
+                { !it.startsWith(prefix, ignoreCase = true) },
+                { it.lowercase() },
+            ),
+        )
         .take(8)
         .map(::SlashArgumentSuggestion)
         .toList()
