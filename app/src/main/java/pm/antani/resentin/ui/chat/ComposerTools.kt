@@ -34,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -78,6 +79,25 @@ private const val IRC_ITALIC = 29
 private const val IRC_UNDERLINE = 31
 private const val IRC_COLOR = 3
 private const val IRC_RESET = 15
+private data class ComposerFormatting(
+    val bold: Boolean,
+    val italic: Boolean,
+    val underline: Boolean,
+    val foreground: Int?,
+    val background: Int?,
+)
+
+private fun composerFormattingAtCursor(value: TextFieldValue): ComposerFormatting {
+    val cursor = value.selection.min.coerceIn(0, value.text.length)
+    val span = MircParser.parse(value.text.substring(0, cursor) + "x").firstOrNull()
+    return ComposerFormatting(
+        bold = span?.bold == true,
+        italic = span?.italic == true,
+        underline = span?.underline == true,
+        foreground = span?.foreground,
+        background = span?.background,
+    )
+}
 
 internal fun toggleIrcStyle(value: TextFieldValue, codePoint: Int): TextFieldValue {
     val code = Char(codePoint)
@@ -125,6 +145,7 @@ internal fun applyIrcColors(value: TextFieldValue, foreground: Int?, background:
 }
 
 internal fun clearIrcColors(value: TextFieldValue): TextFieldValue {
+    if (value.selection.collapsed) return insertComposerText(value, Char(IRC_COLOR).toString())
     val start = value.selection.min
     val end = value.selection.max
     val replacement = stripIrcColors(value.text.substring(start, end))
@@ -155,6 +176,7 @@ private fun stripIrcColors(text: String): String {
 }
 
 internal fun clearIrcFormatting(value: TextFieldValue): TextFieldValue {
+    if (value.selection.collapsed) return insertComposerText(value, Char(IRC_RESET).toString())
     val start = value.selection.min
     val end = value.selection.max
     val selected = value.text.substring(start, end)
@@ -177,12 +199,11 @@ internal fun ComposerTools(
     var colorTargetBackground by remember { mutableStateOf(false) }
     var selectedForeground by remember { mutableStateOf<Int?>(null) }
     var selectedBackground by remember { mutableStateOf<Int?>(null) }
+    val formatting = composerFormattingAtCursor(value)
 
     fun openColorSheet() {
-        val selected = value.text.substring(value.selection.min, value.selection.max)
-        val span = MircParser.parse(selected).firstOrNull()
-        selectedForeground = span?.foreground
-        selectedBackground = span?.background
+        selectedForeground = formatting.foreground
+        selectedBackground = formatting.background
         colorTargetBackground = false
         colorSheetOpen = true
     }
@@ -226,24 +247,28 @@ internal fun ComposerTools(
                     label = stringResource(R.string.composer_tool_emoji),
                     onClick = { emojiSheetOpen = true },
                 )
-                ComposerToolButton(
+                ComposerToggleButton(
                     icon = Icons.Filled.FormatBold,
                     label = stringResource(R.string.composer_tool_bold),
+                    checked = formatting.bold,
                     onClick = { onValueChange(toggleIrcStyle(value, IRC_BOLD)) },
                 )
-                ComposerToolButton(
+                ComposerToggleButton(
                     icon = Icons.Filled.FormatItalic,
                     label = stringResource(R.string.composer_tool_italic),
+                    checked = formatting.italic,
                     onClick = { onValueChange(toggleIrcStyle(value, IRC_ITALIC)) },
                 )
-                ComposerToolButton(
+                ComposerToggleButton(
                     icon = Icons.Filled.FormatUnderlined,
                     label = stringResource(R.string.composer_tool_underline),
+                    checked = formatting.underline,
                     onClick = { onValueChange(toggleIrcStyle(value, IRC_UNDERLINE)) },
                 )
-                ComposerToolButton(
+                ComposerToggleButton(
                     icon = Icons.Filled.FormatColorText,
                     label = stringResource(R.string.composer_tool_color),
+                    checked = formatting.foreground != null || formatting.background != null,
                     onClick = ::openColorSheet,
                 )
                 ComposerToolButton(
@@ -435,6 +460,18 @@ private fun ComposerColorSwatch(color: Int, selected: Boolean, onClick: () -> Un
 @Composable
 private fun ComposerToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(icon, contentDescription = label)
+    }
+}
+
+@Composable
+private fun ComposerToggleButton(
+    icon: ImageVector,
+    label: String,
+    checked: Boolean,
+    onClick: () -> Unit,
+) {
+    IconToggleButton(checked = checked, onCheckedChange = { onClick() }, modifier = Modifier.size(48.dp)) {
         Icon(icon, contentDescription = label)
     }
 }
