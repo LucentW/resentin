@@ -5,6 +5,9 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -15,6 +18,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.MessageEntity
+import pm.antani.resentin.data.db.MessagePagingSource
 import pm.antani.resentin.data.prefs.channelKey
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
@@ -61,6 +65,22 @@ class ChatRepository(
 
     fun observeMessages(networkSlug: String, channelName: String): Flow<List<MessageEntity>> =
         db.messageDao().observeMessages(networkSlug, canonicalTarget(channelName))
+
+    /** Room-backed paging for long transcripts. The source opens at the newest
+     * locally cached rows; older rows are loaded when the reader reaches the top.
+     * Grappa remains the remote history boundary and fills Room through [loadOlder]. */
+    fun observeMessagesPaged(networkSlug: String, channelName: String): Flow<PagingData<MessageEntity>> =
+        Pager(
+            config = PagingConfig(
+                pageSize = PAGE_LIMIT,
+                initialLoadSize = PAGE_LIMIT * 2,
+                prefetchDistance = 12,
+                enablePlaceholders = false,
+            ),
+            pagingSourceFactory = {
+                MessagePagingSource(db, networkSlug, canonicalTarget(channelName))
+            },
+        ).flow
 
     /** Latest chat message per channel, keyed by lower-cased "network/channel" (same
      * scheme as [pm.antani.resentin.data.prefs.channelKey]) — the Home row preview. */

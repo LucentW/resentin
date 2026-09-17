@@ -3,6 +3,7 @@ package pm.antani.resentin.ui.chat
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.paging.PagingData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import androidx.paging.cachedIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -288,6 +290,12 @@ class ChatViewModel(
     // presence preference hides them from the main transcript.
     val allMessages: StateFlow<List<MessageEntity>> = chatRepository.observeMessages(networkSlug, channelName)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Paging stream used by the long-transcript renderer. It is cached in the
+     * ViewModel so rotation/recomposition does not restart the Room source. */
+    val pagedMessages: Flow<PagingData<MessageEntity>> =
+        chatRepository.observeMessagesPaged(networkSlug, channelName)
+            .cachedIn(viewModelScope)
 
     // The server filters historical pages for a hidden presence pin. Apply the same
     // rule locally to live WS rows, which the server still delivers for membership
