@@ -1614,7 +1614,17 @@ fun ChatScreen(
                 viewModel.dismissWhois()
                 longPressedMessageText = null
             },
-            onContactPrivately = viewModel::contactPrivately,
+            onContactPrivately = { nick ->
+                // Dismiss FIRST, synchronously: navigating (pop+push) while the
+                // sheet dialog is still open leaves the transition stuck on the
+                // old screen. The emit->collect->navigate chain is async, so the
+                // sheet is always gone from composition before navigate runs
+                // (same ordering as the /who modal below, which dismisses right
+                // after contactPrivately for the same reason).
+                viewModel.dismissWhois()
+                longPressedMessageText = null
+                viewModel.contactPrivately(nick)
+            },
             onKick = viewModel::kickFromCard,
             onBan = viewModel::banFromCard,
             onSetMode = viewModel::setModeFromCard,

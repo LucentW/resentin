@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,6 +62,38 @@ private const val ROUTE_ARCHIVE = "archive/{networkSlug}"
 private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
 private fun decode(value: String) = URLDecoder.decode(value, "UTF-8")
 
+private fun chatRoute(networkSlug: String, channelName: String, jumpTo: Long? = null): String {
+    val base = "chat/$networkSlug/${encode(channelName)}"
+    return if (jumpTo != null && jumpTo != 0L) "$base?jumpTo=$jumpTo" else base
+}
+
+/**
+ * Telegram-style navigation to a chat: a chat always replaces any chat above
+ * Home instead of stacking (`home` or `home -> chat(X)`, never
+ * `chat -> chat`). Re-tapping the already-open chat is a no-op (no flicker,
+ * no duplicate, no entry reset — the reader is already looking at it).
+ *
+ * NOTE: deliberately neither `launchSingleTop` nor `restoreState` — both match
+ * by route *pattern*, so chat/A -> chat/B with either flag is a silent no-op
+ * (same `chat/{slug}/{channel}` destination). The `popUpTo(HOME)` below already
+ * guarantees convergence on its own: every open ends as `home -> chat(X)`.
+ */
+internal fun NavHostController.navigateToChat(
+    networkSlug: String,
+    channelName: String,
+    jumpTo: Long? = null,
+) {
+    val curArgs = currentBackStackEntry?.arguments
+    val curSlug = curArgs?.getString("networkSlug")
+    val curChan = curArgs?.getString("channelName")?.let {
+        runCatching { decode(it) }.getOrDefault(it)
+    }
+    if (curSlug == networkSlug && curChan == channelName) return
+    navigate(chatRoute(networkSlug, channelName, jumpTo)) {
+        popUpTo(ROUTE_HOME) { saveState = true }
+    }
+}
+
 data class DeepLinkChat(val networkSlug: String, val channelName: String)
 
 @Composable
@@ -95,7 +128,7 @@ fun AppRoot(
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
-            navController.navigate("chat/${deepLink.networkSlug}/${encode(deepLink.channelName)}")
+            navController.navigateToChat(deepLink.networkSlug, deepLink.channelName)
             onDeepLinkConsumed()
         }
     }
@@ -111,7 +144,7 @@ fun AppRoot(
     }
 
     val onOpenQuery: (networkSlug: String, nick: String) -> Unit = { networkSlug, nick ->
-        navController.navigate("chat/$networkSlug/${encode(nick)}")
+        navController.navigateToChat(networkSlug, nick)
     }
 
     // #2029 — the server-owned strip-mIRC pref, provided app-wide from the local
@@ -186,7 +219,7 @@ fun AppRoot(
                 viewModel = viewModel,
                 host = currentSession.host,
                 onChannelClick = { networkSlug, channelName ->
-                    navController.navigate("chat/$networkSlug/${encode(channelName)}")
+                    navController.navigateToChat(networkSlug, channelName)
                 },
                 onNetworkSettingsClick = { networkSlug ->
                     navController.navigate("networksettings/$networkSlug")
@@ -210,7 +243,7 @@ fun AppRoot(
                 networkSlug = networkSlug,
                 onBack = { navController.popBackStack() },
                 onMentionClick = { slug, channel, serverTime ->
-                    navController.navigate("chat/$slug/${encode(channel)}?jumpTo=$serverTime")
+                    navController.navigateToChat(slug, channel, jumpTo = serverTime)
                 },
             )
         }
@@ -228,9 +261,7 @@ fun AppRoot(
                 networkSlug = networkSlug,
                 onBack = { navController.popBackStack() },
                 onJoined = { channelName ->
-                    navController.navigate("chat/$networkSlug/${encode(channelName)}") {
-                        popUpTo(ROUTE_HOME)
-                    }
+                    navController.navigateToChat(networkSlug, channelName)
                 },
             )
         }
@@ -276,9 +307,7 @@ fun AppRoot(
             ShareTargetScreen(
                 viewModel = viewModel,
                 onChatSelected = { networkSlug, channelName ->
-                    navController.navigate("chat/$networkSlug/${encode(channelName)}") {
-                        popUpTo(ROUTE_HOME)
-                    }
+                    navController.navigateToChat(networkSlug, channelName)
                 },
                 onCancel = { navController.popBackStack() },
             )
@@ -360,7 +389,7 @@ fun AppRoot(
                 onAppSettings = { navController.navigate(ROUTE_APP_SETTINGS) },
                 onOpenQuery = onOpenQuery,
                 onOpenChannel = { slug, channel ->
-                    navController.navigate("chat/$slug/${encode(channel)}")
+                    navController.navigateToChat(slug, channel)
                 },
             )
         }
@@ -431,9 +460,7 @@ fun AppRoot(
                 networkSlug = networkSlug,
                 onBack = { navController.popBackStack() },
                 onRecovered = { target ->
-                    navController.navigate("chat/$networkSlug/${encode(target)}") {
-                        popUpTo(ROUTE_HOME)
-                    }
+                    navController.navigateToChat(networkSlug, target)
                 },
             )
         }
