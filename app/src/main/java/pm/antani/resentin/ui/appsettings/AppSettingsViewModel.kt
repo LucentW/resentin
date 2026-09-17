@@ -188,6 +188,13 @@ class AppSettingsViewModel(
         viewModelScope.launch { appPreferences.setReplyStyle(style) }
     }
 
+    val dynamicColor: StateFlow<Boolean> = appPreferences.dynamicColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setDynamicColor(enabled) }
+    }
+
     fun onReplyCustomTemplateChange(value: String) =
         _uiState.update { it.copy(replyCustomTemplate = value, replyCustomTemplateSaved = false) }
 

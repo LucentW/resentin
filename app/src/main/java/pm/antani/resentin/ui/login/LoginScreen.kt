@@ -115,7 +115,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
             Surface(
                 modifier = Modifier.size(72.dp),
                 shape = MaterialTheme.shapes.large,
-                color = androidx.compose.ui.graphics.Color(0xFF4E342E),
+                color = MaterialTheme.colorScheme.primaryContainer,
             ) {
                 androidx.compose.foundation.Image(
                     painter = androidx.compose.ui.res.painterResource(

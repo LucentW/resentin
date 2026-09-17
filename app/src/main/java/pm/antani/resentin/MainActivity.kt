@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
             val lineHeightScale by container.appPreferences.lineHeightScale.collectAsState(initial = 1f)
             val messageDensity by container.appPreferences.messageDensity.collectAsState(initial = MessageDensity.NORMAL)
             val themeMode by container.appPreferences.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            val dynamicColor by container.appPreferences.dynamicColor.collectAsState(initial = false)
             val useDarkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
             }
             ResentinTheme(
                 darkTheme = useDarkTheme,
+                dynamicColor = dynamicColor,
                 fontScale = fontScale,
                 lineHeightScale = lineHeightScale,
                 fontFamilyChoice = fontFamily,

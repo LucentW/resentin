@@ -187,7 +187,7 @@ fun HomeScreen(
                         Surface(
                             modifier = Modifier.size(40.dp),
                             shape = MaterialTheme.shapes.extraSmall,
-                            color = Color(0xFF4E342E),
+                            color = MaterialTheme.colorScheme.primaryContainer,
                         ) {
                             androidx.compose.foundation.Image(
                                 painter = androidx.compose.ui.res.painterResource(
