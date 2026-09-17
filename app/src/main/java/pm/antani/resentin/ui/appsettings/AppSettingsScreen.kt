@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
@@ -83,6 +84,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import org.unifiedpush.android.connector.UnifiedPush
 import pm.antani.resentin.R
+import pm.antani.resentin.data.prefs.AppLockTimeout
 import pm.antani.resentin.data.prefs.ChatDisplayMode
 import pm.antani.resentin.data.prefs.AppFontFamily
 import pm.antani.resentin.data.prefs.MessageDensity
@@ -93,6 +95,8 @@ import pm.antani.resentin.net.dto.VhostOptionDto
 import pm.antani.resentin.ui.chat.CreditsScreen
 import pm.antani.resentin.ui.common.LocalDensityScale
 import pm.antani.resentin.ui.common.ResentinHeaderAction
+import pm.antani.resentin.ui.applock.authenticateWithSystemLock
+import pm.antani.resentin.ui.applock.isSystemLockAvailable
 import pm.antani.resentin.ui.theme.toComposeFontFamily
 import java.time.Instant
 import java.time.ZoneId
@@ -134,6 +138,7 @@ private enum class SettingsSection {
     APPEARANCE,
     CHAT,
     NOTIFICATIONS,
+    SECURITY,
     PRESENCE,
     IDENTITY,
     COMMANDS,
@@ -145,6 +150,7 @@ private fun SettingsSection.icon(): ImageVector = when (this) {
     SettingsSection.APPEARANCE -> Icons.Outlined.Palette
     SettingsSection.CHAT -> Icons.Outlined.ChatBubbleOutline
     SettingsSection.NOTIFICATIONS -> Icons.Outlined.Notifications
+    SettingsSection.SECURITY -> Icons.Outlined.Lock
     SettingsSection.PRESENCE -> Icons.Outlined.Schedule
     SettingsSection.IDENTITY -> Icons.Outlined.Person
     SettingsSection.COMMANDS -> Icons.Outlined.Terminal
@@ -156,6 +162,7 @@ private fun SettingsSection.title(): String = when (this) {
     SettingsSection.APPEARANCE -> stringResource(R.string.settings_group_appearance)
     SettingsSection.CHAT -> stringResource(R.string.settings_group_chat)
     SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_group_notifications)
+    SettingsSection.SECURITY -> stringResource(R.string.settings_group_security)
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands)
@@ -167,6 +174,7 @@ private fun SettingsSection.description(): String = when (this) {
     SettingsSection.APPEARANCE -> stringResource(R.string.settings_group_appearance_desc)
     SettingsSection.CHAT -> stringResource(R.string.settings_group_chat_desc)
     SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_group_notifications_desc)
+    SettingsSection.SECURITY -> stringResource(R.string.settings_group_security_desc)
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence_desc)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity_desc)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands_desc)
@@ -183,6 +191,9 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val autoAwayReason by viewModel.autoAwayReason.collectAsState()
     val pushEnabled by viewModel.pushEnabled.collectAsState()
     val pushDecryptionFailureAt by viewModel.pushDecryptionFailureAt.collectAsState()
+    val appLockEnabled by viewModel.appLockEnabled.collectAsState()
+    val appLockTimeout by viewModel.appLockTimeout.collectAsState()
+    val appLockHidePreview by viewModel.appLockHidePreview.collectAsState()
     val chatDisplayMode by viewModel.chatDisplayMode.collectAsState()
     val showSeconds by viewModel.showSeconds.collectAsState()
     val showHostmaskInEvents by viewModel.showHostmaskInEvents.collectAsState()
@@ -199,6 +210,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val messageDbSizeBytes by viewModel.messageDbSizeBytes.collectAsState()
     var showClearMessagesConfirm by remember { mutableStateOf(false) }
     var showCredits by remember { mutableStateOf(false) }
+    var appLockError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -256,6 +268,41 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
         } else {
             linkDistributorAndEnable()
         }
+    }
+
+    // Blocco app: l'attivazione richiede un'autenticazione di conferma col
+    // sistema (impronta/volto o PIN/segno), così l'utente capisce subito cosa
+    // gli verrà chiesto. La disattivazione è diretta: per arrivare qui l'app
+    // è già sbloccata.
+    val noScreenLockMessage = stringResource(R.string.settings_app_lock_no_screen_lock)
+    val appLockAuthTitle = stringResource(R.string.app_lock_auth_title)
+    val appLockAuthSubtitle = stringResource(R.string.settings_app_lock_desc)
+
+    fun onAppLockChange(enabled: Boolean) {
+        if (!enabled) {
+            viewModel.setAppLockEnabled(false)
+            appLockError = null
+            return
+        }
+        if (!isSystemLockAvailable(context)) {
+            appLockError = noScreenLockMessage
+            return
+        }
+        val fragmentActivity = context as? androidx.fragment.app.FragmentActivity
+        if (fragmentActivity == null) {
+            appLockError = noScreenLockMessage
+            return
+        }
+        authenticateWithSystemLock(
+            activity = fragmentActivity,
+            title = appLockAuthTitle,
+            subtitle = appLockAuthSubtitle,
+            onSuccess = {
+                viewModel.setAppLockEnabled(true)
+                appLockError = null
+            },
+            onError = { err -> appLockError = err?.toString() },
+        )
     }
 
     // On API 33+ the platform's own LocaleManager is the source of truth for the
@@ -739,6 +786,53 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 )
             }
             }
+            if (section == SettingsSection.SECURITY) {
+            item {
+                SettingsGroupCard(
+                    showHeader = false,
+                    icon = Icons.Outlined.Lock,
+                    title = stringResource(R.string.settings_group_security),
+                    description = stringResource(R.string.settings_group_security_desc),
+                ) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_app_lock),
+                        description = stringResource(R.string.settings_app_lock_desc),
+                        checked = appLockEnabled,
+                        onCheckedChange = ::onAppLockChange,
+                    )
+                    appLockError?.let { error ->
+                        Spacer(Modifier.height(ResentinSpacing.xSmall))
+                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    SettingsRowDivider()
+                    SettingsBlockLabel(text = stringResource(R.string.settings_app_lock_timeout))
+                    Text(
+                        stringResource(R.string.settings_app_lock_timeout_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(ResentinSpacing.small))
+                    ResentinDropdown(
+                        selected = appLockTimeout,
+                        options = listOf(
+                            ResentinDropdownOption(AppLockTimeout.IMMEDIATELY, stringResource(R.string.settings_app_lock_timeout_immediately)),
+                            ResentinDropdownOption(AppLockTimeout.AFTER_1_MIN, stringResource(R.string.settings_app_lock_timeout_1min)),
+                            ResentinDropdownOption(AppLockTimeout.AFTER_5_MIN, stringResource(R.string.settings_app_lock_timeout_5min)),
+                            ResentinDropdownOption(AppLockTimeout.AFTER_15_MIN, stringResource(R.string.settings_app_lock_timeout_15min)),
+                        ),
+                        onSelected = viewModel::setAppLockTimeout,
+                        enabled = appLockEnabled,
+                    )
+                    SettingsRowDivider()
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_app_lock_hide_preview),
+                        description = stringResource(R.string.settings_app_lock_hide_preview_desc),
+                        checked = appLockHidePreview,
+                        onCheckedChange = viewModel::setAppLockHidePreview,
+                    )
+                }
+            }
+            }
             if (section == SettingsSection.PRESENCE) {
             item {
                 SettingsGroupCard(
@@ -1115,6 +1209,7 @@ private fun SettingsHubCard(
                 add(SettingsSection.APPEARANCE)
                 add(SettingsSection.CHAT)
                 add(SettingsSection.NOTIFICATIONS)
+                add(SettingsSection.SECURITY)
                 add(SettingsSection.PRESENCE)
                 if (showIdentity) add(SettingsSection.IDENTITY)
                 add(SettingsSection.COMMANDS)

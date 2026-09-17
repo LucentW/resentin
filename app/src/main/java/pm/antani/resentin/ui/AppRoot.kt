@@ -2,14 +2,23 @@ package pm.antani.resentin.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -20,7 +29,9 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import pm.antani.resentin.AppContainer
 import pm.antani.resentin.R
+import pm.antani.resentin.data.prefs.AppLockTimeout
 import pm.antani.resentin.irc.isQueryTarget
+import pm.antani.resentin.ui.applock.LockScreen
 import pm.antani.resentin.ui.appsettings.AppSettingsScreen
 import pm.antani.resentin.ui.appsettings.AppSettingsViewModel
 import pm.antani.resentin.ui.channelsettings.ChannelSettingsScreen
@@ -92,6 +103,50 @@ fun AppRoot(
 
     val currentSession = session!!
     val navController = rememberNavController()
+
+    // Blocco app (Impostazioni → Sicurezza): al cold start parte sempre
+    // bloccata quando attivo; da background a foreground si riblocca dopo il
+    // periodo di tolleranza scelto dall'utente. Finché è bloccata il NavHost
+    // non è composto, quindi nessun contenuto è raggiungibile (deep-link e
+    // share restano in sospeso fino allo sblocco).
+    // `initial = null` = preferenza non ancora caricata: finché è null si
+    // resta bloccati (fail-closed), altrimenti il `false` iniziale sbloccherebbe
+    // l'app per un istante a ogni avvio anche col blocco attivo.
+    val appLockEnabled by container.appPreferences.appLockEnabled.collectAsState(initial = null)
+    val appLockTimeout by container.appPreferences.appLockTimeout.collectAsState(initial = AppLockTimeout.IMMEDIATELY)
+    var locked by remember { mutableStateOf(true) }
+    LaunchedEffect(appLockEnabled) {
+        if (appLockEnabled == false) locked = false
+    }
+    var backgroundedAt by remember { mutableLongStateOf(0L) }
+    val lockEnabledState by rememberUpdatedState(appLockEnabled)
+    val lockTimeoutState by rememberUpdatedState(appLockTimeout)
+    DisposableEffect(Unit) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    backgroundedAt = android.os.SystemClock.elapsedRealtime()
+                }
+                Lifecycle.Event.ON_START -> {
+                    if (lockEnabledState == true && !locked && backgroundedAt != 0L) {
+                        val elapsedSec =
+                            (android.os.SystemClock.elapsedRealtime() - backgroundedAt) / 1000
+                        if (elapsedSec >= lockTimeoutState.seconds) locked = true
+                    }
+                    backgroundedAt = 0L
+                }
+                else -> Unit
+            }
+        }
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+
+    if (appLockEnabled == true && locked) {
+        LockScreen(onUnlocked = { locked = false })
+        return
+    }
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {

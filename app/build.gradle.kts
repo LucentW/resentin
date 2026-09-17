@@ -93,6 +93,7 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.appcompat)
     // Session-share QR scanning (login screen "scan QR code" — cicchetto's
     // "open on another device"). A drop-in scanning Activity + ActivityResultContract,

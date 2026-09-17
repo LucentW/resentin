@@ -4,15 +4,17 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.fragment.app.FragmentActivity
 import pm.antani.resentin.data.prefs.MessageDensity
 import pm.antani.resentin.data.prefs.AppFontFamily
 import pm.antani.resentin.data.prefs.ThemeMode
@@ -24,7 +26,7 @@ import pm.antani.resentin.ui.common.LocalDensityScale
 import pm.antani.resentin.ui.login.parseGrappaLoginLink
 import pm.antani.resentin.ui.theme.ResentinTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private var pendingDeepLink = mutableStateOf<DeepLinkChat?>(null)
     private var pendingSharePick = mutableStateOf(false)
@@ -45,6 +47,16 @@ class MainActivity : ComponentActivity() {
             val lineHeightScale by container.appPreferences.lineHeightScale.collectAsState(initial = 1f)
             val messageDensity by container.appPreferences.messageDensity.collectAsState(initial = MessageDensity.NORMAL)
             val themeMode by container.appPreferences.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+            // Nascondi anteprima (Impostazioni → Sicurezza): oscura l'app nello
+            // switcher delle app recenti via FLAG_SECURE.
+            val hidePreview by container.appPreferences.appLockHidePreview.collectAsState(initial = false)
+            SideEffect {
+                if (hidePreview) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
+            }
             val useDarkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
