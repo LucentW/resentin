@@ -6,11 +6,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FormatBold
@@ -18,9 +21,10 @@ import androidx.compose.material.icons.filled.FormatClear
 import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatUnderlined
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Mood
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,9 +103,10 @@ internal fun ComposerTools(
     visible: Boolean,
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
+    isUploading: Boolean,
+    onAttachFile: () -> Unit,
 ) {
     var emojiMenuOpen by remember { mutableStateOf(false) }
-    var overflowMenuOpen by remember { mutableStateOf(false) }
     var colorMenuOpen by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
@@ -110,15 +115,37 @@ internal fun ComposerTools(
         exit = shrinkVertically() + fadeOut(),
     ) {
         Surface(
+            modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 1.dp,
         ) {
             Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                IconButton(
+                    onClick = onAttachFile,
+                    enabled = !isUploading,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainer,
+                            CircleShape,
+                        ),
+                ) {
+                    if (isUploading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            Icons.Outlined.AttachFile,
+                            contentDescription = stringResource(R.string.cd_attach_file),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Box {
                     ComposerToolButton(
                         icon = Icons.Outlined.Mood,
@@ -159,31 +186,10 @@ internal fun ComposerTools(
 
                 Box {
                     ComposerToolButton(
-                        icon = Icons.Filled.MoreVert,
-                        label = stringResource(R.string.composer_tool_more),
-                        onClick = { overflowMenuOpen = true },
+                        icon = Icons.Filled.FormatColorText,
+                        label = stringResource(R.string.composer_tool_color),
+                        onClick = { colorMenuOpen = true },
                     )
-                    DropdownMenu(
-                        expanded = overflowMenuOpen,
-                        onDismissRequest = { overflowMenuOpen = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.composer_tool_color)) },
-                            leadingIcon = { Icon(Icons.Filled.FormatColorText, contentDescription = null) },
-                            onClick = {
-                                overflowMenuOpen = false
-                                colorMenuOpen = true
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.composer_tool_clear)) },
-                            leadingIcon = { Icon(Icons.Filled.FormatClear, contentDescription = null) },
-                            onClick = {
-                                overflowMenuOpen = false
-                                onValueChange(clearIrcFormatting(value))
-                            },
-                        )
-                    }
                     DropdownMenu(
                         expanded = colorMenuOpen,
                         onDismissRequest = { colorMenuOpen = false },
@@ -199,6 +205,11 @@ internal fun ComposerTools(
                         }
                     }
                 }
+                ComposerToolButton(
+                    icon = Icons.Filled.FormatClear,
+                    label = stringResource(R.string.composer_tool_clear),
+                    onClick = { onValueChange(clearIrcFormatting(value)) },
+                )
             }
         }
     }
