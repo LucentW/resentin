@@ -1,5 +1,12 @@
 package pm.antani.resentin.ui.chat
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+
 import pm.antani.resentin.ui.theme.ResentinSpacing
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -90,6 +97,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextField
@@ -112,6 +120,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -136,6 +145,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -156,9 +167,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import pm.antani.resentin.R
@@ -333,62 +348,211 @@ private fun AttachmentPreviewCard(
         ),
         tonalElevation = 1.dp,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 10.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
+        Column {
+            Row(
                 modifier = Modifier
-                    .size(40.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.AttachFile,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                AttachmentThumbnail(
+                    attachment = attachment,
+                    modifier = Modifier.size(56.dp),
                 )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Text(
+                        text = attachment.fileName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = listOf(attachment.mimeType, formatFileSizeOrUnknown(attachment.sizeBytes))
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isUploading) {
+                        Text(
+                            text = stringResource(R.string.cd_loading),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onRemove,
+                    enabled = !isUploading,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = removeAttachmentLabel
+                        },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 10.dp),
+            AnimatedVisibility(
+                visible = isUploading,
+                enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(120)),
+                exit = shrinkVertically(animationSpec = tween(140)) + fadeOut(animationSpec = tween(90)),
             ) {
-                Text(
-                    text = attachment.fileName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = listOf(attachment.mimeType, formatFileSizeOrUnknown(attachment.sizeBytes))
-                        .joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            IconButton(
-                onClick = onRemove,
-                enabled = !isUploading,
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = removeAttachmentLabel
-                    },
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 10.dp)
+                        .clip(MaterialTheme.shapes.small),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AttachmentThumbnail(
+    attachment: PendingUploadConfirm,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val isImage = attachment.mimeType.startsWith("image/")
+    val bitmap by produceState<Bitmap?>(initialValue = null, attachment.uri, attachment.mimeType) {
+        value = if (isImage) {
+            withContext(Dispatchers.IO) {
+                decodeLocalThumbnail(context, attachment.uri)
+            }
+        } else {
+            null
+        }
+    }
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = attachment.fileName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.AttachFile,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+private fun decodeLocalThumbnail(context: Context, uri: Uri): Bitmap? {
+    return runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val source = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val maxDimension = maxOf(info.size.width, info.size.height).coerceAtLeast(1)
+                val targetDimension = 256
+                val scale = maxDimension.toFloat() / targetDimension
+                decoder.setTargetSize(
+                    (info.size.width / scale).toInt().coerceAtLeast(1),
+                    (info.size.height / scale).toInt().coerceAtLeast(1),
+                )
+                decoder.isMutableRequired = false
+            }
+        } else {
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = 4
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        }
+    }.getOrNull()
+}
+
+private fun inlineImageUrlFromText(body: String): String? {
+    val candidate = body.trim()
+    if (candidate.isEmpty() || candidate.any(Char::isWhitespace)) return null
+    if (!candidate.startsWith("https://") && !candidate.startsWith("http://")) return null
+    val path = candidate.substringBefore('?').substringBefore('#').lowercase()
+    val imageExtensions = listOf(".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif")
+    return candidate.takeIf { imageExtensions.any(path::endsWith) }
+}
+
+@Composable
+private fun InlineAttachmentImage(url: String) {
+    val uriHandler = LocalUriHandler.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, url) {
+        value = withContext(Dispatchers.IO) {
+            decodeRemoteThumbnail(url)
+        }
+    }
+    bitmap?.let { loaded ->
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 240.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .clickable { runCatching { uriHandler.openUri(url) } },
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+            ),
+        ) {
+            Image(
+                bitmap = loaded.asImageBitmap(),
+                contentDescription = url,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+            )
+        }
+    }
+}
+
+private fun decodeRemoteThumbnail(url: String): Bitmap? {
+    val connection = runCatching {
+        URL(url).openConnection() as HttpURLConnection
+    }.getOrNull() ?: return null
+    return try {
+        connection.connectTimeout = 8_000
+        connection.readTimeout = 12_000
+        connection.instanceFollowRedirects = true
+        if (connection.responseCode !in 200..299) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = 4
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        connection.inputStream.use { stream ->
+            BitmapFactory.decodeStream(stream, null, options)
+        }
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection.disconnect()
     }
 }
 
@@ -3495,6 +3659,7 @@ private fun BubbleRow(
     val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }
+    val inlineImageUrl = remember(quoteRest) { inlineImageUrlFromText(quoteRest) }
     val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
@@ -3643,6 +3808,7 @@ private fun BubbleRow(
                                 lightTheme = lightTheme,
                             )
                         }
+                        inlineImageUrl?.let { InlineAttachmentImage(it) }
                         val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontFamily = LocalResentinChatFontFamily.current,
                         )
