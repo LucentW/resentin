@@ -384,6 +384,8 @@
     <string name="settings_theme_system">Sistema</string>
     <string name="settings_theme_light">Chiaro</string>
     <string name="settings_theme_dark">Scuro</string>
+    <string name="settings_dynamic_color">Colori dinamici</string>
+    <string name="settings_dynamic_color_desc">Usa i colori dello sfondo del telefono (Material You, Android 12+)</string>
     <string name="settings_font_family">Font dell’app</string>
     <string name="settings_font_family_desc">Si applica a tutta l’interfaccia.</string>
     <string name="settings_chat_font_family">Font della chat</string>

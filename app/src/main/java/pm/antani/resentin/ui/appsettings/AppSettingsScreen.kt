@@ -190,6 +190,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val unreadFirst by viewModel.unreadFirst.collectAsState()
     val fontScale by viewModel.fontScale.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val dynamicColor by viewModel.dynamicColor.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
     val chatFontFamily by viewModel.chatFontFamily.collectAsState()
     val fontFamilyOptions = appFontFamilyOptions()
@@ -398,6 +399,17 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         ),
                         onSelected = viewModel::setThemeMode,
                     )
+                    // Material You esiste solo da Android 12 (API 31): sotto,
+                    // la voce non viene mostrata proprio.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        SettingsRowDivider()
+                        SettingsSwitchRow(
+                            title = stringResource(R.string.settings_dynamic_color),
+                            description = stringResource(R.string.settings_dynamic_color_desc),
+                            checked = dynamicColor,
+                            onCheckedChange = viewModel::setDynamicColor,
+                        )
+                    }
                     SettingsRowDivider()
                     SettingsBlockLabel(
                         text = stringResource(R.string.settings_language),
