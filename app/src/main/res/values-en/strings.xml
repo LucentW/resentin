@@ -267,6 +267,7 @@
     <string name="composer_tools_open">Open formatting tools</string>
     <string name="composer_tools_close">Close formatting tools</string>
     <string name="composer_tool_emoji">Insert emoji</string>
+    <string name="composer_emoji_no_results">No emoji found for &quot;%1$s&quot;</string>
     <string name="composer_tool_bold">Bold</string>
     <string name="composer_tool_italic">Italic</string>
     <string name="composer_tool_underline">Underline</string>
