@@ -56,6 +56,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
@@ -325,6 +326,7 @@ fun ChatScreen(
     // reliably land the cursor at the end (the reported bug: reply prefilled the text but
     // the caret stayed wherever it last was, not focused, not at the end).
     var draftFieldValue by remember { mutableStateOf(TextFieldValue(draft)) }
+    var composerToolsOpen by remember { mutableStateOf(false) }
     val draftFocusRequester = remember { FocusRequester() }
     LaunchedEffect(draft) {
         if (draftFieldValue.text != draft) {
@@ -501,6 +503,10 @@ fun ChatScreen(
     }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::uploadFile)
+    }
+
+    if (composerToolsOpen) {
+        BackHandler { composerToolsOpen = false }
     }
 
     LaunchedEffect(Unit) {
@@ -1099,6 +1105,7 @@ fun ChatScreen(
                 }
                 val canSendDraft = draftFieldValue.text.isNotBlank()
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
+                val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1111,12 +1118,44 @@ fun ChatScreen(
                     ),
                     tonalElevation = 0.dp,
                 ) {
+                    ComposerTools(
+                        visible = composerToolsOpen,
+                        value = draftFieldValue,
+                        onValueChange = { newValue ->
+                            draftFieldValue = newValue
+                            viewModel.onDraftChange(newValue.text)
+                            draftFocusRequester.requestFocus()
+                        },
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        IconButton(
+                            onClick = { composerToolsOpen = !composerToolsOpen },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    if (composerToolsOpen) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceContainer,
+                                    CircleShape,
+                                )
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = composerToolsLabel
+                                },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = null,
+                                modifier = Modifier.graphicsLayer {
+                                    rotationZ = if (composerToolsOpen) 45f else 0f
+                                },
+                                tint = if (composerToolsOpen) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(
                             onClick = { filePicker.launch("*/*") },
                             enabled = !isUploading,

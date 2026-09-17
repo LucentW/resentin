@@ -270,6 +270,15 @@
     <string name="cd_slash_commands">Comandi IRC</string>
     <string name="chat_message_placeholder">Messaggio</string>
     <string name="cd_send">Invia</string>
+    <string name="composer_tools_open">Apri strumenti di formattazione</string>
+    <string name="composer_tools_close">Chiudi strumenti di formattazione</string>
+    <string name="composer_tool_emoji">Inserisci emoji</string>
+    <string name="composer_tool_bold">Grassetto</string>
+    <string name="composer_tool_italic">Corsivo</string>
+    <string name="composer_tool_underline">Sottolineato</string>
+    <string name="composer_tool_more">Altri strumenti</string>
+    <string name="composer_tool_color">Colore testo</string>
+    <string name="composer_tool_clear">Rimuovi formattazione</string>
     <string name="cd_scroll_to_bottom">Vai al fondo</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Salta alla prossima menzione (%1$d sotto)</item>
