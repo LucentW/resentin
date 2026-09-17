@@ -36,4 +36,10 @@ class ReplyTemplateTest {
         val prefix = buildReplyPrefix(ReplyStyle.CUSTOM, "[\$nick] \$msg", "nick1", "<nick2> messaggio << risposta")
         assertEquals("[nick1] risposta", prefix)
     }
+
+    @Test
+    fun visualPreviewPreservesLinesAndNormalizesFormatting() {
+        val preview = buildReplyPreview("\u0002prima\u000f\r\nseconda\rterza")
+        assertEquals("prima\nseconda\nterza", preview)
+    }
 }

@@ -271,8 +271,14 @@
     <string name="composer_tool_italic">Italic</string>
     <string name="composer_tool_underline">Underline</string>
     <string name="composer_tool_more">More tools</string>
-    <string name="composer_tool_color">Text color</string>
+    <string name="composer_tool_color">Text and background colors</string>
     <string name="composer_tool_clear">Clear formatting</string>
+    <string name="composer_color_title">IRC color</string>
+    <string name="composer_color_apply">Apply</string>
+    <string name="composer_color_target_text">Text</string>
+    <string name="composer_color_target_background">Background</string>
+    <string name="composer_color_remove">Remove colors</string>
+    <string name="composer_color_cancel">Cancel</string>
     <string name="cd_scroll_to_bottom">Scroll to bottom</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Jump to next mention (%1$d below)</item>
@@ -302,6 +308,7 @@
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
     <string name="cd_reply">Reply</string>
+    <string name="chat_replying_to_prefix">Replying to</string>
     <string name="chat_upload_failed">Unable to read the file</string>
     <string name="chat_upload_confirm_title">Send to %1$s?</string>
     <string name="chat_upload_confirm_body">Each file below is uploaded and its link is posted there. This cannot be taken back.</string>

@@ -6,7 +6,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -28,6 +38,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -108,11 +119,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -225,49 +238,62 @@ private val TIME_FORMATTER_WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss"
 @Composable
 private fun ReplyComposerBar(
     reply: PendingReply,
+    coloredNicklist: Boolean,
     onCancel: () -> Unit,
 ) {
-    Surface(
+    val nickColor = if (coloredNicklist) colorForNick(reply.nick, isLightTheme()) else MaterialTheme.colorScheme.primary
+    val preview = remember(reply.messageBody) { buildReplyPreview(reply.messageBody) }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Row(
-            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            .height(IntrinsicSize.Min)
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .width(3.dp)
-                    .height(36.dp)
+                .fillMaxHeight()
+                .width(3.dp)
                     .clip(MaterialTheme.shapes.small)
-                    .background(MaterialTheme.colorScheme.primary),
+                .background(nickColor),
             )
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 10.dp),
             ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = stringResource(R.string.chat_replying_to, reply.nick),
+                    text = stringResource(R.string.chat_replying_to_prefix),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = reply.nick,
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = nickColor,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+            }
                 Text(
-                    text = stripMircCodes(reply.messageBody).trim(),
+                text = preview,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
                 )
             }
             IconButton(
                 onClick = onCancel,
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(48.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
@@ -276,6 +302,33 @@ private fun ReplyComposerBar(
                 )
             }
         }
+    }
+
+@Composable
+private fun AnimatedReplyComposerBar(
+    reply: PendingReply,
+    coloredNicklist: Boolean,
+    onCancel: () -> Unit,
+) {
+    AnimatedContent(
+        targetState = reply,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(160)) + slideInVertically(
+                initialOffsetY = { height -> height / 4 },
+                animationSpec = tween(200),
+            )) togetherWith
+                (fadeOut(animationSpec = tween(110)) + slideOutVertically(
+                    targetOffsetY = { height -> -height / 4 },
+                    animationSpec = tween(160),
+                ))
+        },
+        label = "reply_composer_change",
+    ) { animatedReply ->
+        ReplyComposerBar(
+            reply = animatedReply,
+            coloredNicklist = coloredNicklist,
+            onCancel = onCancel,
+        )
     }
 }
 private fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
@@ -327,6 +380,7 @@ fun ChatScreen(
     var draftFieldValue by remember { mutableStateOf(TextFieldValue(draft)) }
     var composerToolsOpen by remember { mutableStateOf(false) }
     val draftFocusRequester = remember { FocusRequester() }
+    val hapticFeedback = LocalHapticFeedback.current
     LaunchedEffect(draft) {
         if (draftFieldValue.text != draft) {
             draftFieldValue = TextFieldValue(text = draft, selection = TextRange(draft.length))
@@ -1076,6 +1130,10 @@ fun ChatScreen(
                     .navigationBarsPadding()
                     .imePadding(),
             ) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    thickness = 1.dp,
+                )
                 if (slashSuggestions.isNotEmpty()) {
                     SlashCommandSuggestions(
                         suggestions = slashSuggestions,
@@ -1106,13 +1164,17 @@ fun ChatScreen(
                         }
                     }
                 }
-                pendingReply?.let { reply ->
-                    ReplyComposerBar(
-                        reply = reply,
-                        onCancel = viewModel::cancelReply,
-                    )
-                }
                 val canSendDraft = draftFieldValue.text.isNotBlank()
+                    val sendScale by animateFloatAsState(
+                        targetValue = if (isSending) 0.9f else 1f,
+                        animationSpec = spring(),
+                        label = "send_button_scale",
+                    )
+                    val sendRotation by animateFloatAsState(
+                        targetValue = if (isSending) 6f else 0f,
+                        animationSpec = tween(180),
+                        label = "send_button_rotation",
+                    )
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
                 val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
                 Surface(
@@ -1129,6 +1191,29 @@ fun ChatScreen(
                     tonalElevation = 0.dp,
                 ) {
                     Column {
+                        AnimatedVisibility(
+                            visible = pendingReply != null,
+                            enter = expandVertically(animationSpec = tween(220)) +
+                                fadeIn(animationSpec = tween(170)) +
+                                slideInVertically(
+                                    initialOffsetY = { height -> -height / 4 },
+                                    animationSpec = tween(220),
+                                ),
+                            exit = shrinkVertically(animationSpec = tween(180)) +
+                                fadeOut(animationSpec = tween(120)) +
+                                slideOutVertically(
+                                    targetOffsetY = { height -> -height / 4 },
+                                    animationSpec = tween(180),
+                                ),
+                        ) {
+                            pendingReply?.let { reply ->
+                                AnimatedReplyComposerBar(
+                                    reply = reply,
+                                    coloredNicklist = coloredNicklist,
+                                    onCancel = viewModel::cancelReply,
+                                )
+                            }
+                        }
                     ComposerTools(
                         visible = composerToolsOpen,
                         isUploading = isUploading,
@@ -1137,47 +1222,50 @@ fun ChatScreen(
                         onValueChange = { newValue ->
                             draftFieldValue = newValue
                             viewModel.onDraftChange(newValue.text)
-                            draftFocusRequester.requestFocus()
                         },
+                        onFocusComposer = { draftFocusRequester.requestFocus() },
                     )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(
-                            onClick = {
-                                val opening = !composerToolsOpen
-                                shouldScrollToBottomOnComposerTools = opening && positioned && isAtBottom
-                                composerToolsOpen = opening
-                            },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    if (composerToolsOpen) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceContainer,
-                                    CircleShape,
-                                )
-                                .semantics(mergeDescendants = true) {
-                                    contentDescription = composerToolsLabel
-                                },
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = null,
-                                modifier = Modifier.graphicsLayer {
-                                    rotationZ = if (composerToolsOpen) 45f else 0f
-                                },
-                                tint = if (composerToolsOpen) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                         TextField(
                             value = draftFieldValue,
                             onValueChange = { newValue ->
                                 draftFieldValue = newValue
                                 viewModel.onDraftChange(newValue.text)
+                            },
+                            leadingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        val opening = !composerToolsOpen
+                                        shouldScrollToBottomOnComposerTools = opening && positioned && isAtBottom
+                                        composerToolsOpen = opening
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(
+                                            if (composerToolsOpen) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceContainer,
+                                            CircleShape,
+                                        )
+                                        .semantics(mergeDescendants = true) {
+                                            contentDescription = composerToolsLabel
+                                        },
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.graphicsLayer {
+                                            rotationZ = if (composerToolsOpen) 45f else 0f
+                                        },
+                                        tint = if (composerToolsOpen) MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -1205,7 +1293,7 @@ fun ChatScreen(
                             visualTransformation = MircComposerVisualTransformation,
                             minLines = 1,
                             maxLines = 4,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(28.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -1214,7 +1302,11 @@ fun ChatScreen(
                                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                             ),
                         )
-                        if (draftFieldValue.text.isEmpty()) {
+                        AnimatedVisibility(
+                            visible = draftFieldValue.text.isEmpty(),
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                        ) {
                             IconButton(
                                 onClick = {
                                     val commandStarter = TextFieldValue("/", TextRange(1))
@@ -1223,7 +1315,7 @@ fun ChatScreen(
                                     draftFocusRequester.requestFocus()
                                 },
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(48.dp)
                                     .background(
                                         MaterialTheme.colorScheme.surfaceContainer,
                                         CircleShape,
@@ -1241,30 +1333,47 @@ fun ChatScreen(
                             }
                         }
                         IconButton(
-                            onClick = viewModel::send,
+                            onClick = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.send()
+                            },
                             enabled = !isSending && canSendDraft,
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(48.dp)
                                 .background(
                                     color = if (canSendDraft) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.surfaceContainer,
                                     shape = CircleShape,
-                                ),
+                                )
+                                .graphicsLayer {
+                                    scaleX = sendScale
+                                    scaleY = sendScale
+                                    rotationZ = sendRotation
+                                },
                         ) {
-                            if (isSending) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            } else {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.Send,
-                                    contentDescription = stringResource(R.string.cd_send),
-                                    tint = if (canSendDraft) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                            AnimatedContent(
+                                targetState = isSending,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(120)) togetherWith
+                                        fadeOut(animationSpec = tween(90))
+                                },
+                                label = "send_button_content",
+                            ) { sending ->
+                                if (sending) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.Send,
+                                        contentDescription = stringResource(R.string.cd_send),
+                                        tint = if (canSendDraft) MaterialTheme.colorScheme.onPrimary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                     }

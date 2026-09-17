@@ -1,10 +1,14 @@
 package pm.antani.resentin.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,8 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FormatBold
@@ -34,7 +40,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -44,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,11 +57,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pm.antani.resentin.R
@@ -64,15 +76,6 @@ import pm.antani.resentin.ui.common.mircAnnotatedString
 import pm.antani.resentin.ui.common.mircPaletteColor
 import pm.antani.resentin.ui.common.stripMircCodes
 
-private val ComposerEmojis = listOf(
-    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰",
-    "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", "🥳", "😏",
-    "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠",
-    "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🫡", "🤭", "🤫",
-    "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵",
-    "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "👍", "👎", "👏", "🙌", "🙏", "💪", "🤝", "❤️",
-    "💔", "🔥", "✨", "🎉", "🎊", "🚀", "💡", "✅", "❌", "⚠️", "⭐", "💯", "🍀", "🎵", "☕", "🍕",
-)
 
 private const val IRC_BOLD = 2
 private const val IRC_ITALIC = 29
@@ -193,19 +196,31 @@ internal fun ComposerTools(
     onValueChange: (TextFieldValue) -> Unit,
     isUploading: Boolean,
     onAttachFile: () -> Unit,
+    onFocusComposer: () -> Unit,
 ) {
-    var emojiSheetOpen by remember { mutableStateOf(false) }
+    var emojiPickerOpen by remember { mutableStateOf(false) }
     var colorSheetOpen by remember { mutableStateOf(false) }
     var colorTargetBackground by remember { mutableStateOf(false) }
     var selectedForeground by remember { mutableStateOf<Int?>(null) }
     var selectedBackground by remember { mutableStateOf<Int?>(null) }
     val formatting = composerFormattingAtCursor(value)
+    val hapticFeedback = LocalHapticFeedback.current
+
+    fun commitToolValue(nextValue: TextFieldValue) {
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onValueChange(nextValue)
+        onFocusComposer()
+    }
 
     fun openColorSheet() {
         selectedForeground = formatting.foreground
         selectedBackground = formatting.background
         colorTargetBackground = false
         colorSheetOpen = true
+    }
+
+    LaunchedEffect(visible) {
+        if (!visible) emojiPickerOpen = false
     }
 
     AnimatedVisibility(
@@ -229,7 +244,7 @@ internal fun ComposerTools(
                     onClick = onAttachFile,
                     enabled = !isUploading,
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(48.dp)
                         .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape),
                 ) {
                     if (isUploading) {
@@ -245,48 +260,56 @@ internal fun ComposerTools(
                 ComposerToolButton(
                     icon = Icons.Outlined.Mood,
                     label = stringResource(R.string.composer_tool_emoji),
-                    onClick = { emojiSheetOpen = true },
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        emojiPickerOpen = !emojiPickerOpen
+                    },
                 )
-                ComposerToggleButton(
+                ComposerFormatButton(
                     icon = Icons.Filled.FormatBold,
                     label = stringResource(R.string.composer_tool_bold),
                     checked = formatting.bold,
-                    onClick = { onValueChange(toggleIrcStyle(value, IRC_BOLD)) },
+                    onClick = { commitToolValue(toggleIrcStyle(value, IRC_BOLD)) },
                 )
-                ComposerToggleButton(
+                ComposerFormatButton(
                     icon = Icons.Filled.FormatItalic,
                     label = stringResource(R.string.composer_tool_italic),
                     checked = formatting.italic,
-                    onClick = { onValueChange(toggleIrcStyle(value, IRC_ITALIC)) },
+                    onClick = { commitToolValue(toggleIrcStyle(value, IRC_ITALIC)) },
                 )
-                ComposerToggleButton(
+                ComposerFormatButton(
                     icon = Icons.Filled.FormatUnderlined,
                     label = stringResource(R.string.composer_tool_underline),
                     checked = formatting.underline,
-                    onClick = { onValueChange(toggleIrcStyle(value, IRC_UNDERLINE)) },
+                    onClick = { commitToolValue(toggleIrcStyle(value, IRC_UNDERLINE)) },
                 )
-                ComposerToggleButton(
+                ComposerFormatButton(
                     icon = Icons.Filled.FormatColorText,
                     label = stringResource(R.string.composer_tool_color),
                     checked = formatting.foreground != null || formatting.background != null,
-                    onClick = ::openColorSheet,
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        openColorSheet()
+                    },
+                    foregroundCode = formatting.foreground,
+                    backgroundCode = formatting.background,
                 )
                 ComposerToolButton(
                     icon = Icons.Filled.FormatClear,
                     label = stringResource(R.string.composer_tool_clear),
-                    onClick = { onValueChange(clearIrcFormatting(value)) },
+                    onClick = { commitToolValue(clearIrcFormatting(value)) },
                 )
             }
         }
     }
 
-    if (emojiSheetOpen) {
-        ComposerEmojiSheet(
-            onPick = { emoji ->
-                emojiSheetOpen = false
-                onValueChange(insertComposerText(value, emoji))
-            },
-            onDismiss = { emojiSheetOpen = false },
+    AnimatedVisibility(
+        visible = emojiPickerOpen && visible,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut(),
+    ) {
+        ComposerEmojiPanel(
+            onPick = { emoji -> commitToolValue(insertComposerText(value, emoji)) },
         )
     }
     if (colorSheetOpen) {
@@ -294,51 +317,54 @@ internal fun ComposerTools(
             foreground = selectedForeground,
             background = selectedBackground,
             editingBackground = colorTargetBackground,
-            onEditingBackgroundChange = { colorTargetBackground = it },
-            onForegroundChange = { selectedForeground = it },
-            onBackgroundChange = { selectedBackground = it },
+            onEditingBackgroundChange = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                colorTargetBackground = it
+            },
+            onForegroundChange = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                selectedForeground = it
+            },
+            onBackgroundChange = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                selectedBackground = it
+            },
             onRemove = {
                 colorSheetOpen = false
-                onValueChange(clearIrcColors(value))
+                commitToolValue(clearIrcColors(value))
             },
             onCancel = { colorSheetOpen = false },
             onApply = {
                 colorSheetOpen = false
-                onValueChange(applyIrcColors(value, selectedForeground, selectedBackground))
+                commitToolValue(applyIrcColors(value, selectedForeground, selectedBackground))
             },
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ComposerEmojiSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Text(
-            text = "Emoji",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(8),
+private fun ComposerEmojiPanel(onPick: (String) -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 1.dp,
+    ) {
+        AndroidView(
+            factory = { context ->
+                EmojiPickerView(context).apply {
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+            },
+            update = { picker ->
+                picker.setOnEmojiPickedListener { item -> onPick(item.emoji) }
+            },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(420.dp)
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            items(ComposerEmojis) { emoji ->
-                Text(
-                    text = emoji,
-                    fontSize = 27.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable { onPick(emoji) },
-                )
-            }
-        }
+                .height(260.dp),
+        )
     }
 }
 
@@ -371,8 +397,8 @@ private fun ComposerColorSheet(
                 .padding(start = 24.dp, end = 16.dp, top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Colore IRC", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Button(onClick = onApply) { Text("Applica") }
+            Text(stringResource(R.string.composer_color_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Button(onClick = onApply) { Text(stringResource(R.string.composer_color_apply)) }
         }
         Row(
             modifier = Modifier
@@ -380,12 +406,18 @@ private fun ComposerColorSheet(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            TextButton(onClick = { onEditingBackgroundChange(false) }) {
-                Text("Testo", fontWeight = if (!editingBackground) FontWeight.Bold else null)
-            }
-            TextButton(onClick = { onEditingBackgroundChange(true) }) {
-                Text("Sfondo", fontWeight = if (editingBackground) FontWeight.Bold else null)
-            }
+            ComposerColorTargetButton(
+                label = stringResource(R.string.composer_color_target_text),
+                selected = !editingBackground,
+                colorCode = foreground,
+                onClick = { onEditingBackgroundChange(false) },
+            )
+            ComposerColorTargetButton(
+                label = stringResource(R.string.composer_color_target_background),
+                selected = editingBackground,
+                colorCode = background,
+                onClick = { onEditingBackgroundChange(true) },
+            )
         }
         Surface(
             modifier = Modifier
@@ -425,8 +457,8 @@ private fun ComposerColorSheet(
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            TextButton(onClick = onRemove) { Text("Rimuovi colori") }
-            TextButton(onClick = onCancel) { Text("Annulla") }
+            TextButton(onClick = onRemove) { Text(stringResource(R.string.composer_color_remove)) }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.composer_color_cancel)) }
         }
     }
 }
@@ -465,13 +497,124 @@ private fun ComposerToolButton(icon: ImageVector, label: String, onClick: () -> 
 }
 
 @Composable
-private fun ComposerToggleButton(
+private fun ComposerFormatButton(
     icon: ImageVector,
     label: String,
     checked: Boolean,
     onClick: () -> Unit,
+    foregroundCode: Int? = null,
+    backgroundCode: Int? = null,
 ) {
-    IconToggleButton(checked = checked, onCheckedChange = { onClick() }, modifier = Modifier.size(48.dp)) {
-        Icon(icon, contentDescription = label)
+    val shape = RoundedCornerShape(14.dp)
+    val containerColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        label = "composer_format_container",
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "composer_format_icon",
+    )
+    val borderWidth by animateDpAsState(
+        targetValue = if (checked) 1.dp else 0.dp,
+        label = "composer_format_border",
+    )
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .background(containerColor, shape)
+            .border(
+                width = borderWidth,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                shape = shape,
+            )
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                selected = checked
+            },
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+            Icon(icon, contentDescription = null, tint = iconColor)
+        }
+        AnimatedVisibility(
+            visible = checked,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 4.dp)
+                    .size(4.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
+            )
+        }
+        val colorCode = foregroundCode ?: backgroundCode
+        if (colorCode != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 6.dp, bottom = 6.dp)
+                    .size(8.dp)
+                    .background(mircPaletteColor(colorCode), CircleShape)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        shape = CircleShape,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ComposerColorTargetButton(
+    label: String,
+    selected: Boolean,
+    colorCode: Int?,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(12.dp)
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .weight(1f)
+            .height(48.dp)
+            .background(
+                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                shape = shape,
+            )
+            .border(
+                width = if (selected) 1.dp else 0.dp,
+                color = if (selected) MaterialTheme.colorScheme.secondary else Color.Transparent,
+                shape = shape,
+            )
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                this.selected = selected
+            },
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = label,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (colorCode != null) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(mircPaletteColor(colorCode), CircleShape)
+                        .border(
+                            width = 1.dp,
+                            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.outline,
+                            shape = CircleShape,
+                        ),
+                )
+            }
+        }
     }
 }
