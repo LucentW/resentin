@@ -264,6 +264,15 @@
     <string name="cd_slash_commands">IRC commands</string>
     <string name="chat_message_placeholder">Message</string>
     <string name="cd_send">Send</string>
+    <string name="composer_tools_open">Open formatting tools</string>
+    <string name="composer_tools_close">Close formatting tools</string>
+    <string name="composer_tool_emoji">Insert emoji</string>
+    <string name="composer_tool_bold">Bold</string>
+    <string name="composer_tool_italic">Italic</string>
+    <string name="composer_tool_underline">Underline</string>
+    <string name="composer_tool_more">More tools</string>
+    <string name="composer_tool_color">Text color</string>
+    <string name="composer_tool_clear">Clear formatting</string>
     <string name="cd_scroll_to_bottom">Scroll to bottom</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Jump to next mention (%1$d below)</item>
