@@ -57,7 +57,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
@@ -1121,6 +1120,8 @@ fun ChatScreen(
                     Column {
                     ComposerTools(
                         visible = composerToolsOpen,
+                        isUploading = isUploading,
+                        onAttachFile = { filePicker.launch("*/*") },
                         value = draftFieldValue,
                         onValueChange = { newValue ->
                             draftFieldValue = newValue
@@ -1156,26 +1157,6 @@ fun ChatScreen(
                                 tint = if (composerToolsOpen) MaterialTheme.colorScheme.onPrimaryContainer
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-                        IconButton(
-                            onClick = { filePicker.launch("*/*") },
-                            enabled = !isUploading,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceContainer,
-                                    CircleShape,
-                                ),
-                        ) {
-                            if (isUploading) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(
-                                    Icons.Outlined.AttachFile,
-                                    contentDescription = stringResource(R.string.cd_attach_file),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         }
                         TextField(
                             value = draftFieldValue,
