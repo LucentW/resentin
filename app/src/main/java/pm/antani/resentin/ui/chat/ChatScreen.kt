@@ -113,7 +113,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle as collectAsState
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -143,13 +148,14 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
@@ -164,6 +170,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import java.time.Instant
+import java.util.LinkedHashMap
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -614,6 +621,8 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
+    val pagedMessages = viewModel.pagedMessages.collectAsLazyPagingItems()
+    val renderCache = remember { MessageRenderCache() }
     val topic by viewModel.topic.collectAsState()
     val channelModes by viewModel.channelModes.collectAsState()
     val topicSubtitle = remember(channelModes, topic) {
@@ -813,10 +822,11 @@ fun ChatScreen(
     val highlightNotice by viewModel.highlightNotice.collectAsState()
     val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
+    val pagingEligible = (isQuery || isServer) && messages.size > 300 && initialReadCursorReady && initialReadCursor == null && readCursor == null
     var initialListIndex by remember { mutableStateOf<Int?>(null) }
-    val positioned = initialListIndex != null
-    val listState = remember(initialListIndex) {
-        LazyListState(firstVisibleItemIndex = initialListIndex ?: 0)
+    val positioned = pagingEligible || initialListIndex != null
+    val listState = remember(initialListIndex, pagingEligible) {
+        LazyListState(firstVisibleItemIndex = if (pagingEligible) 0 else initialListIndex ?: 0)
     }
     val showHistoryLoading = messages.isEmpty() && (!initialHistoryReady || isRefreshing)
     val showHistoryError = messages.isEmpty() && initialHistoryReady && error != null && !isRefreshing
@@ -837,6 +847,21 @@ fun ChatScreen(
     // Long-press message menu target (Copy / Reply / !addquote / Select… / user
     // card — cicchetto MessageContextMenu parity). Null = menu closed.
     var messageMenuTarget by remember { mutableStateOf<MessageMenuTarget?>(null) }
+    val stableReply: (String, String) -> Unit = remember(viewModel) {
+        { nick, body -> viewModel.reply(nick, body) }
+    }
+    val stableMessageMenu: (MessageMenuTarget) -> Unit = remember {
+        { target -> messageMenuTarget = target }
+    }
+    val togglePresence: (Long) -> Unit = remember {
+        { burstKey ->
+            expandedPresenceBursts = if (burstKey in expandedPresenceBursts) {
+                expandedPresenceBursts - burstKey
+            } else {
+                expandedPresenceBursts + burstKey
+            }
+        }
+    }
     // Text-selection latch: the one message id whose body renders inside a
     // SelectionContainer (cicchetto's "Select…" escape hatch). Gestures on that
     // row are disabled while latched; back clears it.
@@ -895,6 +920,8 @@ fun ChatScreen(
     val dividerIndex = dividerCursor?.let { cursor ->
         timelineRows.indexOfFirst { row -> row.messages.any { it.id > cursor } }.takeIf { it >= 0 }
     }
+    val usePaging = pagingEligible && !searchOpen && !revealAllPresenceEvents && dividerIndex == null
+    var pagedInitialPositioned by remember(usePaging) { mutableStateOf(false) }
 
     // List indices of the mention rows (own nick / /hilight match from another
     // sender — the SAME isMentionRow predicate the per-row highlight uses, the
@@ -958,8 +985,8 @@ fun ChatScreen(
     // bottom — only once, and only once we actually know where that is (see
     // ChatViewModel.initialReadCursorReady: null is ambiguous between "not loaded yet"
     // and "never read anything").
-    LaunchedEffect(timelineRows, initialReadCursorReady) {
-        if (initialListIndex != null || !initialReadCursorReady || messages.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(timelineRows, initialReadCursorReady, pagingEligible) {
+        if (pagingEligible || initialListIndex != null || !initialReadCursorReady || messages.isEmpty()) return@LaunchedEffect
         initialListIndex = dividerIndex ?: (timelineRows.size - 1)
     }
 
@@ -1015,7 +1042,7 @@ fun ChatScreen(
     var composerBarHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
-    LaunchedEffect(listState, composerHeightPx, composerBarHeightPx) {
+    LaunchedEffect(listState, composerHeightPx, composerBarHeightPx, usePaging) {
         snapshotFlow {
             val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             Triple(
@@ -1027,6 +1054,7 @@ fun ChatScreen(
                 bottomIndex,
             )
         }.collectLatest { (imeBottom, follows, bottomIndex) ->
+            if (usePaging) return@collectLatest
             val shouldFollowIme = follows.first
             val shouldFollowTools = follows.second
             if ((!shouldFollowIme && !shouldFollowTools) || (imeBottom <= 0 && !shouldFollowTools) || bottomIndex < 0) {
@@ -1045,7 +1073,8 @@ fun ChatScreen(
     // NOT get yanked down the instant one more message arrives; a still-unread backlog
     // stays exactly where the reader put it. loadOlder() prepends at the head, which
     // doesn't change `lastOrNull()?.id`, so this never fires for that case either.
-    LaunchedEffect(messages.lastOrNull()?.id) {
+    LaunchedEffect(messages.lastOrNull()?.id, usePaging) {
+        if (usePaging) return@LaunchedEffect
         if (positioned && messages.isNotEmpty() && isAtBottom) {
             val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
             // During the initial REST fill, follow the cache with a snap. Once the
@@ -1058,9 +1087,32 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, usePaging) {
         snapshotFlow { listState.firstVisibleItemIndex }
-            .collect { index -> if (index == 0 && messages.isNotEmpty()) viewModel.loadOlder() }
+            .collect { index -> if (!usePaging && index == 0 && messages.isNotEmpty()) viewModel.loadOlder() }
+    }
+
+    LaunchedEffect(usePaging, pagedMessages.itemCount) {
+        if (!usePaging || pagedMessages.itemCount == 0 || pagedInitialPositioned) return@LaunchedEffect
+        withFrameNanos { }
+        listState.scrollToItem(pagedMessages.itemCount)
+        pagedInitialPositioned = true
+    }
+
+    LaunchedEffect(usePaging, messages.lastOrNull()?.id) {
+        if (!usePaging || !isAtBottom || pagedMessages.itemCount == 0) return@LaunchedEffect
+        withFrameNanos { }
+        listState.animateScrollToItem(pagedMessages.itemCount)
+    }
+
+    LaunchedEffect(usePaging) {
+        if (!usePaging) return@LaunchedEffect
+        snapshotFlow { pagedMessages.loadState.prepend }
+            .collectLatest { state ->
+                if (state is LoadState.NotLoading && state.endOfPaginationReached) {
+                    viewModel.loadOlder()
+                }
+            }
     }
 
     CompositionLocalProvider(
@@ -1770,110 +1822,30 @@ fun ChatScreen(
                     // state has been positioned, avoiding the visible top-to-unread jump.
                 }
                 else -> {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                timelineRows.forEachIndexed { index, row ->
-                    if (index == dividerIndex) {
-                        item(key = "unread-divider") { UnreadDivider(density = messageDensity) }
-                    }
-                    when (row) {
-                        is ChatTimelineRow.Message -> item(key = row.key) {
-                            val message = row.message
-                            val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
-                            // Persistent in-list day chip (motd parity): drawn inside this
-                            // row's own item, so item indexes, keys and jump math never shift.
-                            val showDay = previous == null || !isSameDay(previous.serverTime, message.serverTime)
-                            val tight = index != dividerIndex &&
-                                continuesMessageGroup(previous, message)
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                if (showDay) DaySeparatorRow(timeMillis = message.serverTime, density = messageDensity)
-                            ChatTimelineMessageItem(
-                                message = message,
-                                members = members,
-                                displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                                density = messageDensity,
-                                showSeconds = showSeconds,
-                                coloredNicklist = coloredNicklist,
-                                showHostmaskInEvents = showHostmaskInEvents,
-                                isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
-                                isQuery = isQuery,
-                                isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
-                                isSelected = message.id == selectedSearchMessageId,
-                                onReply = viewModel::reply,
-                                onMessageMenu = { target -> messageMenuTarget = target },
-                                selectingMessageId = selectingMessageId,
-                                tight = tight,
-                            )
-                            }
-                        }
-                        is ChatTimelineRow.PresenceSummary -> item(key = row.key) {
-                            val burstKey = row.messages.first().id
-                            val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
-                            val expanded = selectedInBurst || burstKey in expandedPresenceBursts
-                            val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
-                            val senderLabel = row.sender ?: pluralStringResource(
-                                R.plurals.chat_activity_users,
-                                uniqueUsers,
-                                uniqueUsers,
-                            )
-                            // Same day chip as message rows: the burst is one visual unit,
-                            // so the chip goes above it, never between its events.
-                            val burstPrevious = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
-                            val burstFirst = row.messages.first()
-                            val showBurstDay = burstPrevious == null ||
-                                !isSameDay(burstPrevious.serverTime, burstFirst.serverTime)
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                if (showBurstDay) DaySeparatorRow(timeMillis = burstFirst.serverTime, density = messageDensity)
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                PresenceBurstSummaryRow(
-                                    sender = senderLabel,
-                                    joins = row.joins,
-                                    leaves = row.leaves,
-                                    time = formatTime(row.messages.last().serverTime, showSeconds),
-                                    isIrcLine = isServer || displayMode == ChatDisplayMode.IRC_LINE,
-                                    expanded = expanded,
-                                    selected = selectedInBurst,
-                                    onToggle = {
-                                        expandedPresenceBursts = if (burstKey in expandedPresenceBursts) {
-                                            expandedPresenceBursts - burstKey
-                                        } else {
-                                            expandedPresenceBursts + burstKey
-                                        }
-                                    },
-                                )
-                                if (expanded) {
-                                    row.messages.forEach { event ->
-                                        ChatTimelineMessageItem(
-                                            message = event,
-                                            members = members,
-                                            displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                                            density = messageDensity,
-                                            showSeconds = showSeconds,
-                                            coloredNicklist = coloredNicklist,
-                                            showHostmaskInEvents = showHostmaskInEvents,
-                                            isMention = false,
-                                            isQuery = isQuery,
-                                            isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
-                                            isSelected = event.id == selectedSearchMessageId,
-                                            onReply = viewModel::reply,
-                                            onMessageMenu = { target -> messageMenuTarget = target },
-                                            selectingMessageId = selectingMessageId,
-                                            tight = false,
-                                        )
-                                    }
-                                }
-                            }
-                            }
-                        }
-                    }
-                }
-                // A dedicated final row makes "go to bottom" unambiguous. Scrolling
-                // to the last message alone can leave a long message clipped; this
-                // anchor is always the final row and therefore clamps at the true
-                // end of the viewport.
-                item(key = "chat-bottom-anchor") {
-                    Spacer(Modifier.size(1.dp))
-                }
-            }
+            ChatMessageList(
+                listState = listState,
+                renderCache = renderCache,
+                timelineRows = timelineRows,
+                dividerIndex = dividerIndex,
+                members = members,
+                displayMode = displayMode,
+                messageDensity = messageDensity,
+                showSeconds = showSeconds,
+                coloredNicklist = coloredNicklist,
+                showHostmaskInEvents = showHostmaskInEvents,
+                myNick = myNick,
+                isQuery = isQuery,
+                isServer = isServer,
+                viewerUsername = viewerUsername,
+                highlightPatterns = highlightPatterns,
+                selectedSearchMessageId = selectedSearchMessageId,
+                selectingMessageId = selectingMessageId,
+                expandedPresenceBursts = expandedPresenceBursts,
+                onTogglePresence = togglePresence,
+                onReply = stableReply,
+                onMessageMenu = stableMessageMenu,
+                pagedMessages = pagedMessages.takeIf { usePaging },
+            )
             if (isLoadingOlder) {
                 Surface(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
@@ -2129,6 +2101,7 @@ fun ChatScreen(
                                 )
                                 ChatTimelineMessageItem(
                                     message = event,
+                                    renderCache = renderCache,
                                     members = members,
                                     displayMode = ChatDisplayMode.IRC_LINE,
                                     density = messageDensity,
@@ -2143,6 +2116,7 @@ fun ChatScreen(
                                     onMessageMenu = { target -> messageMenuTarget = target },
                                     selectingMessageId = selectingMessageId,
                                     tight = false,
+                                    deferRichContent = false,
                                 )
                             }
                         }
@@ -2177,7 +2151,8 @@ fun ChatScreen(
     }
 
     val whoisValue = whois
-    if (whoisValue != null) {        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initial = false)
+    if (whoisValue != null) {
+        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initialValue = false)
         val avatar by viewModel.avatarBitmap.collectAsState()
         UserCardSheet(
             whois = whoisValue,
@@ -3328,9 +3303,219 @@ private fun systemEventText(event: FormattedEvent.System, showHostmask: Boolean)
     is FormattedEvent.System.TopicChanged -> stringResource(R.string.event_topic_changed, event.sender)
 }
 
+
+
+private class MessageRenderCache {
+    private data class Entry(
+        val fingerprint: Int,
+        val formatted: FormattedEvent,
+    )
+
+    private val entries = object : LinkedHashMap<Long, Entry>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Entry>?): Boolean =
+            size > 512
+    }
+
+    fun formatted(message: MessageEntity): FormattedEvent {
+        val fingerprint = 31 * message.kind.hashCode() +
+            31 * message.sender.hashCode() +
+            31 * (message.body?.hashCode() ?: 0) +
+            message.metaJson.hashCode()
+        entries[message.id]?.takeIf { it.fingerprint == fingerprint }?.let { return it.formatted }
+
+        val meta = runCatching {
+            AppJson.parseToJsonElement(message.metaJson).jsonObject
+        }.getOrDefault(JsonObject(emptyMap()))
+        val formatted = SystemEventFormatter.format(message.kind, message.sender, message.body, meta)
+        entries[message.id] = Entry(fingerprint, formatted)
+        return formatted
+    }
+}
+
+@Composable
+private fun ChatMessageList(
+    listState: LazyListState,
+    renderCache: MessageRenderCache,
+    timelineRows: List<ChatTimelineRow>,
+    pagedMessages: LazyPagingItems<MessageEntity>? = null,
+    dividerIndex: Int?,
+    members: List<MemberEntity>,
+    displayMode: ChatDisplayMode,
+    messageDensity: MessageDensity,
+    showSeconds: Boolean,
+    coloredNicklist: Boolean,
+    showHostmaskInEvents: Boolean,
+    myNick: String?,
+    isQuery: Boolean,
+    isServer: Boolean,
+    viewerUsername: String,
+    highlightPatterns: List<String>?,
+    selectedSearchMessageId: Long?,
+    selectingMessageId: Long?,
+    expandedPresenceBursts: Set<Long>,
+    onTogglePresence: (Long) -> Unit,
+    onReply: (String, String) -> Unit,
+    onMessageMenu: (MessageMenuTarget) -> Unit,
+) {
+    val scrolling by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        if (pagedMessages == null) {
+        timelineRows.forEachIndexed { index, row ->
+            if (index == dividerIndex) {
+                item(key = "unread-divider", contentType = "unread-divider") {
+                    UnreadDivider(density = messageDensity)
+                }
+            }
+            when (row) {
+                is ChatTimelineRow.Message -> item(
+                    key = row.key,
+                    contentType = timelineContentType(row),
+                ) {
+                    val message = row.message
+                    val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
+                    // Persistent in-list day chip (motd parity): drawn inside this
+                    // row's own item, so item indexes, keys and jump math never shift.
+                    val showDay = previous == null || !isSameDay(previous.serverTime, message.serverTime)
+                    val tight = index != dividerIndex && continuesMessageGroup(previous, message)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (showDay) DaySeparatorRow(timeMillis = message.serverTime, density = messageDensity)
+                        ChatTimelineMessageItem(
+                            message = message,
+                            renderCache = renderCache,
+                            members = members,
+                            displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
+                            density = messageDensity,
+                            showSeconds = showSeconds,
+                            coloredNicklist = coloredNicklist,
+                            showHostmaskInEvents = showHostmaskInEvents,
+                            isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
+                            isQuery = isQuery,
+                            isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
+                            isSelected = message.id == selectedSearchMessageId,
+                            onReply = onReply,
+                            onMessageMenu = onMessageMenu,
+                            selectingMessageId = selectingMessageId,
+                            tight = tight,
+                            deferRichContent = scrolling,
+                        )
+                    }
+                }
+
+                is ChatTimelineRow.PresenceSummary -> item(
+                    key = row.key,
+                    contentType = "presence-summary",
+                ) {
+                    val burstKey = row.messages.first().id
+                    val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
+                    val expanded = selectedInBurst || burstKey in expandedPresenceBursts
+                    val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
+                    val senderLabel = row.sender ?: pluralStringResource(
+                        R.plurals.chat_activity_users,
+                        uniqueUsers,
+                        uniqueUsers,
+                    )
+                    // Same day chip as message rows: the burst is one visual unit,
+                    // so the chip goes above it, never between its events.
+                    val burstPrevious = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
+                    val burstFirst = row.messages.first()
+                    val showBurstDay = burstPrevious == null ||
+                        !isSameDay(burstPrevious.serverTime, burstFirst.serverTime)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (showBurstDay) DaySeparatorRow(timeMillis = burstFirst.serverTime, density = messageDensity)
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            PresenceBurstSummaryRow(
+                                sender = senderLabel,
+                                joins = row.joins,
+                                leaves = row.leaves,
+                                time = formatTime(row.messages.last().serverTime, showSeconds),
+                                isIrcLine = isServer || displayMode == ChatDisplayMode.IRC_LINE,
+                                expanded = expanded,
+                                selected = selectedInBurst,
+                                onToggle = { onTogglePresence(burstKey) },
+                            )
+                            if (expanded) {
+                                row.messages.forEach { event ->
+                                    ChatTimelineMessageItem(
+                                        message = event,
+                                        renderCache = renderCache,
+                                        members = members,
+                                        displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
+                                        density = messageDensity,
+                                        showSeconds = showSeconds,
+                                        coloredNicklist = coloredNicklist,
+                                        showHostmaskInEvents = showHostmaskInEvents,
+                                        isMention = false,
+                                        isQuery = isQuery,
+                                        isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
+                                        isSelected = event.id == selectedSearchMessageId,
+                                        onReply = onReply,
+                                        onMessageMenu = onMessageMenu,
+                                        selectingMessageId = selectingMessageId,
+                                        tight = false,
+                                        deferRichContent = scrolling,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        } else {
+            val pagingItems = pagedMessages
+            items(
+                count = pagingItems.itemCount,
+                key = pagingItems.itemKey { it.id },
+                contentType = pagingItems.itemContentType { pagingContentType(it) },
+            ) { index ->
+                val message = pagingItems[index]
+                if (message == null) {
+                    Spacer(Modifier.fillMaxWidth().height(48.dp))
+                } else {
+                    ChatTimelineMessageItem(
+                        message = message,
+                        renderCache = renderCache,
+                        members = members,
+                        displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
+                        density = messageDensity,
+                        showSeconds = showSeconds,
+                        coloredNicklist = coloredNicklist,
+                        showHostmaskInEvents = showHostmaskInEvents,
+                        isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
+                        isQuery = isQuery,
+                        isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
+                        isSelected = message.id == selectedSearchMessageId,
+                        onReply = onReply,
+                        onMessageMenu = onMessageMenu,
+                        selectingMessageId = selectingMessageId,
+                        tight = false,
+                        deferRichContent = scrolling,
+                    )
+                }
+            }
+        }
+        item(key = "chat-bottom-anchor", contentType = "bottom-anchor") {
+            Spacer(Modifier.size(1.dp))
+        }
+    }
+}
+
+private fun pagingContentType(message: MessageEntity): String = if (message.kind in SYSTEM_EVENT_KINDS) "system-message" else "chat-message"
+
+private fun timelineContentType(row: ChatTimelineRow): String = when (row) {
+    is ChatTimelineRow.Message ->
+        if (row.message.kind in SYSTEM_EVENT_KINDS) "system-message" else "chat-message"
+    is ChatTimelineRow.PresenceSummary -> "presence-summary"
+}
+
+
 @Composable
 private fun ChatTimelineMessageItem(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     members: List<MemberEntity>,
     displayMode: ChatDisplayMode,
     density: MessageDensity,
@@ -3345,6 +3530,7 @@ private fun ChatTimelineMessageItem(
     onMessageMenu: (MessageMenuTarget) -> Unit,
     selectingMessageId: Long?,
     tight: Boolean,
+    deferRichContent: Boolean,
 ) {
     Box(
         modifier = Modifier
@@ -3356,6 +3542,7 @@ private fun ChatTimelineMessageItem(
     ) {
         MessageRow(
             message = message,
+            renderCache = renderCache,
             members = members,
             displayMode = displayMode,
             density = density,
@@ -3439,6 +3626,7 @@ private fun PresenceBurstSummaryRow(
 @Composable
 private fun MessageRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     members: List<MemberEntity>,
     displayMode: ChatDisplayMode,
     density: MessageDensity,
@@ -3452,13 +3640,10 @@ private fun MessageRow(
     onMessageMenu: (MessageMenuTarget) -> Unit,
     selectingMessageId: Long?,
     tight: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
-    val meta = remember(message.metaJson) {
-        runCatching { AppJson.parseToJsonElement(message.metaJson).jsonObject }
-            .getOrDefault(JsonObject(emptyMap()))
-    }
-    val formatted = remember(message.kind, message.sender, message.body, meta) {
-        SystemEventFormatter.format(message.kind, message.sender, message.body, meta)
+    val formatted = remember(message.id, message.kind, message.sender, message.body, message.metaJson) {
+        renderCache.formatted(message)
     }
     val time = remember(message.serverTime, showSeconds) { formatTime(message.serverTime, showSeconds) }
     val prefix = remember(message.sender, members) { nickPrefixFor(message.sender, members) }
@@ -3540,7 +3725,7 @@ private fun MessageRow(
             ) {
                 val selecting = selectingMessageId == message.id
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density, selecting)
+                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density, selecting, deferRichContent)
                 } else {
                     BubbleRow(
                         message, formatted, prefix, time, coloredNicklist, isMention,
@@ -3548,6 +3733,7 @@ private fun MessageRow(
                         tight = tight,
                         density = density,
                         selecting = selecting,
+                        deferRichContent = deferRichContent,
                     )
                 }
             }
@@ -3558,6 +3744,25 @@ private fun MessageRow(
 /** Nick color (when [coloredNicklist] is on) applies to the bare nick only — the role
  * prefix sigil (`@`/`+`/...) and any "* "/"< >"/"(notice)" decoration around it stay
  * the surrounding text's own color, matching how real IRC clients color-code nicks. */
+private fun renderMessageText(
+    text: String,
+    lightTheme: Boolean,
+    stripFormatting: Boolean,
+    deferRichContent: Boolean,
+    onDccFileClick: (path: String, filename: String?) -> Unit,
+    onChannelClick: ((channelName: String) -> Unit)?,
+): AnnotatedString = if (deferRichContent) {
+    buildAnnotatedString {
+        append(if (stripFormatting) stripMircCodes(text) else text)
+    }
+} else {
+    withClickableLinks(
+        mircAnnotatedString(text, lightTheme, stripFormatting),
+        linkStylesFor(lightTheme),
+        onDccFileClick,
+        onChannelClick,
+    )
+}
 private fun buildNickLine(
     before: String,
     prefix: String,
@@ -3569,6 +3774,7 @@ private fun buildNickLine(
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
     stripFormatting: Boolean = false,
     onChannelClick: ((channelName: String) -> Unit)? = null,
+    deferRichContent: Boolean = false,
 ) = buildAnnotatedString {
     append(before)
     append(prefix)
@@ -3578,7 +3784,7 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick, onChannelClick))
+    append(renderMessageText(body, lightTheme, stripFormatting, deferRichContent, onDccFileClick, onChannelClick))
 }
 
 // MESSAGE_GROUP_WINDOW_MS lives in ChatTimeline.kt next to continuesMessageGroup.
@@ -3661,6 +3867,7 @@ private fun BubbleRow(
     tight: Boolean = false,
     density: MessageDensity = MessageDensity.NORMAL,
     selecting: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
     // WhatsApp-style: i messaggi propri stanno a destra, gli altri a sinistra.
     // isMention non scatta mai per i propri (vedi isMentionRow), ma resta primo
@@ -3699,7 +3906,7 @@ private fun BubbleRow(
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
+            append(renderMessageText(quoteRest, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -3730,7 +3937,7 @@ private fun BubbleRow(
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
+            append(renderMessageText(formatted.text, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -3884,18 +4091,19 @@ private fun IrcLineRow(
     isMention: Boolean,
     density: MessageDensity = MessageDensity.NORMAL,
     selecting: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
     val stripFormatting = LocalStripMircFormatting.current
     val channelClickHandler = LocalIrcChannelLinkHandler.current
     val annotated = remember(
-        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler,
+        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent,
     ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
         }
     }
     val body: @Composable () -> Unit = {
