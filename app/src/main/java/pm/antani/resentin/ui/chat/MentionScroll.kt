@@ -34,6 +34,15 @@ object MentionScroll {
     fun mentionRowsBelowFold(mentionRowIndices: List<Int>, lastVisibleRowIndex: Int): List<Int> =
         mentionRowIndices.dropWhile { it <= lastVisibleRowIndex }
 
+    /**
+     * Reverse-layout equivalent: lower list indices are newer and sit toward
+     * the chat tail. These mentions remain on the tail side of the fold.
+     */
+    fun mentionRowsBeforeFold(mentionRowIndices: List<Int>, firstVisibleRowIndex: Int): List<Int> =
+        mentionRowIndices.takeWhile { it < firstVisibleRowIndex }.asReversed()
+
+    fun reverseBadgeCount(mentionRowIndices: List<Int>, firstVisibleRowIndex: Int): Int =
+        mentionRowsBeforeFold(mentionRowIndices, firstVisibleRowIndex).size
     /** Badge count = how many mentions are still below the fold. */
     fun badgeCount(mentionRowIndices: List<Int>, lastVisibleRowIndex: Int): Int =
         mentionRowsBelowFold(mentionRowIndices, lastVisibleRowIndex).size

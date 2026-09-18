@@ -9,6 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,9 +26,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items as lazyItems
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
@@ -65,12 +64,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,7 +82,7 @@ private const val IRC_ITALIC = 29
 private const val IRC_UNDERLINE = 31
 private const val IRC_COLOR = 3
 private const val IRC_RESET = 15
-private data class ComposerFormatting(
+internal data class ComposerFormatting(
     val bold: Boolean,
     val italic: Boolean,
     val underline: Boolean,
@@ -94,9 +90,9 @@ private data class ComposerFormatting(
     val background: Int?,
 )
 
-private fun composerFormattingAtCursor(value: TextFieldValue): ComposerFormatting {
+internal fun composerFormattingAtCursor(value: TextFieldValue): ComposerFormatting {
     val cursor = value.selection.min.coerceIn(0, value.text.length)
-    val span = MircParser.parse(value.text.substring(0, cursor) + "x").firstOrNull()
+    val span = MircParser.parse(value.text.substring(0, cursor) + "x").lastOrNull()
     return ComposerFormatting(
         bold = span?.bold == true,
         italic = span?.italic == true,
@@ -202,17 +198,11 @@ internal fun ComposerTools(
     onAttachFile: () -> Unit,
     onFocusComposer: () -> Unit,
 ) {
-    var emojiPickerOpen by remember { mutableStateOf(false) }
     var colorSheetOpen by remember { mutableStateOf(false) }
     var colorTargetBackground by remember { mutableStateOf(false) }
     var selectedForeground by remember { mutableStateOf<Int?>(null) }
     var selectedBackground by remember { mutableStateOf<Int?>(null) }
     val formatting = composerFormattingAtCursor(value)
-    val emojiSearchEntries = remember { systemEmojiSearchEntries() }
-    val emojiQuery = activeEmojiQuery(value)
-    val emojiSuggestions = remember(emojiQuery, emojiSearchEntries) {
-        emojiQuery?.let { searchSystemEmojis(emojiSearchEntries, it.query) }.orEmpty()
-    }
     val hapticFeedback = LocalHapticFeedback.current
 
     fun commitToolValue(nextValue: TextFieldValue) {
@@ -229,7 +219,7 @@ internal fun ComposerTools(
     }
 
     LaunchedEffect(visible) {
-        if (!visible) emojiPickerOpen = false
+        if (!visible) colorSheetOpen = false
     }
 
     AnimatedVisibility(
@@ -249,31 +239,21 @@ internal fun ComposerTools(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                IconButton(
+                ComposerToolSurface(
+                    label = stringResource(R.string.cd_attach_file),
                     onClick = onAttachFile,
                     enabled = !isUploading,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape),
                 ) {
                     if (isUploading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
                         Icon(
                             Icons.Outlined.AttachFile,
-                            contentDescription = stringResource(R.string.cd_attach_file),
+                            contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                ComposerToolButton(
-                    icon = Icons.Outlined.Mood,
-                    label = stringResource(R.string.composer_tool_emoji),
-                    onClick = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        emojiPickerOpen = !emojiPickerOpen
-                    },
-                )
                 ComposerFormatButton(
                     icon = Icons.Filled.FormatBold,
                     label = stringResource(R.string.composer_tool_bold),
@@ -295,7 +275,7 @@ internal fun ComposerTools(
                 ComposerFormatButton(
                     icon = Icons.Filled.FormatColorText,
                     label = stringResource(R.string.composer_tool_color),
-                    checked = formatting.foreground != null || formatting.background != null,
+                    checked = colorSheetOpen || formatting.foreground != null || formatting.background != null,
                     onClick = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         openColorSheet()
@@ -312,31 +292,6 @@ internal fun ComposerTools(
         }
     }
 
-    AnimatedVisibility(
-        visible = emojiQuery != null && visible,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut(),
-    ) {
-        ComposerEmojiAutocompletePanel(
-            suggestions = emojiSuggestions,
-            query = emojiQuery?.query.orEmpty(),
-            onPick = { suggestion ->
-                emojiQuery?.let { query ->
-                    commitToolValue(replaceEmojiQuery(value, query, suggestion.emoji))
-                }
-            },
-        )
-    }
-
-    AnimatedVisibility(
-        visible = emojiPickerOpen && visible && emojiQuery == null,
-        enter = expandVertically() + fadeIn(),
-        exit = shrinkVertically() + fadeOut(),
-    ) {
-        ComposerEmojiPanel(
-            onPick = { emoji -> commitToolValue(insertComposerText(value, emoji)) },
-        )
-    }
     if (colorSheetOpen) {
         ComposerColorSheet(
             foreground = selectedForeground,
@@ -364,79 +319,6 @@ internal fun ComposerTools(
                 commitToolValue(applyIrcColors(value, selectedForeground, selectedBackground))
             },
         )
-    }
-}
-
-@Composable
-private fun ComposerEmojiPanel(onPick: (String) -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 1.dp,
-    ) {
-        AndroidView(
-            factory = { context ->
-                EmojiPickerView(context).apply {
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                }
-            },
-            update = { picker ->
-                picker.setOnEmojiPickedListener { item -> onPick(item.emoji) }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(260.dp),
-        )
-    }
-}
-
-@Composable
-private fun ComposerEmojiAutocompletePanel(
-    suggestions: List<EmojiSearchEntry>,
-    query: String,
-    onPick: (EmojiSearchEntry) -> Unit,
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp,
-    ) {
-        if (suggestions.isEmpty()) {
-            Text(
-                text = stringResource(R.string.composer_emoji_no_results, query),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            )
-        } else {
-            LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-                lazyItems(suggestions, key = { it.emoji }) { suggestion ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(suggestion) }
-                            .height(48.dp)
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(suggestion.emoji, fontSize = 24.sp)
-                        Text(
-                            text = suggestion.name.replace('_', ' '),
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -562,9 +444,71 @@ private fun ComposerColorSwatch(color: Int, selected: Boolean, onClick: () -> Un
 }
 
 @Composable
-private fun ComposerToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-        Icon(icon, contentDescription = label)
+private fun ComposerToolSurface(
+    label: String,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceContainer
+            active -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        label = "composer_tool_container",
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (active && enabled) 2.dp else 0.dp,
+        label = "composer_tool_elevation",
+    )
+
+    Surface(
+        modifier = Modifier
+            .size(48.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                selected = active
+            },
+        shape = shape,
+        color = containerColor,
+        tonalElevation = elevation,
+        border = if (active && enabled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+        } else {
+            null
+        },
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ComposerToolButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+) {
+    ComposerToolSurface(
+        label = label,
+        active = active,
+        onClick = onClick,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -577,68 +521,76 @@ private fun ComposerFormatButton(
     foregroundCode: Int? = null,
     backgroundCode: Int? = null,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(16.dp)
     val containerColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        targetValue = if (checked) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
         label = "composer_format_container",
     )
     val iconColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = if (checked) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
         label = "composer_format_icon",
     )
     val borderWidth by animateDpAsState(
         targetValue = if (checked) 1.dp else 0.dp,
         label = "composer_format_border",
     )
+    val elevation by animateDpAsState(
+        targetValue = if (checked) 2.dp else 0.dp,
+        label = "composer_format_elevation",
+    )
 
-    Box(
+    Surface(
         modifier = Modifier
             .size(48.dp)
-            .background(containerColor, shape)
-            .border(
-                width = borderWidth,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                shape = shape,
-            )
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 selected = checked
             },
+        shape = shape,
+        color = containerColor,
+        tonalElevation = elevation,
+        border = BorderStroke(
+            width = borderWidth,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = if (checked) 0.7f else 0f),
+        ),
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-            Icon(icon, contentDescription = null, tint = iconColor)
-        }
-        AnimatedVisibility(
-            visible = checked,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Box(
-                modifier = Modifier
-                    .padding(bottom = 4.dp)
-                    .size(4.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape),
-            )
-        }
-        val colorCode = foregroundCode ?: backgroundCode
-        if (colorCode != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 6.dp, bottom = 6.dp)
-                    .size(8.dp)
-                    .background(mircPaletteColor(colorCode), CircleShape)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shape = CircleShape,
-                    ),
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+                Icon(icon, contentDescription = null, tint = iconColor)
+            }
+            AnimatedVisibility(
+                visible = checked,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .size(4.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            }
+            val colorCode = foregroundCode ?: backgroundCode
+            if (colorCode != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 6.dp, bottom = 6.dp)
+                        .size(8.dp)
+                        .background(mircPaletteColor(colorCode), CircleShape)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            shape = CircleShape,
+                        ),
+                )
+            }
         }
     }
 }
-
 @Composable
 private fun RowScope.ComposerColorTargetButton(
     label: String,

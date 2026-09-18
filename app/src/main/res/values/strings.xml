@@ -273,8 +273,6 @@
     <string name="cd_send">Invia</string>
     <string name="composer_tools_open">Apri strumenti di formattazione</string>
     <string name="composer_tools_close">Chiudi strumenti di formattazione</string>
-    <string name="composer_tool_emoji">Inserisci emoji</string>
-    <string name="composer_emoji_no_results">Nessuna emoji trovata per &quot;%1$s&quot;</string>
     <string name="composer_tool_bold">Grassetto</string>
     <string name="composer_tool_italic">Corsivo</string>
     <string name="composer_tool_underline">Sottolineato</string>

@@ -3,6 +3,7 @@ package pm.antani.resentin.ui.chat
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class ComposerToolsTest {
@@ -65,21 +66,5 @@ class ComposerToolsTest {
         assertEquals(TextRange(2), result.selection)
     }
 
-    @Test
-    fun activeEmojiQueryStartsAfterWhitespace() {
-        val value = TextFieldValue("hello :smil", TextRange(11))
-        val query = activeEmojiQuery(value)
 
-        assertEquals(EmojiQuery(start = 6, end = 11, query = "smil"), query)
-    }
-
-    @Test
-    fun replacingEmojiQueryPreservesTextAroundToken() {
-        val value = TextFieldValue("hello :smil there", TextRange(11))
-        val query = checkNotNull(activeEmojiQuery(value))
-        val result = replaceEmojiQuery(value, query, "😄")
-
-        assertEquals("hello 😄 there", result.text)
-        assertEquals(TextRange(8), result.selection)
-    }
 }

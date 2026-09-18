@@ -4,9 +4,8 @@ import androidx.paging.PagingSource
 import androidx.paging.PagingState
 
 /**
- * A Room-backed source that opens at the newest local rows while keeping the
- * natural chronological order required by the chat. Paging's prepend side then
- * asks for older rows as the reader moves toward the top of the transcript.
+ * A Room-backed source ordered for a reverse-layout chat: index 0 is the newest
+ * message and Paging append loads progressively older rows.
  */
 class MessagePagingSource(
     private val db: AppDatabase,
@@ -34,22 +33,28 @@ class MessagePagingSource(
             return LoadResult.Page(emptyList(), prevKey = null, nextKey = null)
         }
 
-        val requestedOffset = params.key
-        val offset = requestedOffset ?: (total - params.loadSize).coerceAtLeast(0)
-        val rows = dao.loadMessagesPage(networkSlug, channelName, params.loadSize, offset)
-        val actualEnd = offset + rows.size
+        val descendingOffset = params.key ?: 0
+        val ascendingOffset = (total - descendingOffset - params.loadSize).coerceAtLeast(0)
+        val rows = dao.loadMessagesPage(networkSlug, channelName, params.loadSize, ascendingOffset)
+            .asReversed()
+        val actualDescendingEnd = descendingOffset + rows.size
         LoadResult.Page(
             data = rows,
-            prevKey = if (offset > 0) (offset - params.loadSize).coerceAtLeast(0) else null,
-            nextKey = if (actualEnd < total) actualEnd else null,
+            prevKey = if (descendingOffset > 0) {
+                (descendingOffset - params.loadSize).coerceAtLeast(0)
+            } else {
+                null
+            },
+            nextKey = if (ascendingOffset > 0) actualDescendingEnd else null,
         )
     }.getOrElse { LoadResult.Error(it) }
 
     override fun getRefreshKey(state: PagingState<Int, MessageEntity>): Int? {
         val anchor = state.anchorPosition ?: return null
         val item = state.closestItemToPosition(anchor) ?: return null
-        val page = state.pages.firstOrNull { page -> page.data.any { it.id == item.id } } ?: return null
-        val indexInPage = page.data.indexOfFirst { it.id == item.id }
-        return (page.prevKey ?: 0) + indexInPage
+        val pageIndex = state.pages.indexOfFirst { page -> page.data.any { it.id == item.id } }
+        if (pageIndex < 0) return null
+        val indexInPage = state.pages[pageIndex].data.indexOfFirst { it.id == item.id }
+        return state.pages.take(pageIndex).sumOf { it.data.size } + indexInPage
     }
 }
