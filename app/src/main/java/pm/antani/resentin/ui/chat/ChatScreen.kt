@@ -984,6 +984,7 @@ fun ChatScreen(
     var pagedInitialPositioned by remember(usePaging) { mutableStateOf(false) }
     val autoFollowTracker = remember(networkSlug, channelName) { ChatAutoFollowTracker() }
     var programmaticScrolls by remember(networkSlug, channelName) { mutableStateOf(0) }
+    var explicitScrollInProgress by remember(networkSlug, channelName) { mutableStateOf(false) }
     val positionSettled = if (usePaging) pagedInitialPositioned else initialScrollApplied
 
     suspend fun scrollToChatIndex(index: Int, animate: Boolean) {
@@ -997,6 +998,7 @@ fun ChatScreen(
     }
 
     suspend fun requestChatTail() {
+        if (explicitScrollInProgress) return
         autoFollowTracker.requestFollow()
         programmaticScrolls++
         try {
@@ -1121,25 +1123,43 @@ fun ChatScreen(
 
         snapshotFlow {
             val info = listState.layoutInfo
-            Triple(info.totalItemsCount, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-        }.collect { (totalItems, firstVisibleIndex, firstVisibleOffset) ->
-            val atBottom = totalItems > 0 &&
+            val firstVisibleIndex = listState.firstVisibleItemIndex
+            val atBottom = info.totalItemsCount > 0 &&
                 firstVisibleIndex == 0 &&
-                firstVisibleOffset <= AUTO_FOLLOW_BOTTOM_TOLERANCE_PX
+                listState.firstVisibleItemScrollOffset <= AUTO_FOLLOW_BOTTOM_TOLERANCE_PX
+            Triple(info.totalItemsCount, firstVisibleIndex, atBottom)
+        }.collect { (_, firstVisibleIndex, atBottom) ->
             isAtBottom = atBottom
             showJumpToBottom = !atBottom
             val before = MentionScroll.mentionRowsBeforeFold(mentionRowIndices, firstVisibleIndex)
             mentionBadgeCount = before.size
             nextMentionRowIndex = before.firstOrNull()
-            if (atBottom && positionSettled) {
-                withFrameNanos { }
-                if (listState.isAtChatTail()) {
-                    val renderedNewestId = timelineRows.lastOrNull()?.messages?.lastOrNull()?.id
-                    val newestId = renderedNewestId ?: messagesState.value.lastOrNull()?.id
-                    newestId?.let(viewModel::markRead)
-                }
-            }
         }
+    }
+
+    // Mark the read cursor only after the list is settled at the tail. Updating it
+    // while an animation is still running removes the unread divider from the
+    // LazyColumn and forces a structural remeasure in the middle of the motion.
+    LaunchedEffect(listState, positionSettled, explicitScrollInProgress, messagesState.value.lastOrNull()?.id) {
+        if (!positionSettled) return@LaunchedEffect
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                explicitScrollInProgress,
+                listState.isAtChatTail(),
+            )
+        }
+            .distinctUntilChanged()
+            .collect { (scrolling, explicit, atTail) ->
+                if (scrolling || explicit || !atTail) return@collect
+                withFrameNanos { }
+                if (listState.isScrollInProgress || explicitScrollInProgress || !listState.isAtChatTail()) {
+                    return@collect
+                }
+                val renderedNewestId = timelineRows.lastOrNull()?.messages?.lastOrNull()?.id
+                val newestId = renderedNewestId ?: messagesState.value.lastOrNull()?.id
+                newestId?.let(viewModel::markRead)
+            }
     }
 
     // Opening the IME reduces the list viewport, but it does not change the
@@ -1154,6 +1174,37 @@ fun ChatScreen(
     var composerBarHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
+
+    suspend fun runExplicitChatScroll(index: Int, followTail: Boolean) {
+        if (explicitScrollInProgress) return
+        explicitScrollInProgress = true
+        shouldScrollToBottomOnIme = false
+        shouldScrollToBottomOnComposerTools = false
+        if (followTail) {
+            autoFollowTracker.requestFollow()
+        } else {
+            autoFollowTracker.stopFollowing()
+        }
+        programmaticScrolls++
+        try {
+            listState.animateScrollToItem(index.coerceAtLeast(0))
+            if (followTail) {
+                // Re-anchor after the final animation frame. This handles a message
+                // inserted while the explicit jump was running without allowing a
+                // second scroll owner to fight the animation.
+                listState.requestScrollToItem(0)
+                withFrameNanos { }
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.requestScrollToItem(0)
+                }
+                withFrameNanos { }
+            }
+        } finally {
+            programmaticScrolls--
+            explicitScrollInProgress = false
+        }
+    }
+
     LaunchedEffect(listState, composerHeightPx, composerBarHeightPx, usePaging) {
         snapshotFlow {
             val bottomIndex = 0
@@ -1170,6 +1221,9 @@ fun ChatScreen(
             val shouldFollowIme = follows.first
             val shouldFollowTools = follows.second
             if ((!shouldFollowIme && !shouldFollowTools) || bottomIndex < 0) {
+                return@collectLatest
+            }
+            if (explicitScrollInProgress) {
                 return@collectLatest
             }
             // The tools animation has its own frame-by-frame anchoring below.
@@ -1192,8 +1246,10 @@ fun ChatScreen(
         if (usePaging || !positioned || !shouldScrollToBottomOnComposerTools) return@LaunchedEffect
         repeat(60) {
             withFrameNanos { }
-            val bottomIndex = 0
-            if (bottomIndex >= 0) scrollToChatIndex(bottomIndex, animate = false)
+            if (!explicitScrollInProgress) {
+                val bottomIndex = 0
+                if (bottomIndex >= 0) scrollToChatIndex(bottomIndex, animate = false)
+            }
         }
         shouldScrollToBottomOnComposerTools = false
     }
@@ -1251,9 +1307,8 @@ fun ChatScreen(
         viewModel.scrollToLatestAfterSend.collect {
             // Sending is an explicit newest-message request: even if the reader was
             // looking at history, the just-sent message must become visible.
-            autoFollowTracker.requestFollow()
             withFrameNanos { }
-            scrollToChatIndex(0, animate = true)
+            runExplicitChatScroll(index = 0, followTail = true)
         }
     }
     LaunchedEffect(listState, usePaging) {
@@ -2136,14 +2191,12 @@ fun ChatScreen(
                                 // scrolling to the following row would hide the
                                 // very mention this button is meant to reveal.
                                 scope.launch {
-                                    val maxRow = listState.layoutInfo.totalItemsCount - 1
-                                    autoFollowTracker.stopFollowing()
-                                    scrollToChatIndex(target.coerceAtMost(maxRow), animate = true)
+                                    val maxRow = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                                    runExplicitChatScroll(target.coerceAtMost(maxRow), followTail = false)
                                 }
                             } else {
                                 scope.launch {
-                                    autoFollowTracker.requestFollow()
-                                    scrollToChatIndex(0, animate = true)
+                                    runExplicitChatScroll(index = 0, followTail = true)
                                 }
                             }
                         },
