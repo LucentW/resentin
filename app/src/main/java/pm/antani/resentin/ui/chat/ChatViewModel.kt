@@ -460,12 +460,9 @@ class ChatViewModel(
             chatRepository.backfill(networkSlug, channelName).onFailure { postError(it.message) }
             _initialHistoryReady.value = true
         }
-        // Marks the newest loaded message as read whenever it changes — the chat being
-        // open (this ViewModel existing) is already the "the user is looking at this"
-        // signal the rest of the app (OpenChatTracker) relies on.
-        viewModelScope.launch {
-            messages.collect { list -> list.maxByOrNull { it.id }?.let { markRead(it.id) } }
-        }
+        // Read state is advanced by the chat viewport only after the initial entry position settles
+        // and the user is actually at the reverse-list tail. Loading Room rows alone must not consume
+        // the unread divider while the screen is still deciding where to land.
         // Server-query replies for this network only — bundles carry no window
         // context, so anything for another network belongs to a different chat.
         viewModelScope.launch {
@@ -511,14 +508,15 @@ class ChatViewModel(
         }
     }
 
-    private fun markRead(messageId: Long) {
+    fun markRead(messageId: Long) {
         if (messageId <= lastMarkedRead) return
         lastMarkedRead = messageId
+        // The chat is already visible to the user, so update the local divider
+        // immediately. Persisting the cursor remains asynchronous; waiting for
+        // the server response makes every newly sent message flash as unread.
+        _readCursor.value = maxOf(_readCursor.value ?: Long.MIN_VALUE, messageId)
         viewModelScope.launch {
             chatRepository.markRead(networkSlug, channelName, messageId)
-                .onSuccess {
-                    _readCursor.value = maxOf(_readCursor.value ?: Long.MIN_VALUE, messageId)
-                }
         }
     }
 
