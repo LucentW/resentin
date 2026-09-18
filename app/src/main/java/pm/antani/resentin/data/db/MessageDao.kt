@@ -15,6 +15,8 @@ interface MessageDao {
 
     @Query("SELECT COUNT(*) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
     suspend fun countMessages(networkSlug: String, channelName: String): Int
+    @Query("SELECT COUNT(*) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
+    fun observeMessageCount(networkSlug: String, channelName: String): Flow<Int>
 
     @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName ORDER BY id ASC LIMIT :limit OFFSET :offset")
     suspend fun loadMessagesPage(networkSlug: String, channelName: String, limit: Int, offset: Int): List<MessageEntity>
