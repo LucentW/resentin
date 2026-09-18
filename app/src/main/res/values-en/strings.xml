@@ -279,6 +279,8 @@
     <string name="composer_color_target_background">Background</string>
     <string name="composer_color_remove">Remove colors</string>
     <string name="composer_color_cancel">Cancel</string>
+    <string name="composer_color_preview">Preview</string>
+    <string name="composer_color_swatch">IRC color %1$d</string>
     <string name="cd_scroll_to_bottom">Scroll to bottom</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Jump to next mention (%1$d below)</item>

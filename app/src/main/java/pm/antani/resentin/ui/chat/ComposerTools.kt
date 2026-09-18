@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -142,7 +143,9 @@ internal fun applyIrcColors(value: TextFieldValue, foreground: Int?, background:
     val start = selection.min
     val end = selection.max
     val selected = value.text.substring(start, end)
-    val replacement = prefix + selected + Char(IRC_RESET)
+    // Close with a bare color code (0x03), not RESET (0x0F): RESET also clears
+    // bold/italic/underline, so coloring an already-bold span would un-bold it.
+    val replacement = prefix + selected + Char(IRC_COLOR)
     val text = value.text.substring(0, start) + replacement + value.text.substring(end)
     return TextFieldValue(text, TextRange(start + replacement.length))
 }
@@ -381,7 +384,7 @@ private fun ComposerColorSheet(
             shape = MaterialTheme.shapes.medium,
         ) {
             Text(
-                text = mircAnnotatedString(previewCode + "Anteprima"),
+                text = mircAnnotatedString(previewCode + stringResource(R.string.composer_color_preview)),
                 modifier = Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -421,6 +424,7 @@ private fun ComposerColorSheet(
 private fun ComposerColorSwatch(color: Int, selected: Boolean, onClick: () -> Unit) {
     val swatch = mircPaletteColor(color)
     val labelColor = if (swatch.luminance() > 0.55f) Color.Black else Color.White
+    val description = stringResource(R.string.composer_color_swatch, color)
     Box(
         modifier = Modifier
             .size(42.dp)
@@ -431,7 +435,11 @@ private fun ComposerColorSwatch(color: Int, selected: Boolean, onClick: () -> Un
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 shape = CircleShape,
             )
-            .clickable(onClick = onClick),
+            .semantics {
+                contentDescription = description
+                this.selected = selected
+            }
+            .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(

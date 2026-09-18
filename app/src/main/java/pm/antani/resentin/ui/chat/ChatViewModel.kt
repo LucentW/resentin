@@ -620,7 +620,6 @@ class ChatViewModel(
                 sendPendingAttachmentIfAny()
                 return@launch
             }
-            _pendingReply.value = null
             if (_isSending.value) return@launch
             _isSending.value = true
             try {
@@ -637,7 +636,10 @@ class ChatViewModel(
                         },
                         "/" + parsed.token,
                     )
+                    // The reply bar survives Incomplete/Invalid/failed commands: nothing
+                    // was sent, so dropping it would discard the user's context.
                     is SlashCommandParseResult.Parsed -> runCatching { executeSlashCommand(parsed.command) }
+                        .onSuccess { _pendingReply.value = null }
                         .onFailure { failure -> postError(failure.message ?: appContext.getString(R.string.chat_slash_command_unsupported, "/" + parsed.command.name)) }
                 }
             } finally {
@@ -654,6 +656,9 @@ class ChatViewModel(
             }
     }
     private suspend fun composeOutgoingText(rawText: String): String {
+        // A blank draft with a selected reply must stay blank: ("nick: " + "")
+        // would trim to a ghost "nick:" mention that sends an empty ping.
+        if (rawText.isBlank()) return ""
         if (rawText.trimStart().startsWith("/")) return rawText.trim()
         val pending = _pendingReply.value ?: return rawText.trim()
         val style = appPreferences.replyStyle.first()

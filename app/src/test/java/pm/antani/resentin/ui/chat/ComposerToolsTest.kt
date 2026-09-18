@@ -33,8 +33,17 @@ class ComposerToolsTest {
 
         val result = applyIrcColors(value, foreground = 42, background = 98)
 
-        assertEquals("\u000342,98hello\u000f", result.text)
+        assertEquals("\u000342,98hello\u0003", result.text)
         assertEquals(TextRange(12), result.selection)
+    }
+
+    @Test
+    fun `apply colors preserves surrounding bold`() {
+        val value = TextFieldValue("\u0002hello", TextRange(0, 6))
+
+        val result = applyIrcColors(value, foreground = 4, background = null)
+
+        assertEquals("\u000304\u0002hello\u0003", result.text)
     }
 
     @Test
