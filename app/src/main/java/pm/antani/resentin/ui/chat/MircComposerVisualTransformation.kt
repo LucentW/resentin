@@ -4,6 +4,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import pm.antani.resentin.mirc.isMircHexDigit
 import pm.antani.resentin.ui.common.mircAnnotatedString
 
 /**
@@ -49,8 +50,26 @@ internal object MircComposerVisualTransformation : VisualTransformation {
     }
 }
 
+// Must mirror MircParser exactly: every byte the parser consumes but does not
+// render has to map onto the same transformed offset, or the composer cursor
+// drifts on text carrying those codes.
 private fun mircControlCodeLength(text: String, index: Int): Int = when (text[index].code) {
     2, 15, 29, 30, 31 -> 1
+    17, 22 -> 1
+    4 -> {
+        var cursor = index + 1
+        repeat(6) { if (cursor < text.length && text[cursor].isMircHexDigit()) cursor++ }
+        if (cursor < text.length && text[cursor] == ',') {
+            var j = cursor + 1
+            var digits = 0
+            while (j < text.length && text[j].isMircHexDigit() && digits < 6) {
+                j++
+                digits++
+            }
+            if (digits == 6) cursor = j
+        }
+        cursor - index
+    }
     3 -> {
         var cursor = index + 1
         var foregroundDigits = 0

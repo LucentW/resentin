@@ -56,6 +56,12 @@
     <string name="home_network_recovering_description">Step: %1$s</string>
     <string name="home_network_recovery_failed">Connection recovery failed</string>
     <string name="home_no_networks_description">Add a network to start chatting.</string>
+    <string name="home_no_networks_available_description">You have no connected networks. Pick an available network below to get started.</string>
+    <string name="home_available_networks_title">Available networks</string>
+    <string name="home_available_networks_description">Connect to a network offered by Grappa and start chatting.</string>
+    <string name="home_available_network_connect">Connect</string>
+    <string name="home_available_network_connecting">Connecting…</string>
+    <string name="home_featured_channels_title">Featured channels</string>
     <string name="home_connection_error_title">Connection failed</string>
     <string name="home_connection_error_description">I couldn\'t load your networks. Check your connection and try again.</string>
     <string name="home_connection_retry">Try again</string>
@@ -546,6 +552,13 @@
     <string name="network_settings_nick_label">Nick</string>
     <string name="network_settings_ident_label">Ident</string>
     <string name="network_settings_realname_label">Real name</string>
+    <string name="network_settings_credentials_label">IRC credentials</string>
+    <string name="network_settings_nickserv_password_label">NickServ password</string>
+    <string name="network_settings_nickserv_password_hint">Leave empty to keep it unchanged. Used for automatic identification.</string>
+    <string name="network_settings_server_pass_label">IRC server password</string>
+    <string name="network_settings_server_pass_hint">Password required by the network before registration. Leave empty to keep it unchanged.</string>
+    <string name="network_settings_password_unchanged">Unchanged</string>
+    <string name="network_settings_server_pass_remove">Remove server password</string>
     <string name="network_settings_perform_label">Perform list (commands run on connect)</string>
     <string name="network_settings_perform_placeholder">One IRC command per line</string>
     <string name="network_settings_saved">Saved</string>

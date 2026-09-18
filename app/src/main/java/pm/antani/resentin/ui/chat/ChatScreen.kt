@@ -1259,9 +1259,8 @@ fun ChatScreen(
         if (!positionSettled) return@LaunchedEffect
         snapshotFlow { listState.isScrollInProgress to (programmaticScrolls > 0) }
             .distinctUntilChanged()
-            .collect { (scrolling, programmatic) ->
+            .collect { (_, programmatic) ->
                 autoFollowTracker.onScrollStateChanged(
-                    scrolling = scrolling,
                     programmatic = programmatic,
                     atBottom = listState.isAtChatTail(),
                 )
@@ -1334,6 +1333,21 @@ fun ChatScreen(
                 if (state is LoadState.NotLoading && state.endOfPaginationReached) {
                     viewModel.loadOlder()
                 }
+            }
+    }
+
+    // Channel-scoped paging refresh. The PagingSource deliberately observes no
+    // table (Room invalidation is table-wide: any other chat's traffic would
+    // rebuild this list mid-read). This channel's own row count drives refresh()
+    // instead; the refresh anchors on the visible row, so the reader keeps
+    // their position while new arrivals prepend on demand.
+    LaunchedEffect(usePaging) {
+        if (!usePaging) return@LaunchedEffect
+        var lastCount: Int? = null
+        snapshotFlow { messageCount }
+            .collect { count ->
+                if (lastCount != null && count != lastCount) pagedMessages.refresh()
+                lastCount = count
             }
     }
 

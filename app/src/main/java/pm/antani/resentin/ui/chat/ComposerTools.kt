@@ -172,10 +172,15 @@ private fun stripIrcColors(text: String): String {
             if (index < text.length && text[index].isDigit()) index++
         }
         if (index < text.length && text[index] == ',') {
-            index++
-            repeat(2) {
-                if (index < text.length && text[index].isDigit()) index++
+            // A bare comma is literal text (mirror MircParser): only consume it
+            // as a background separator when background digits follow.
+            var j = index + 1
+            var digits = 0
+            while (j < text.length && text[j].isDigit() && digits < 2) {
+                j++
+                digits++
             }
+            if (digits > 0) index = j
         }
     }
     return result.toString()

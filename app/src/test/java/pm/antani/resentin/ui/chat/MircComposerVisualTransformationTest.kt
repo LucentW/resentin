@@ -28,4 +28,14 @@ class MircComposerVisualTransformationTest {
         assertEquals(1, result.offsetMapping.transformedToOriginal(0))
         assertEquals(source.length, result.offsetMapping.transformedToOriginal(result.text.length))
     }
+
+    @Test
+    fun `hex color bytes stay hidden and mapping covers them`() {
+        val source = "${Char(4)}FF0000hi"
+        val result = MircComposerVisualTransformation.filter(AnnotatedString(source))
+
+        assertEquals("hi", result.text.text)
+        assertEquals(0, result.offsetMapping.originalToTransformed(source.length - 2))
+        assertEquals(source.length, result.offsetMapping.transformedToOriginal(result.text.length))
+    }
 }

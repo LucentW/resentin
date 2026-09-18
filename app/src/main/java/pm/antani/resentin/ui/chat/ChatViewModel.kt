@@ -451,7 +451,15 @@ class ChatViewModel(
                 if (_initialReadCursor.value == null) {
                     val cursor = networksRepository.getStoredReadCursor(networkSlug, channelName)
                     _initialReadCursor.value = cursor
-                    _readCursor.value = cursor
+                    // markRead may already have advanced past the stored cursor while
+                    // the join reply was in flight: take the max so the visible
+                    // divider never rewinds and no redundant markRead fires.
+                    val current = _readCursor.value
+                    _readCursor.value = when {
+                        cursor == null -> current
+                        current == null -> cursor
+                        else -> maxOf(current, cursor)
+                    }
                 }
             }.onFailure {
                 if (!channelReady.isCompleted) channelReady.completeExceptionally(it)
@@ -733,7 +741,17 @@ class ChatViewModel(
                 if (sent > 0) _scrollToLatestAfterSend.tryEmit(Unit)
                 val residue = lines.drop(sent)
                 if (residue.isNotEmpty()) {
-                    setDraft(residue.joinToString("\n"))
+                    // When nothing went out (sent == 0, e.g. the first line failed),
+                    // the residue still carries the reply prefix baked into its first
+                    // line while the reply stays selected: rebuild it from the
+                    // unprefixed draft so the next send attaches it exactly once
+                    // instead of stacking a second attribution head.
+                    val redraft = if (sent == 0) {
+                        MessageLines.splitMessageLines(draftSnapshot).joinToString("\n")
+                    } else {
+                        residue.joinToString("\n")
+                    }
+                    setDraft(redraft)
                     if (sent > 0) _pendingReply.value = null
                 } else if (_draft.value.trim() == draftSnapshot.trim()) {
                     setDraft("")

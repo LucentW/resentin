@@ -26,12 +26,14 @@ internal class ChatAutoFollowTracker {
     }
 
     fun onScrollStateChanged(
-        scrolling: Boolean,
         programmatic: Boolean,
         atBottom: Boolean,
     ) {
         if (programmatic) return
-        following = if (scrolling) false else atBottom
+        // Position wins over gesture phase: a slow drag that never leaves the
+        // tail must not switch follow off, or arrivals during the touch land
+        // one row behind until the finger lifts.
+        following = atBottom
     }
 
     fun onTimelineChanged(newestMessageId: Long?): Boolean {

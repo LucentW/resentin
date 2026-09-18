@@ -4,10 +4,16 @@ package pm.antani.resentin.mirc
 // control bytes in source: bold=2, color=3, strikethrough=30, italic=29, underline=31, reset=15.
 private val BOLD = Char(2)
 private val COLOR = Char(3)
+private val HEX_COLOR = Char(4)
+private val MONOSPACE = Char(17)
+private val REVERSE = Char(22)
 private val ITALIC = Char(29)
 private val UNDERLINE = Char(31)
 private val STRIKETHROUGH = Char(30)
 private val RESET = Char(15)
+
+internal fun Char.isMircHexDigit(): Boolean =
+    this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 /**
  * Parses mIRC inline formatting control codes into a flat list of styled spans.
@@ -94,6 +100,29 @@ object MircParser {
                         if (fgDigits.isNotEmpty()) foreground = fgDigits.toString().toIntOrNull()
                         if (bgDigits.isNotEmpty()) background = bgDigits.toString().toIntOrNull()
                     }
+                }
+                HEX_COLOR -> {
+                    // Hex colors (HexChat): RRGGBB[,RRGGBB]. MircSpan has no RGB
+                    // field, so the color itself is dropped — but the bytes must
+                    // be consumed, never leaked as tofu + literal hex digits.
+                    flush()
+                    i++
+                    repeat(6) { if (i < input.length && input[i].isMircHexDigit()) i++ }
+                    if (i < input.length && input[i] == ',') {
+                        var j = i + 1
+                        var digits = 0
+                        while (j < input.length && input[j].isMircHexDigit() && digits < 6) {
+                            j++
+                            digits++
+                        }
+                        if (digits == 6) i = j
+                    }
+                }
+                MONOSPACE, REVERSE -> {
+                    // Consumed so they never render as tofu; no visual effect
+                    // (no model field for monospace/reverse).
+                    flush()
+                    i++
                 }
                 else -> {
                     current.append(input[i])

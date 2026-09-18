@@ -57,6 +57,15 @@ class ComposerToolsTest {
     }
 
     @Test
+    fun `remove colors keeps a literal comma after a bare color code`() {
+        val value = TextFieldValue("\u0003,hello", TextRange(0, 7))
+
+        val result = clearIrcColors(value)
+
+        assertEquals(",hello", result.text)
+    }
+
+    @Test
     fun `style can be toggled off before typing`() {
         val active = toggleIrcStyle(TextFieldValue("hello", TextRange(0)), codePoint = 2)
         val inactive = toggleIrcStyle(active, codePoint = 2)

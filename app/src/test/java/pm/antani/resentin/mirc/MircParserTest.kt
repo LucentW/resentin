@@ -95,4 +95,22 @@ class MircParserTest {
         val spans = MircParser.parse(input)
         assertEquals(listOf(MircSpan("plain")), spans)
     }
+
+    @Test
+    fun `hex color codes are consumed without leaking bytes`() {
+        val spans = MircParser.parse("${Char(4)}FF0000,00FF00colored")
+        assertEquals(listOf(MircSpan("colored")), spans)
+    }
+
+    @Test
+    fun `hex color without background is consumed`() {
+        val spans = MircParser.parse("${Char(4)}FF0000colored")
+        assertEquals(listOf(MircSpan("colored")), spans)
+    }
+
+    @Test
+    fun `monospace and reverse codes are consumed`() {
+        val spans = MircParser.parse("${Char(17)}mono${Char(17)} ${Char(22)}rev${Char(22)}")
+        assertEquals(listOf(MircSpan("mono"), MircSpan(" "), MircSpan("rev")), spans)
+    }
 }

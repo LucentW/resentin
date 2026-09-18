@@ -27,11 +27,21 @@ class ChatAutoFollowTest {
         val tracker = ChatAutoFollowTracker()
         tracker.reset(atBottom = true, newestMessageId = 10L)
 
-        tracker.onScrollStateChanged(scrolling = true, programmatic = false, atBottom = false)
+        tracker.onScrollStateChanged(programmatic = false, atBottom = false)
         assertFalse(tracker.onTimelineChanged(11L))
 
-        tracker.onScrollStateChanged(scrolling = false, programmatic = false, atBottom = true)
+        tracker.onScrollStateChanged(programmatic = false, atBottom = true)
         assertTrue(tracker.onTimelineChanged(12L))
+    }
+
+    @Test
+    fun slowDragAtBottomKeepsFollowing() {
+        val tracker = ChatAutoFollowTracker()
+        tracker.reset(atBottom = true, newestMessageId = 10L)
+
+        tracker.onScrollStateChanged(programmatic = false, atBottom = true)
+
+        assertTrue(tracker.onTimelineChanged(11L))
     }
 
     @Test
@@ -39,7 +49,7 @@ class ChatAutoFollowTest {
         val tracker = ChatAutoFollowTracker()
         tracker.reset(atBottom = true, newestMessageId = 10L)
 
-        tracker.onScrollStateChanged(scrolling = true, programmatic = true, atBottom = false)
+        tracker.onScrollStateChanged(programmatic = true, atBottom = false)
 
         assertTrue(tracker.onTimelineChanged(11L))
     }

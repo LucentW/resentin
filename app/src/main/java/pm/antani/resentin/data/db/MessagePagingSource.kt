@@ -12,25 +12,16 @@ import androidx.paging.PagingState
  * rows. A [LoadResult.Page.nextKey] is the exclusive older bound (`id < key`),
  * [LoadResult.Page.prevKey] the exclusive newer bound (`id > key`); a refresh
  * anchors inclusively on the visible row so it stays in the reloaded page.
+ *
+ * No table-wide invalidation here: Room only observes whole tables, so any
+ * other chat's traffic would rebuild this list mid-read. The screen refreshes
+ * this source off its own channel-scoped row count instead (see ChatScreen).
  */
 class MessagePagingSource(
     private val db: AppDatabase,
     private val networkSlug: String,
     private val channelName: String,
 ) : PagingSource<Long, MessageEntity>() {
-
-    private val observer = object : androidx.room.InvalidationTracker.Observer("messages") {
-        override fun onInvalidated(tables: Set<String>) {
-            invalidate()
-        }
-    }
-
-    init {
-        db.invalidationTracker.addObserver(observer)
-        registerInvalidatedCallback {
-            db.invalidationTracker.removeObserver(observer)
-        }
-    }
 
     override suspend fun load(params: LoadParams<Long>): LoadResult<Long, MessageEntity> = runCatching {
         val dao = db.messageDao()
@@ -48,19 +39,16 @@ class MessagePagingSource(
             is LoadParams.Append ->
                 dao.loadOlderThan(networkSlug, channelName, params.key, params.loadSize)
         }
+        if (rows.isEmpty()) {
+            // An empty window terminates its own direction; the head needs no
+            // extra probe query to prove there is nothing newer.
+            return LoadResult.Page(emptyList(), prevKey = null, nextKey = null)
+        }
         val fullPage = rows.size >= params.loadSize
         LoadResult.Page(
             data = rows,
-            prevKey = if (rows.isEmpty() || !fullPage && params is LoadParams.Prepend) {
-                null
-            } else {
-                // Newest page already holds the head: prepending past it can only
-                // return an empty window, so terminate instead of looping on it.
-                val newest = rows.first().id
-                val head = dao.loadNewerThan(networkSlug, channelName, newest, 1)
-                if (head.isEmpty()) null else newest
-            },
-            nextKey = if (!fullPage || rows.isEmpty()) null else rows.last().id,
+            prevKey = rows.first().id,
+            nextKey = if (fullPage) rows.last().id else null,
         )
     }.getOrElse { LoadResult.Error(it) }
 
