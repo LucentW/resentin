@@ -285,6 +285,8 @@
     <string name="composer_color_target_background">Sfondo</string>
     <string name="composer_color_remove">Rimuovi colori</string>
     <string name="composer_color_cancel">Annulla</string>
+    <string name="composer_color_preview">Anteprima</string>
+    <string name="composer_color_swatch">Colore IRC %1$d</string>
     <string name="cd_scroll_to_bottom">Vai al fondo</string>
     <plurals name="cd_jump_to_next_mention">
         <item quantity="one">Salta alla prossima menzione (%1$d sotto)</item>

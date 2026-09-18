@@ -61,6 +61,7 @@ class ChatAutoFollowTest {
 
         assertFalse(tracker.onTimelineChanged(42L))
     }
+    @Test
     fun emptyInitialSnapshotFollowsItsFirstMessage() {
         val tracker = ChatAutoFollowTracker()
         tracker.reset(atBottom = true, newestMessageId = null)
