@@ -65,6 +65,8 @@ class ChatRepository(
 
     fun observeMessages(networkSlug: String, channelName: String): Flow<List<MessageEntity>> =
         db.messageDao().observeMessages(networkSlug, canonicalTarget(channelName))
+    fun observeMessageCount(networkSlug: String, channelName: String): Flow<Int> =
+        db.messageDao().observeMessageCount(networkSlug, canonicalTarget(channelName))
 
     /** Room-backed paging for long transcripts. The source opens at the newest
      * locally cached rows; older rows are loaded when the reader reaches the top.

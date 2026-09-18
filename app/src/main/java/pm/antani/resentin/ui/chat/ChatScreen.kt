@@ -91,6 +91,8 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +112,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -151,7 +154,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -340,7 +342,9 @@ private fun ReplyComposerBar(
 private fun AttachmentPreviewCard(
     attachment: PendingUploadConfirm,
     isUploading: Boolean,
+    isFailed: Boolean,
     onRemove: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     val removeAttachmentLabel = stringResource(R.string.chat_attachment_remove)
     Surface(
@@ -387,12 +391,25 @@ private fun AttachmentPreviewCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (isUploading) {
+
+                    if (isFailed) {
                         Text(
-                            text = stringResource(R.string.cd_loading),
+                            text = stringResource(R.string.chat_upload_failed),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.error,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                if (isFailed && !isUploading) {
+                    IconButton(
+                        onClick = onRetry,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = stringResource(R.string.chat_history_retry),
+                            tint = MaterialTheme.colorScheme.error,
                         )
                     }
                 }
@@ -429,6 +446,7 @@ private fun AttachmentPreviewCard(
             }
         }
     }
+}
 }
 
 @Composable
@@ -508,7 +526,7 @@ private fun inlineImageUrlFromText(body: String): String? {
 
 @Composable
 private fun InlineAttachmentImage(url: String) {
-    val uriHandler = LocalUriHandler.current
+    var viewerOpen by rememberSaveable(url) { mutableStateOf(false) }
     val bitmap by produceState<Bitmap?>(initialValue = null, url) {
         value = withContext(Dispatchers.IO) {
             decodeRemoteThumbnail(url)
@@ -520,7 +538,7 @@ private fun InlineAttachmentImage(url: String) {
                 .fillMaxWidth()
                 .heightIn(max = 240.dp)
                 .clip(MaterialTheme.shapes.medium)
-                .clickable { runCatching { uriHandler.openUri(url) } },
+                .clickable { viewerOpen = true },
             shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.surfaceContainer,
             border = BorderStroke(
@@ -536,6 +554,41 @@ private fun InlineAttachmentImage(url: String) {
                     .fillMaxWidth()
                     .height(180.dp),
             )
+        }
+    }
+    if (viewerOpen && bitmap != null) {
+        Dialog(
+            onDismissRequest = { viewerOpen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.96f)),
+            ) {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = url,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .clickable { viewerOpen = false },
+                )
+                IconButton(
+                    onClick = { viewerOpen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(48.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.cd_cancel),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+            }
         }
     }
 }
@@ -621,6 +674,7 @@ fun ChatScreen(
 ) {
     val messages by viewModel.messages.collectAsState()
     val allMessages by viewModel.allMessages.collectAsState()
+    val messageCount by viewModel.messageCount.collectAsState()
     val pagedMessages = viewModel.pagedMessages.collectAsLazyPagingItems()
     val renderCache = remember { MessageRenderCache() }
     val topic by viewModel.topic.collectAsState()
@@ -671,7 +725,9 @@ fun ChatScreen(
     }
     val error by viewModel.error.collectAsState()
     val pendingMultiLineSend by viewModel.pendingMultiLineSend.collectAsState()
-    val pendingUpload by viewModel.pendingUpload.collectAsState()
+    val pendingUploads by viewModel.pendingUploads.collectAsState()
+    val uploadingUri by viewModel.uploadingUri.collectAsState()
+    val failedUploadUris by viewModel.failedUploadUris.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
     val ownSigils by viewModel.ownSigils.collectAsState()
     val privilegeModes by viewModel.privilegeModes.collectAsState()
@@ -683,8 +739,14 @@ fun ChatScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedSearchIndex by remember { mutableStateOf(0) }
-    val searchMatches = remember(messages, searchQuery) {
-        findLocalChatMatches(messages, searchQuery)
+    val searchMatches by produceState(
+        initialValue = emptyList<MessageEntity>(),
+        key1 = messages,
+        key2 = searchQuery,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            findLocalChatMatches(messages, searchQuery)
+        }
     }
     val selectedSearchMessageId = searchMatches.getOrNull(selectedSearchIndex)?.id
     val searchFocusRequester = remember { FocusRequester() }
@@ -822,7 +884,14 @@ fun ChatScreen(
     val highlightNotice by viewModel.highlightNotice.collectAsState()
     val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
-    val pagingEligible = (isQuery || isServer) && messages.size > 300 && initialReadCursorReady && initialReadCursor == null && readCursor == null
+    // A normal channel can use raw paging only when the smart presence filter and
+    // unread divider are inactive. Those two features depend on rows outside the
+    // currently loaded page; keeping them on the full timeline preserves behavior.
+    val pagingEligible = messageCount > 300 &&
+        initialReadCursorReady &&
+        initialReadCursor == null &&
+        readCursor == null &&
+        (isQuery || isServer || !smartPresenceFilter)
     var initialListIndex by remember { mutableStateOf<Int?>(null) }
     val positioned = pagingEligible || initialListIndex != null
     val listState = remember(initialListIndex, pagingEligible) {
@@ -869,8 +938,8 @@ fun ChatScreen(
     if (selectingMessageId != null) {
         BackHandler { selectingMessageId = null }
     }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let(viewModel::uploadFile)
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        uris.forEach(viewModel::uploadFile)
     }
 
     if (composerToolsOpen) {
@@ -909,13 +978,20 @@ fun ChatScreen(
     val dividerCursor = if (positioned) readCursor ?: initialReadCursor else initialReadCursor
     val smartFilterActive = smartPresenceFilter && !searchOpen && !revealAllPresenceEvents && !isQuery && !isServer
     val timelineMessages = if (revealAllPresenceEvents) allMessages else messages
-    val timelineRows = remember(timelineMessages, dividerCursor, smartFilterActive, myNick) {
-        buildChatTimeline(
-            timelineMessages,
-            dividerCursor,
-            smartPresenceFilterEnabled = smartFilterActive,
-            alwaysVisibleSender = myNick,
-        )
+    var timelineRows by remember(networkSlug, channelName) { mutableStateOf<List<ChatTimelineRow>>(emptyList()) }
+    LaunchedEffect(timelineMessages, dividerCursor, smartFilterActive, myNick, pagingEligible) {
+        if (pagingEligible) {
+            timelineRows = emptyList()
+        } else {
+            timelineRows = withContext(Dispatchers.Default) {
+                buildChatTimeline(
+                    timelineMessages,
+                    dividerCursor,
+                    smartPresenceFilterEnabled = smartFilterActive,
+                    alwaysVisibleSender = myNick,
+                )
+            }
+        }
     }
     val dividerIndex = dividerCursor?.let { cursor ->
         timelineRows.indexOfFirst { row -> row.messages.any { it.id > cursor } }.takeIf { it >= 0 }
@@ -1499,7 +1575,7 @@ fun ChatScreen(
                 }
                 val draftEmpty = draftFieldValue.text.isEmpty()
                 val canSendDraft = draftFieldValue.text.isNotBlank()
-                val canSendAttachment = pendingUpload?.requiresConfirmation == false
+                val canSendAttachment = pendingUploads.any { !it.requiresConfirmation }
                 val hasSendableText = canSendDraft || canSendAttachment
                     val sendScale by animateFloatAsState(
                         targetValue = when {
@@ -1562,17 +1638,25 @@ fun ChatScreen(
                             }
                         }
                         AnimatedVisibility(
-                            visible = pendingUpload != null,
+                            visible = pendingUploads.isNotEmpty(),
                             enter = expandVertically(animationSpec = tween(200)) +
                                 fadeIn(animationSpec = tween(160)),
                             exit = shrinkVertically(animationSpec = tween(160)) +
                                 fadeOut(animationSpec = tween(110)),
                         ) {
-                            pendingUpload?.let { attachment ->
+                            pendingUploads.forEachIndexed { index, attachment ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                    )
+                                }
                                 AttachmentPreviewCard(
                                     attachment = attachment,
-                                    isUploading = isUploading,
-                                    onRemove = viewModel::dismissPendingUpload,
+                                    isUploading = uploadingUri == attachment.uri,
+                                    isFailed = attachment.uri in failedUploadUris,
+                                    onRemove = { viewModel.removePendingUpload(attachment.uri) },
+                                    onRetry = { viewModel.retryPendingUpload(attachment.uri) },
                                 )
                             }
                         }
@@ -1822,12 +1906,19 @@ fun ChatScreen(
                     // state has been positioned, avoiding the visible top-to-unread jump.
                 }
                 else -> {
+            val messageListData = remember(timelineRows, members, highlightPatterns, expandedPresenceBursts) {
+                ChatMessageListData(
+                    timelineRows = timelineRows,
+                    members = members,
+                    highlightPatterns = highlightPatterns,
+                    expandedPresenceBursts = expandedPresenceBursts,
+                )
+            }
             ChatMessageList(
                 listState = listState,
                 renderCache = renderCache,
-                timelineRows = timelineRows,
+                data = messageListData,
                 dividerIndex = dividerIndex,
-                members = members,
                 displayMode = displayMode,
                 messageDensity = messageDensity,
                 showSeconds = showSeconds,
@@ -1837,10 +1928,8 @@ fun ChatScreen(
                 isQuery = isQuery,
                 isServer = isServer,
                 viewerUsername = viewerUsername,
-                highlightPatterns = highlightPatterns,
                 selectedSearchMessageId = selectedSearchMessageId,
                 selectingMessageId = selectingMessageId,
-                expandedPresenceBursts = expandedPresenceBursts,
                 onTogglePresence = togglePresence,
                 onReply = stableReply,
                 onMessageMenu = stableMessageMenu,
@@ -2715,14 +2804,14 @@ fun ChatScreen(
 
     // #1883 — pre-upload confirm (opt-in, server-side). The staged file goes out
     // only on Send, with the TTL picked here (a per-batch choice, not saved).
-    val stagedUpload = pendingUpload
-    if (stagedUpload?.requiresConfirmation == true && !isUploading) {
+    val stagedUpload = pendingUploads.firstOrNull { it.requiresConfirmation }
+    if (stagedUpload != null && !isUploading) {
         UploadConfirmDialog(
             pending = stagedUpload,
             channelName = channelName,
             onTtlChange = viewModel::onPendingUploadTtlChange,
-            onConfirm = viewModel::confirmPendingUpload,
-            onDismiss = viewModel::dismissPendingUpload,
+            onConfirm = viewModel::confirmPendingUploads,
+            onDismiss = viewModel::dismissPendingUploads,
         )
     }
     }
@@ -3287,8 +3376,20 @@ private class MessageRenderCache {
         val formatted: FormattedEvent,
     )
 
+    private data class TextKey(
+        val text: String,
+        val lightTheme: Boolean,
+        val stripFormatting: Boolean,
+        val deferRichContent: Boolean,
+    )
+
     private val entries = object : LinkedHashMap<Long, Entry>(512, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Entry>?): Boolean =
+            size > 512
+    }
+
+    private val richTextEntries = object : LinkedHashMap<TextKey, AnnotatedString>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TextKey, AnnotatedString>?): Boolean =
             size > 512
     }
 
@@ -3306,16 +3407,35 @@ private class MessageRenderCache {
         entries[message.id] = Entry(fingerprint, formatted)
         return formatted
     }
+
+    fun messageText(text: String, lightTheme: Boolean, stripFormatting: Boolean, deferRichContent: Boolean): AnnotatedString {
+        val key = TextKey(text, lightTheme, stripFormatting, deferRichContent)
+        return if (deferRichContent) {
+            richTextEntries.getOrPut(key) {
+                buildAnnotatedString { append(if (stripFormatting) stripMircCodes(text) else text) }
+            }
+        } else {
+            richTextEntries.getOrPut(key) { mircAnnotatedString(text, lightTheme, stripFormatting) }
+        }
+    }
 }
+
+@Immutable
+private data class ChatMessageListData(
+    val timelineRows: List<ChatTimelineRow>,
+    val members: List<MemberEntity>,
+    val highlightPatterns: List<String>?,
+    val expandedPresenceBursts: Set<Long>,
+)
 
 @Composable
 private fun ChatMessageList(
     listState: LazyListState,
     renderCache: MessageRenderCache,
-    timelineRows: List<ChatTimelineRow>,
+    data: ChatMessageListData,
     pagedMessages: LazyPagingItems<MessageEntity>? = null,
     dividerIndex: Int?,
-    members: List<MemberEntity>,
+
     displayMode: ChatDisplayMode,
     messageDensity: MessageDensity,
     showSeconds: Boolean,
@@ -3325,10 +3445,10 @@ private fun ChatMessageList(
     isQuery: Boolean,
     isServer: Boolean,
     viewerUsername: String,
-    highlightPatterns: List<String>?,
+
     selectedSearchMessageId: Long?,
     selectingMessageId: Long?,
-    expandedPresenceBursts: Set<Long>,
+
     onTogglePresence: (Long) -> Unit,
     onReply: (String, String) -> Unit,
     onMessageMenu: (MessageMenuTarget) -> Unit,
@@ -3339,7 +3459,7 @@ private fun ChatMessageList(
 
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         if (pagedMessages == null) {
-        timelineRows.forEachIndexed { index, row ->
+        data.timelineRows.forEachIndexed { index, row ->
             if (index == dividerIndex) {
                 item(key = "unread-divider", contentType = "unread-divider") {
                     UnreadDivider(density = messageDensity)
@@ -3351,7 +3471,7 @@ private fun ChatMessageList(
                     contentType = timelineContentType(row),
                 ) {
                     val message = row.message
-                    val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
+                    val previous = data.timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
                     val gapFromPrevious = previous?.let { message.serverTime - it.serverTime }
                     val tight = previous != null &&
                         index != dividerIndex &&
@@ -3362,13 +3482,13 @@ private fun ChatMessageList(
                     ChatTimelineMessageItem(
                         message = message,
                         renderCache = renderCache,
-                        members = members,
+                        members = data.members,
                         displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
                         density = messageDensity,
                         showSeconds = showSeconds,
                         coloredNicklist = coloredNicklist,
                         showHostmaskInEvents = showHostmaskInEvents,
-                        isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
+                        isMention = isMentionRow(message, myNick, isQuery, data.highlightPatterns),
                         isQuery = isQuery,
                         isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
                         isSelected = message.id == selectedSearchMessageId,
@@ -3386,7 +3506,7 @@ private fun ChatMessageList(
                 ) {
                     val burstKey = row.messages.first().id
                     val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
-                    val expanded = selectedInBurst || burstKey in expandedPresenceBursts
+                    val expanded = selectedInBurst || burstKey in data.expandedPresenceBursts
                     val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
                     val senderLabel = row.sender ?: pluralStringResource(
                         R.plurals.chat_activity_users,
@@ -3409,7 +3529,7 @@ private fun ChatMessageList(
                                 ChatTimelineMessageItem(
                                     message = event,
                                     renderCache = renderCache,
-                                    members = members,
+                                    members = data.members,
                                     displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
                                     density = messageDensity,
                                     showSeconds = showSeconds,
@@ -3445,13 +3565,13 @@ private fun ChatMessageList(
                     ChatTimelineMessageItem(
                         message = message,
                         renderCache = renderCache,
-                        members = members,
+                        members = data.members,
                         displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
                         density = messageDensity,
                         showSeconds = showSeconds,
                         coloredNicklist = coloredNicklist,
                         showHostmaskInEvents = showHostmaskInEvents,
-                        isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
+                        isMention = isMentionRow(message, myNick, isQuery, data.highlightPatterns),
                         isQuery = isQuery,
                         isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
                         isSelected = message.id == selectedSearchMessageId,
@@ -3692,10 +3812,12 @@ private fun MessageRow(
             ) {
                 val selecting = selectingMessageId == message.id
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density, selecting, deferRichContent)
+                    IrcLineRow(message, renderCache, formatted, prefix, time, coloredNicklist, isMention, density, selecting, deferRichContent)
                 } else {
                     BubbleRow(
-                        message, formatted, prefix, time, coloredNicklist, isMention,
+                        message,
+                        renderCache,
+                        formatted, prefix, time, coloredNicklist, isMention,
                         isMine = isMine,
                         tight = tight,
                         density = density,
@@ -3712,19 +3834,17 @@ private fun MessageRow(
  * prefix sigil (`@`/`+`/...) and any "* "/"< >"/"(notice)" decoration around it stay
  * the surrounding text's own color, matching how real IRC clients color-code nicks. */
 private fun renderMessageText(
+    renderCache: MessageRenderCache,
     text: String,
     lightTheme: Boolean,
     stripFormatting: Boolean,
     deferRichContent: Boolean,
     onDccFileClick: (path: String, filename: String?) -> Unit,
     onChannelClick: ((channelName: String) -> Unit)?,
-): AnnotatedString = if (deferRichContent) {
-    buildAnnotatedString {
-        append(if (stripFormatting) stripMircCodes(text) else text)
-    }
-} else {
-    withClickableLinks(
-        mircAnnotatedString(text, lightTheme, stripFormatting),
+): AnnotatedString {
+    val base = renderCache.messageText(text, lightTheme, stripFormatting, deferRichContent)
+    return if (deferRichContent) base else withClickableLinks(
+        base,
         linkStylesFor(lightTheme),
         onDccFileClick,
         onChannelClick,
@@ -3741,6 +3861,7 @@ private fun buildNickLine(
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
     stripFormatting: Boolean = false,
     onChannelClick: ((channelName: String) -> Unit)? = null,
+    renderCache: MessageRenderCache,
     deferRichContent: Boolean = false,
 ) = buildAnnotatedString {
     append(before)
@@ -3751,7 +3872,7 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(renderMessageText(body, lightTheme, stripFormatting, deferRichContent, onDccFileClick, onChannelClick))
+    append(renderMessageText(renderCache, body, lightTheme, stripFormatting, deferRichContent, onDccFileClick, onChannelClick))
 }
 
 private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
@@ -3825,6 +3946,7 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
 @Composable
 private fun BubbleRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     formatted: FormattedEvent.Chat,
     prefix: String,
     time: String,
@@ -3868,12 +3990,12 @@ private fun BubbleRow(
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }
     val inlineImageUrl = remember(quoteRest) { inlineImageUrlFromText(quoteRest) }
-    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler) {
+    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(renderMessageText(quoteRest, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
+            append(renderMessageText(renderCache, quoteRest, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -3881,7 +4003,7 @@ private fun BubbleRow(
         }
     }
     val actionWithTime = remember(
-        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler,
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent,
     ) {
         buildAnnotatedString {
             if (continuesGroup) {
@@ -3899,12 +4021,13 @@ private fun BubbleRow(
                         onDccFileClick = dccFileHandler,
                         stripFormatting = stripFormatting,
                         onChannelClick = channelClickHandler,
+                        renderCache = renderCache,
                     ),
                 )
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(renderMessageText(formatted.text, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
+            append(renderMessageText(renderCache, formatted.text, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -4051,6 +4174,7 @@ private fun BubbleRow(
 @Composable
 private fun IrcLineRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     formatted: FormattedEvent.Chat,
     prefix: String,
     time: String,
@@ -4068,9 +4192,9 @@ private fun IrcLineRow(
         message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent,
     ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
         }
     }
     val body: @Composable () -> Unit = {

@@ -79,6 +79,7 @@ data class PendingUploadConfirm(
     /** TTL choice in seconds, preselected with the effective default. */
     val ttlSeconds: Int,
     val requiresConfirmation: Boolean = true,
+    val id: Long = 0L,
 )
 /** A reply selected in the composer, kept separate from the text being written. */
 data class PendingReply(
@@ -290,6 +291,8 @@ class ChatViewModel(
     // presence preference hides them from the main transcript.
     val allMessages: StateFlow<List<MessageEntity>> = chatRepository.observeMessages(networkSlug, channelName)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val messageCount: StateFlow<Int> = chatRepository.observeMessageCount(networkSlug, channelName)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /** Paging stream used by the long-transcript renderer. It is cached in the
      * ViewModel so rotation/recomposition does not restart the Room source. */
@@ -369,8 +372,23 @@ class ChatViewModel(
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
-    private val _pendingUpload = MutableStateFlow<PendingUploadConfirm?>(null)
-    val pendingUpload: StateFlow<PendingUploadConfirm?> = _pendingUpload.asStateFlow()
+    private val _uploadingUri = MutableStateFlow<Uri?>(null)
+    val uploadingUri: StateFlow<Uri?> = _uploadingUri.asStateFlow()
+
+    private val _failedUploadUris = MutableStateFlow<Set<Uri>>(emptySet())
+    val failedUploadUris: StateFlow<Set<Uri>> = _failedUploadUris.asStateFlow()
+
+    private val _pendingUploads = MutableStateFlow<List<PendingUploadConfirm>>(emptyList())
+    val pendingUploads: StateFlow<List<PendingUploadConfirm>> = _pendingUploads.asStateFlow()
+
+    /** Compatibility view for the existing single-file confirmation dialog. */
+    val pendingUpload: StateFlow<PendingUploadConfirm?> = pendingUploads
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val uploadMutex = Mutex()
+    private val queuedUploadUris = mutableSetOf<Uri>()
+    private var nextPendingUploadId = 0L
 
     // #1883/#2095 — server upload prefs, loaded on open. Failures keep the
     // server defaults (confirm off, no TTL pref) so an upload never blocks on
@@ -631,11 +649,11 @@ class ChatViewModel(
     }
 
     private fun sendPendingAttachmentIfAny() {
-        val pending = _pendingUpload.value?.takeUnless { it.requiresConfirmation } ?: return
-        sendUpload(
-            pending.uri,
-            uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS },
-        )
+        _pendingUploads.value
+            .filterNot { it.requiresConfirmation }
+            .forEach { pending ->
+                sendUpload(pending.uri, pending.ttlSeconds, pending.id)
+            }
     }
     private suspend fun composeOutgoingText(rawText: String): String {
         if (rawText.trimStart().startsWith("/")) return rawText.trim()
@@ -1089,50 +1107,102 @@ class ChatViewModel(
                 .onFailure { postError(it.message); return@launch }
             val meta = readUploadMeta(appContext, uri)
                 ?: run { postError(appContext.getString(R.string.chat_upload_failed)); return@launch }
-            _pendingUpload.value = PendingUploadConfirm(
+            val pending = PendingUploadConfirm(
                 uri = meta.uri,
                 fileName = meta.fileName,
                 sizeBytes = meta.sizeBytes,
                 mimeType = meta.mimeType,
                 ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
                 requiresConfirmation = uploadConfirmEnabled && !sendImmediately,
+                id = ++nextPendingUploadId,
             )
+            _pendingUploads.value = _pendingUploads.value
+                .filterNot { it.uri == pending.uri }
+                .plus(pending)
             if (sendImmediately) {
-                sendUpload(meta.uri, uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS })
+                sendUpload(
+                    pending.uri,
+                    uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS },
+                    pending.id,
+                )
             }
         }
     }
 
     fun onPendingUploadTtlChange(seconds: Int) {
-        _pendingUpload.value = _pendingUpload.value?.copy(ttlSeconds = seconds)
+        _pendingUploads.value = _pendingUploads.value.map { pending ->
+            if (pending.requiresConfirmation) pending.copy(ttlSeconds = seconds) else pending
+        }
     }
 
-    /** The dialog's Send: uploads the staged file with the chosen TTL. The
-     * choice is per-batch only — it is NOT written back to the stored
-     * preference (same as cicchetto: a one-off stays a one-off). */
-    fun confirmPendingUpload() {
-        val pending = _pendingUpload.value ?: return
-        sendUpload(pending.uri, pending.ttlSeconds)
-    }
-
-    fun dismissPendingUpload() {
-        _pendingUpload.value = null
-    }
-
-    private fun sendUpload(uri: Uri, expireSeconds: Int?) {
-        if (_isUploading.value) return
-        viewModelScope.launch {
-            val result = runCatching {
-                _isUploading.value = true
-                val pending = readUploadFile(appContext, uri)
-                    ?: error(appContext.getString(R.string.chat_upload_failed))
-                chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType, expireSeconds)
-                    .getOrThrow()
+    /** Sends every staged file that is waiting for the opt-in confirmation. */
+    fun confirmPendingUploads() {
+        _pendingUploads.value
+            .filter { it.requiresConfirmation }
+            .forEach { pending ->
+                sendUpload(pending.uri, pending.ttlSeconds, pending.id)
             }
-            result.onFailure { postError(it.message) }
-            _isUploading.value = false
-            if (result.isSuccess && _pendingUpload.value?.uri == uri) {
-                _pendingUpload.value = null
+    }
+
+    /** Compatibility entry point used by older callers. */
+    fun confirmPendingUpload() = confirmPendingUploads()
+
+    fun removePendingUpload(uri: Uri) {
+        if (_uploadingUri.value == uri) return
+        _pendingUploads.value = _pendingUploads.value.filterNot { it.uri == uri }
+        _failedUploadUris.value = _failedUploadUris.value - uri
+    }
+
+    fun retryPendingUpload(uri: Uri) {
+        val pending = _pendingUploads.value.firstOrNull { it.uri == uri } ?: return
+        _failedUploadUris.value = _failedUploadUris.value - uri
+        sendUpload(pending.uri, pending.ttlSeconds, pending.id)
+    }
+
+    fun dismissPendingUploads() {
+        _pendingUploads.value = _pendingUploads.value.filterNot { it.requiresConfirmation }
+    }
+
+    /** Compatibility entry point used by older callers. */
+    fun dismissPendingUpload() = dismissPendingUploads()
+
+    private fun sendUpload(uri: Uri, expireSeconds: Int?, pendingId: Long) {
+        synchronized(queuedUploadUris) {
+            if (!queuedUploadUris.add(uri)) return
+        }
+        viewModelScope.launch {
+            uploadMutex.withLock {
+                val staged = _pendingUploads.value.firstOrNull {
+                    it.uri == uri && (pendingId == 0L || it.id == pendingId)
+                } ?: return@withLock
+                _uploadingUri.value = uri
+                _isUploading.value = true
+                val result = runCatching {
+                    val pending = readUploadFile(appContext, uri)
+                        ?: error(appContext.getString(R.string.chat_upload_failed))
+                    chatRepository.uploadAndSend(
+                        networkSlug,
+                        channelName,
+                        pending.bytes,
+                        pending.fileName,
+                        pending.mimeType,
+                        expireSeconds,
+                    ).getOrThrow()
+                }
+                if (result.isSuccess) {
+                    _pendingUploads.value = _pendingUploads.value.filterNot {
+                        it.uri == uri && (pendingId == 0L || it.id == pendingId)
+                    }
+                    _failedUploadUris.value = _failedUploadUris.value - uri
+                } else {
+                    _failedUploadUris.value = _failedUploadUris.value + uri
+                    postError(result.exceptionOrNull()?.message)
+                }
+                _isUploading.value = false
+                _uploadingUri.value = null
+            }
+            synchronized(queuedUploadUris) {
+                queuedUploadUris.remove(uri)
             }
         }
     }
