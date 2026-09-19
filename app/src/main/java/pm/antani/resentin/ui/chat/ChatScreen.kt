@@ -22,7 +22,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -52,6 +51,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -180,6 +183,7 @@ import java.time.format.DateTimeFormatter
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -249,6 +253,10 @@ internal fun reverseChatListIndex(rowIndex: Int, rowCount: Int, dividerIndex: In
     val renderedIndex = rowCount - 1 - rowIndex
     val renderedDivider = dividerIndex?.let { rowCount - it }
     return renderedIndex + if (renderedDivider != null && renderedIndex >= renderedDivider) 1 else 0
+}
+
+private fun flightLog(msg: String) {
+    if (pm.antani.resentin.BuildConfig.DEBUG) android.util.Log.d("SendFlight", msg)
 }
 private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 private val TIME_FORMATTER_WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss")
@@ -1181,6 +1189,30 @@ fun ChatScreen(
             }
     }
 
+    var flightText by remember(networkSlug, channelName) { mutableStateOf<String?>(null) }
+    var flightToken by remember(networkSlug, channelName) { mutableStateOf(0L) }
+    var flightStart by remember(networkSlug, channelName) { mutableStateOf<Offset?>(null) }
+    var flightTight by remember(networkSlug, channelName) { mutableStateOf(false) }
+    var flightSentAt by remember(networkSlug, channelName) { mutableStateOf(0L) }
+    var flightErrorAtLaunch by remember(networkSlug, channelName) { mutableStateOf<String?>(null) }
+    val flightProgress = remember(networkSlug, channelName) { Animatable(0f) }
+    var composerFieldPosWin by remember { mutableStateOf<Offset?>(null) }
+    var composerFieldSizePx by remember { mutableStateOf<IntSize?>(null) }
+    var listBoxWin by remember { mutableStateOf<Offset?>(null) }
+    var listBoxSize by remember { mutableStateOf(IntSize.Zero) }
+    val flightLineHeightPx = with(LocalDensity.current) {
+        MaterialTheme.typography.bodyLarge.lineHeight.toPx()
+    }
+    val flightTextStartPadPx = with(LocalDensity.current) { 56.dp.toPx() }
+    val flightScope = rememberCoroutineScope()
+    var ghostHpx by remember(networkSlug, channelName) { mutableStateOf<Int?>(null) }
+    var newestAtTap by remember(networkSlug, channelName) { mutableStateOf<Long?>(null) }
+    var runwayHoldPx by remember(networkSlug, channelName) { mutableStateOf<Float?>(null) }
+    var runwayDraining by remember(networkSlug, channelName) { mutableStateOf(false) }
+    val runwayDrain = remember(networkSlug, channelName) { Animatable(0f) }
+    val runwayEstPx = with(LocalDensity.current) { 64.dp.toPx() }
+    val tailNewestId = messagesState.value.lastOrNull()?.id
+
     // Mark the read cursor only after the list is settled at the tail. Updating it
     // while an animation is still running removes the unread divider from the
     // LazyColumn and forces a structural remeasure in the middle of the motion.
@@ -1195,7 +1227,11 @@ fun ChatScreen(
         }
             .distinctUntilChanged()
             .collect { (scrolling, explicit, atTail) ->
+                // Il volo/runway possiede già la coda: marcare letto qui
+                // rimuoverebbe il divider (remisura strutturale) nel mezzo
+                // del moto. Tocca al prossimo evento a volo finito.
                 if (scrolling || explicit || !atTail) return@collect
+                if (flightText != null || runwayHoldPx != null || runwayDraining) return@collect
                 withFrameNanos { }
                 if (listState.isScrollInProgress || explicitScrollInProgress || !listState.isAtChatTail()) {
                     return@collect
@@ -1354,10 +1390,144 @@ fun ChatScreen(
     LaunchedEffect(listState) {
         viewModel.scrollToLatestAfterSend.collect {
             // Sending is an explicit newest-message request: even if the reader was
-            // looking at history, the just-sent message must become visible.
+            // looking at history, the just-sent message must become visible. Ma se
+            // il volo è partito al tap siamo già in coda: basta l'ancoraggio,
+            // senza una seconda animazione in fila a quella del follow-effect.
             withFrameNanos { }
-            runExplicitChatScroll(index = 0, followTail = true)
+            if (flightText != null || listState.isAtChatTail()) {
+                requestChatTail()
+            } else {
+                runExplicitChatScroll(index = 0, followTail = true)
+            }
         }
+    }
+
+    // Send-flight ghost (motd-style), launched on TAP so the tapped line never
+    // vanishes: the ghost stays pinned glyph-for-glyph where the composer had
+    // it, morphs toward the outgoing side, then rises to the tail slot while
+    // the list scrolls there. Timed, draw-phase only. Cancelled when the send
+    // cannot produce a row (error, multiline confirm dialog); slash commands
+    // never fly (see sendFlightEligible).
+    // seriale degli altri scroll), non all'arrivo della riga via rete.
+    // (Stati volo/runway dichiarati sopra, prima dell'effetto markRead.)
+    fun startRunwayDrain() {
+        val hold = runwayHoldPx ?: return
+        if (runwayDraining) return
+        runwayDraining = true
+        flightScope.launch {
+            runwayDrain.snapTo(hold)
+            runwayDrain.animateTo(0f, tween(150))
+            runwayHoldPx = null
+            runwayDraining = false
+        }
+    }
+
+    fun cancelFlight() {
+        if (flightText == null && runwayHoldPx == null) return
+        flightText = null
+        val current = runwayHoldPx
+            ?: ((ghostHpx?.toFloat() ?: runwayEstPx) * sendFlightRise(flightProgress.value))
+        if (current > 0.5f) {
+            runwayHoldPx = current
+            startRunwayDrain()
+        } else {
+            runwayHoldPx = null
+        }
+    }
+
+    fun beginFlight(snapshot: String) {
+        if (!sendFlightEligible(snapshot, displayMode == ChatDisplayMode.IRC_LINE, isServer)) {
+            flightLog("skip eligible=false textLen=${snapshot.length} ircLine=${displayMode == ChatDisplayMode.IRC_LINE} server=$isServer")
+            return
+        }
+        val fieldPos = composerFieldPosWin
+        val fieldSize = composerFieldSizePx
+        val box = listBoxWin
+        if (fieldPos == null || fieldSize == null || box == null) {
+            flightLog("skip measure-null field=$fieldPos size=$fieldSize box=$box")
+            return
+        }
+        // Glyph origin ≈ text start: past the 48dp leading icon + inner padding,
+        // vertically centered on the bodyLarge line (single-line flights only).
+        // Tight/grouping come farà la lista: il ghost deve coincidere con la
+        // riga d'atterraggio o l'ora salta inline<->sotto all'handoff.
+        val now = System.currentTimeMillis()
+        val sender = myNick ?: viewerUsername
+        flightTight = ghostTightFor(
+            timelineRows.lastOrNull()?.messages?.lastOrNull(),
+            now,
+            sender,
+        )
+        flightSentAt = now
+        flightStart = Offset(
+            fieldPos.x + flightTextStartPadPx,
+            fieldPos.y + (fieldSize.height - flightLineHeightPx) / 2f,
+        ) - box
+        ghostHpx = null
+        runwayHoldPx = null
+        newestAtTap = tailNewestId
+        flightErrorAtLaunch = error
+        flightText = snapshot
+        flightToken++
+        flightLog("begin token=$flightToken start=$flightStart tight=$flightTight newestAtTap=$newestAtTap")
+        // Coda ottimistica: la lista va in coda subito al tap (stessa coda
+        // seriale degli altri scroll), non all'arrivo della riga via rete.
+        flightScope.launch { requestChatTail() }
+    }
+
+    val runwayShift: () -> Float = {
+        when {
+            runwayDraining -> runwayDrain.value
+            flightText != null -> (ghostHpx?.toFloat() ?: runwayEstPx) * sendFlightRise(flightProgress.value)
+            runwayHoldPx != null -> (runwayHoldPx ?: 0f)
+            else -> 0f
+        }
+    }
+
+    LaunchedEffect(flightToken) {
+        if (flightText == null) return@LaunchedEffect
+        flightProgress.snapTo(0f)
+        val token = flightToken
+        try {
+            flightProgress.animateTo(1f, tween(SEND_FLIGHT_DURATION_MS))
+        } catch (e: CancellationException) {
+            // Atterraggio precoce (watcher tailNewestId sotto): l'animazione da
+            // 120ms ha preso il possesso del driver, si cade nel cleanup normale.
+        }
+        if (flightToken != token) return@LaunchedEffect
+        if (messagesState.value.lastOrNull()?.id != newestAtTap) {
+            flightLog("end landed newest=${messagesState.value.lastOrNull()?.id}")
+            flightText = null
+        } else {
+            // Rete lenta: la riga non c'è ancora, tieni il varco finché arriva.
+            flightLog("end hold")
+            runwayHoldPx = ghostHpx?.toFloat() ?: runwayEstPx
+            flightText = null
+        }
+    }
+    // A send that raises an error or the multiline dialog leaves no row behind.
+    LaunchedEffect(error) {
+        if (flightText != null && error != null && error != flightErrorAtLaunch) cancelFlight()
+    }
+    LaunchedEffect(pendingMultiLineSend) {
+        if (flightText != null && pendingMultiLineSend != null) cancelFlight()
+    }
+    // La riga vera è arrivata: se il volo è ancora in corso lo si completa in
+    // fretta invece di farlo volare sopra la riga (doppio testo visibile),
+    // altrimenti si drena il varco tenuto.
+    LaunchedEffect(tailNewestId) {
+        if (tailNewestId == null || tailNewestId == newestAtTap) return@LaunchedEffect
+        if (flightText != null) {
+            flightLog("early-finish newest=$tailNewestId")
+            flightScope.launch { flightProgress.animateTo(1f, tween(120)) }
+        } else if (runwayHoldPx != null) {
+            startRunwayDrain()
+        }
+    }
+    LaunchedEffect(runwayHoldPx) {
+        if (runwayHoldPx == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(3000)
+        startRunwayDrain()
     }
     LaunchedEffect(listState, usePaging) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
@@ -1786,20 +1956,6 @@ fun ChatScreen(
                 val canSendDraft = draftFieldValue.text.isNotBlank()
                 val canSendAttachment = pendingUploads.any { !it.requiresConfirmation }
                 val hasSendableText = canSendDraft || canSendAttachment
-                    val sendScale by animateFloatAsState(
-                        targetValue = when {
-                            isSending -> 0.9f
-                            hasSendableText -> 1.08f
-                            else -> 1f
-                        },
-                        animationSpec = spring(),
-                        label = "send_button_scale",
-                    )
-                    val sendRotation by animateFloatAsState(
-                        targetValue = if (isSending) 6f else 0f,
-                        animationSpec = tween(180),
-                        label = "send_button_rotation",
-                    )
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
                 val attachFileLabel = stringResource(R.string.cd_attach_file)
                 val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
@@ -1930,6 +2086,10 @@ fun ChatScreen(
                                 .weight(1f)
                                 .heightIn(max = 120.dp)
                                 .onSizeChanged { composerHeightPx = it.height }
+                                .onGloballyPositioned {
+                                    composerFieldPosWin = it.positionInWindow()
+                                    composerFieldSizePx = it.size
+                                }
                                 .focusRequester(draftFocusRequester)
                                 .onFocusChanged { focusState ->
                                     shouldScrollToBottomOnIme = if (focusState.isFocused) {
@@ -2035,16 +2195,12 @@ fun ChatScreen(
                         FilledIconButton(
                             onClick = {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                val snapshot = draftFieldValue.text
                                 viewModel.send()
+                                beginFlight(snapshot)
                             },
-                            enabled = !isSending && !isUploading && hasSendableText,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .graphicsLayer {
-                                    scaleX = sendScale
-                                    scaleY = sendScale
-                                    rotationZ = sendRotation
-                                },
+                            enabled = !isUploading && hasSendableText,
+                            modifier = Modifier.size(52.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -2052,30 +2208,13 @@ fun ChatScreen(
                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
                         ) {
-                            AnimatedContent(
-                                targetState = isSending,
-                                transitionSpec = {
-                                    fadeIn(animationSpec = tween(120)) togetherWith
-                                        fadeOut(animationSpec = tween(90))
-                                },
-                                label = "send_button_content",
-                            ) { sending ->
-                                if (sending) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.AutoMirrored.Outlined.Send,
-                                        contentDescription = stringResource(R.string.cd_send),
-                                        tint = if (hasSendableText) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
+                            Icon(
+                                Icons.AutoMirrored.Outlined.Send,
+                                contentDescription = stringResource(R.string.cd_send),
+                                tint = if (hasSendableText) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
                     }
@@ -2084,7 +2223,13 @@ fun ChatScreen(
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .onGloballyPositioned { listBoxWin = it.positionInWindow() }
+                .onSizeChanged { listBoxSize = it },
+        ) {
             when {
                 showHistoryLoading -> {
                     ResentinLoadingState(
@@ -2146,7 +2291,29 @@ fun ChatScreen(
                 onMessageMenu = stableMessageMenu,
                 pagedMessages = pagedMessages.takeIf { usePaging },
                 channelKey = "$networkSlug/$channelName",
+                listShift = runwayShift,
             )
+            val flyingText = flightText
+            val flyingStart = flightStart
+            if (flyingText != null && flyingStart != null && listBoxSize != IntSize.Zero) {
+                SendFlightOverlay(
+                    text = flyingText,
+                    senderNick = myNick ?: viewerUsername,
+                    networkSlug = networkSlug,
+                    channelName = channelName,
+                    progress = { flightProgress.value },
+                    start = flyingStart,
+                    boxSize = listBoxSize,
+                    renderCache = renderCache,
+                    members = members,
+                    density = messageDensity,
+                    showSeconds = showSeconds,
+                    coloredNicklist = coloredNicklist,
+                    tight = flightTight,
+                    sentAt = flightSentAt,
+                    onMeasuredHeightPx = { ghostHpx = it },
+                )
+            }
             if (isLoadingOlder) {
                 Surface(
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp),
@@ -3005,7 +3172,10 @@ fun ChatScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmMultiLineSend) {
+                TextButton(onClick = {
+                    beginFlight(pendingSend.substringAfterLast('\n'))
+                    viewModel.confirmMultiLineSend()
+                }) {
                     Text(stringResource(R.string.cd_send))
                 }
             },
@@ -3490,7 +3660,7 @@ internal fun UnreadDivider(density: MessageDensity) {
 
 /** The nick's highest-priority role sigil (~&@%+), or "" if they hold none / aren't a
  * known member (e.g. a query partner, who never appears in a channel's member list). */
-private fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
+internal fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
     val member = members.find { it.nick.equals(nick, ignoreCase = true) } ?: return ""
     return highestSigil(sigilsOf(member))?.toString().orEmpty()
 }
@@ -3982,7 +4152,7 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
 }
 
 @Composable
-private fun BubbleRow(
+internal fun BubbleRow(
     message: MessageEntity,
     renderCache: MessageRenderCache,
     formatted: FormattedEvent.Chat,
