@@ -15,6 +15,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import androidx.paging.compose.LazyPagingItems
@@ -62,6 +63,10 @@ internal fun ChatMessageList(
     onReply: (String, String) -> Unit,
     onMessageMenu: (MessageMenuTarget) -> Unit,
     channelKey: String? = null,
+    // Runway del send-flight: alza l'intera lista per aprire sotto il varco
+    // dove atterra il ghost. Lettura differita (motd-style): il chiamante passa
+    // { valore } e la lettura avviene nel graphicsLayer, mai in composition.
+    listShift: () -> Float = { 0f },
 ) {
     val scrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
@@ -71,7 +76,9 @@ internal fun ChatMessageList(
     val renderedDividerIndex = dividerIndex?.let { data.timelineRows.size - it }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { translationY = -listShift() },
         reverseLayout = true,
         contentPadding = PaddingValues(vertical = 8.dp),
     ) {
