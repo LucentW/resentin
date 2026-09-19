@@ -59,6 +59,11 @@ class SlashCommandTest {
     }
 
     @Test
+    fun formatsMeAsCtcpActionBody() {
+        assertEquals("\u0001ACTION waves hello\u0001", ctcpActionBody("waves hello"))
+    }
+
+    @Test
     fun completionAddsSpaceKeepsSuffixAndPlacesCursorBeforeSuffix() {
         val whois = slashCommandCatalog.first { it.name == "whois" }
 
