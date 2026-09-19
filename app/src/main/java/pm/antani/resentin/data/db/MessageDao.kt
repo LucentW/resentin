@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.paging.PagingSource
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -11,6 +12,31 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName ORDER BY id ASC")
     fun observeMessages(networkSlug: String, channelName: String): Flow<List<MessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
+    suspend fun countMessages(networkSlug: String, channelName: String): Int
+    @Query("SELECT COUNT(*) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
+    fun observeMessageCount(networkSlug: String, channelName: String): Flow<Int>
+
+    @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName ORDER BY id ASC LIMIT :limit OFFSET :offset")
+    suspend fun loadMessagesPage(networkSlug: String, channelName: String, limit: Int, offset: Int): List<MessageEntity>
+
+    /** Keyset paging for [MessagePagingSource]: newest-first windows that stay stable
+     * when new rows arrive (OFFSET windows shift under inserts and skip/duplicate).
+     * Keys are message ids; bounds are exclusive except [loadPageAtOrBefore], which
+     * anchors a refresh on the visible row itself. */
+    @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName ORDER BY id DESC LIMIT :limit")
+    suspend fun loadNewestPage(networkSlug: String, channelName: String, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName AND id <= :maxId ORDER BY id DESC LIMIT :limit")
+    suspend fun loadPageAtOrBefore(networkSlug: String, channelName: String, maxId: Long, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName AND id > :minId ORDER BY id ASC LIMIT :limit")
+    suspend fun loadNewerThan(networkSlug: String, channelName: String, minId: Long, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName AND id < :maxId ORDER BY id DESC LIMIT :limit")
+    suspend fun loadOlderThan(networkSlug: String, channelName: String, maxId: Long, limit: Int): List<MessageEntity>
+
 
     @Query("SELECT MAX(id) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
     suspend fun maxId(networkSlug: String, channelName: String): Long?

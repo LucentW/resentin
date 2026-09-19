@@ -1,12 +1,27 @@
 package pm.antani.resentin.ui.chat
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+
 import pm.antani.resentin.ui.theme.ResentinSpacing
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -20,7 +35,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,13 +42,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,11 +73,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.History
@@ -70,12 +92,17 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextField
@@ -88,17 +115,26 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle as collectAsState
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,14 +144,24 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextRange
@@ -130,12 +176,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import java.time.Instant
+import java.util.LinkedHashMap
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import pm.antani.resentin.R
@@ -184,44 +238,408 @@ import pm.antani.resentin.ui.theme.LocalResentinChatFontFamily
 import pm.antani.resentin.ui.theme.LocalResentinCodeFontFamily
 
 /**
- * Moves to the final row without LazyColumn's long-distance item-by-item spring.
- * That default animation can visibly pause while new rows are measured. Small,
- * timed pixel chunks keep the motion continuous; the final snap is only a residual
- * correction after the bottom anchor has been composed.
+ * The reverse list uses index 0 as its newest-message anchor. Allow a small
+ * measured tolerance so a settled IME/composer resize is still considered the
+ * tail instead of disabling follow mode for a few pixels.
  */
-private suspend fun LazyListState.animateToChatBottom() {
-    repeat(8) {
-        val layoutInfo = layoutInfo
-        val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return
-        val targetIndex = layoutInfo.totalItemsCount - 1
-        if (targetIndex < 0) return
+private const val AUTO_FOLLOW_BOTTOM_TOLERANCE_PX = 64
 
-        val lastItemEnd = lastVisible.offset + lastVisible.size
-        if (lastVisible.index >= targetIndex && lastItemEnd <= layoutInfo.viewportEndOffset) return
-
-        val averageItemSize = layoutInfo.visibleItemsInfo
-            .map { it.size }
-            .average()
-            .toFloat()
-            .coerceAtLeast(1f)
-        val remainingItems = (targetIndex - lastVisible.index).coerceAtLeast(0)
-        val clippedTail = (lastItemEnd - layoutInfo.viewportEndOffset).coerceAtLeast(0)
-        val estimatedDistance = remainingItems * averageItemSize + clippedTail
-        val distance = estimatedDistance.coerceIn(240f, 1400f)
-        val duration = (distance / 4f).roundToInt().coerceIn(120, 260)
-        animateScrollBy(
-            value = distance,
-            animationSpec = tween(durationMillis = duration, easing = LinearOutSlowInEasing),
-        )
-    }
-
-    layoutInfo.totalItemsCount.takeIf { it > 0 }?.let { scrollToItem(it - 1) }
+private fun LazyListState.isAtChatTail(): Boolean {
+    return layoutInfo.totalItemsCount > 0 &&
+        firstVisibleItemIndex == 0 &&
+        firstVisibleItemScrollOffset <= AUTO_FOLLOW_BOTTOM_TOLERANCE_PX
+}
+internal fun reverseChatListIndex(rowIndex: Int, rowCount: Int, dividerIndex: Int?): Int {
+    val renderedIndex = rowCount - 1 - rowIndex
+    val renderedDivider = dividerIndex?.let { rowCount - it }
+    return renderedIndex + if (renderedDivider != null && renderedIndex >= renderedDivider) 1 else 0
 }
 
+private fun flightLog(msg: String) {
+    if (pm.antani.resentin.BuildConfig.DEBUG) android.util.Log.d("SendFlight", msg)
+}
 private val TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm")
 private val TIME_FORMATTER_WITH_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss")
 
-private fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
+
+@Composable
+private fun ReplyComposerBar(
+    reply: PendingReply,
+    coloredNicklist: Boolean,
+    onCancel: () -> Unit,
+) {
+    val nickColor = if (coloredNicklist) colorForNick(reply.nick, isLightTheme()) else MaterialTheme.colorScheme.primary
+    val preview = remember(reply.messageBody) { buildReplyPreview(reply.messageBody) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                .fillMaxHeight()
+                .width(3.dp)
+                    .clip(MaterialTheme.shapes.small)
+                .background(nickColor),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp),
+            ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.chat_replying_to_prefix),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = reply.nick,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = nickColor,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+                Text(
+                text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = stringResource(R.string.cd_cancel),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+@Composable
+private fun AttachmentPreviewCard(
+    attachment: PendingUploadConfirm,
+    isUploading: Boolean,
+    isFailed: Boolean,
+    onRemove: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val removeAttachmentLabel = stringResource(R.string.chat_attachment_remove)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+        ),
+        tonalElevation = 1.dp,
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AttachmentThumbnail(
+                    attachment = attachment,
+                    modifier = Modifier.size(56.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Text(
+                        text = attachment.fileName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = listOf(attachment.mimeType, formatFileSizeOrUnknown(attachment.sizeBytes))
+                            .joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    if (isFailed) {
+                        Text(
+                            text = stringResource(R.string.chat_upload_failed),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                if (isFailed && !isUploading) {
+                    IconButton(
+                        onClick = onRetry,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = stringResource(R.string.chat_history_retry),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onRemove,
+                    enabled = !isUploading,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = removeAttachmentLabel
+                        },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            AnimatedVisibility(
+                visible = isUploading,
+                enter = expandVertically(animationSpec = tween(180)) + fadeIn(animationSpec = tween(120)),
+                exit = shrinkVertically(animationSpec = tween(140)) + fadeOut(animationSpec = tween(90)),
+            ) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 10.dp)
+                        .clip(MaterialTheme.shapes.small),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                )
+            }
+        }
+    }
+}
+}
+
+@Composable
+private fun AttachmentThumbnail(
+    attachment: PendingUploadConfirm,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val isImage = attachment.mimeType.startsWith("image/")
+    val bitmap by produceState<Bitmap?>(initialValue = null, attachment.uri, attachment.mimeType) {
+        value = if (isImage) {
+            withContext(Dispatchers.IO) {
+                decodeLocalThumbnail(context, attachment.uri)
+            }
+        } else {
+            null
+        }
+    }
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = attachment.fileName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.AttachFile,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+private fun decodeLocalThumbnail(context: Context, uri: Uri): Bitmap? {
+    return runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val source = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val maxDimension = maxOf(info.size.width, info.size.height).coerceAtLeast(1)
+                val targetDimension = 256
+                val scale = maxDimension.toFloat() / targetDimension
+                decoder.setTargetSize(
+                    (info.size.width / scale).toInt().coerceAtLeast(1),
+                    (info.size.height / scale).toInt().coerceAtLeast(1),
+                )
+                decoder.isMutableRequired = false
+            }
+        } else {
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = 4
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+        }
+    }.getOrNull()
+}
+
+private fun inlineImageUrlFromText(body: String): String? {
+    val candidate = body.trim()
+    if (candidate.isEmpty() || candidate.any(Char::isWhitespace)) return null
+    if (!candidate.startsWith("https://") && !candidate.startsWith("http://")) return null
+    val path = candidate.substringBefore('?').substringBefore('#').lowercase()
+    val imageExtensions = listOf(".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif")
+    return candidate.takeIf { imageExtensions.any(path::endsWith) }
+}
+
+@Composable
+private fun InlineAttachmentImage(url: String) {
+    var viewerOpen by rememberSaveable(url) { mutableStateOf(false) }
+    val bitmap by produceState<Bitmap?>(initialValue = null, url) {
+        value = withContext(Dispatchers.IO) {
+            decodeRemoteThumbnail(url)
+        }
+    }
+    bitmap?.let { loaded ->
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 240.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .clickable { viewerOpen = true },
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+            ),
+        ) {
+            Image(
+                bitmap = loaded.asImageBitmap(),
+                contentDescription = url,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+            )
+        }
+    }
+    if (viewerOpen && bitmap != null) {
+        Dialog(
+            onDismissRequest = { viewerOpen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.96f)),
+            ) {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = url,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .clickable { viewerOpen = false },
+                )
+                IconButton(
+                    onClick = { viewerOpen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(48.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = stringResource(R.string.cd_cancel),
+                        tint = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun decodeRemoteThumbnail(url: String): Bitmap? {
+    val connection = runCatching {
+        URL(url).openConnection() as HttpURLConnection
+    }.getOrNull() ?: return null
+    return try {
+        connection.connectTimeout = 8_000
+        connection.readTimeout = 12_000
+        connection.instanceFollowRedirects = true
+        if (connection.responseCode !in 200..299) return null
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = 4
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        connection.inputStream.use { stream ->
+            BitmapFactory.decodeStream(stream, null, options)
+        }
+    } catch (_: Exception) {
+        null
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private fun formatFileSizeOrUnknown(bytes: Long): String =
+    if (bytes >= 0L) formatFileSize(bytes) else "—"
+
+@Composable
+private fun AnimatedReplyComposerBar(
+    reply: PendingReply,
+    coloredNicklist: Boolean,
+    onCancel: () -> Unit,
+) {
+    AnimatedContent(
+        targetState = reply,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(160)) + slideInVertically(
+                initialOffsetY = { height -> height / 4 },
+                animationSpec = tween(200),
+            )) togetherWith
+                (fadeOut(animationSpec = tween(110)) + slideOutVertically(
+                    targetOffsetY = { height -> -height / 4 },
+                    animationSpec = tween(160),
+                ))
+        },
+        label = "reply_composer_change",
+    ) { animatedReply ->
+        ReplyComposerBar(
+            reply = animatedReply,
+            coloredNicklist = coloredNicklist,
+            onCancel = onCancel,
+        )
+    }
+}
+internal fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
     val formatter = if (showSeconds) TIME_FORMATTER_WITH_SECONDS else TIME_FORMATTER
     return Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(formatter)
 }
@@ -247,8 +665,12 @@ fun ChatScreen(
     // the target stays above what's cached.
     jumpToServerTime: Long = 0L,
 ) {
-    val messages by viewModel.messages.collectAsState()
+    val messagesState = viewModel.messages.collectAsState()
+    val messages by messagesState
     val allMessages by viewModel.allMessages.collectAsState()
+    val messageCount by viewModel.messageCount.collectAsState()
+    val pagedMessages = viewModel.pagedMessages.collectAsLazyPagingItems()
+    val renderCache = remember { MessageRenderCache() }
     val topic by viewModel.topic.collectAsState()
     val channelModes by viewModel.channelModes.collectAsState()
     val topicSubtitle = remember(channelModes, topic) {
@@ -260,6 +682,7 @@ fun ChatScreen(
     val peerAvatarUrl by viewModel.peerAvatarUrl.collectAsState()
     val peerAvatarBitmap = rememberAvatarBitmap(peerAvatarUrl, viewModel::fetchAvatarBytes)
     val draft by viewModel.draft.collectAsState()
+    val pendingReply by viewModel.pendingReply.collectAsState()
     // Local TextFieldValue (not just the String from the ViewModel) so an externally
     // triggered draft change — a swipe-to-reply prefill, or send() clearing it — can
     // explicitly place the cursor, instead of leaning on Compose's default "diff the new
@@ -267,7 +690,11 @@ fun ChatScreen(
     // reliably land the cursor at the end (the reported bug: reply prefilled the text but
     // the caret stayed wherever it last was, not focused, not at the end).
     var draftFieldValue by remember { mutableStateOf(TextFieldValue(draft)) }
+    var composerToolsOpen by remember { mutableStateOf(false) }
+    var recentMentionNicks by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var selectedSuggestionIndex by remember { mutableStateOf(0) }
     val draftFocusRequester = remember { FocusRequester() }
+    val hapticFeedback = LocalHapticFeedback.current
     LaunchedEffect(draft) {
         if (draftFieldValue.text != draft) {
             draftFieldValue = TextFieldValue(text = draft, selection = TextRange(draft.length))
@@ -292,7 +719,9 @@ fun ChatScreen(
     }
     val error by viewModel.error.collectAsState()
     val pendingMultiLineSend by viewModel.pendingMultiLineSend.collectAsState()
-    val pendingUpload by viewModel.pendingUpload.collectAsState()
+    val pendingUploads by viewModel.pendingUploads.collectAsState()
+    val uploadingUri by viewModel.uploadingUri.collectAsState()
+    val failedUploadUris by viewModel.failedUploadUris.collectAsState()
     val whois by viewModel.selectedWhois.collectAsState()
     val ownSigils by viewModel.ownSigils.collectAsState()
     val privilegeModes by viewModel.privilegeModes.collectAsState()
@@ -304,8 +733,14 @@ fun ChatScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedSearchIndex by remember { mutableStateOf(0) }
-    val searchMatches = remember(messages, searchQuery) {
-        findLocalChatMatches(messages, searchQuery)
+    val searchMatches by produceState(
+        initialValue = emptyList<MessageEntity>(),
+        key1 = messages,
+        key2 = searchQuery,
+    ) {
+        value = withContext(Dispatchers.Default) {
+            findLocalChatMatches(messages, searchQuery)
+        }
     }
     val selectedSearchMessageId = searchMatches.getOrNull(selectedSearchIndex)?.id
     val searchFocusRequester = remember { FocusRequester() }
@@ -331,20 +766,21 @@ fun ChatScreen(
     }
 
     val activeMention = remember(draftFieldValue) { mentionQueryAtCursor(draftFieldValue) }
-    val mentionSuggestions = remember(activeMention, members) {
-        activeMention?.let { findMentionSuggestions(it.query, members) }.orEmpty()
+    val mentionSuggestions = remember(activeMention, members, recentMentionNicks) {
+        activeMention?.let { findMentionSuggestions(it.query, members, recentMentionNicks) }.orEmpty()
     }
     val slashSuggestions = remember(draftFieldValue.text) {
         suggestSlashCommands(draftFieldValue.text)
     }
     val availableChannels by viewModel.availableChannels.collectAsState()
     val availableNetworks by viewModel.availableNetworks.collectAsState()
-    val slashArgumentSuggestions = remember(draftFieldValue.text, members, availableChannels, availableNetworks) {
+    val slashArgumentSuggestions = remember(draftFieldValue.text, members, availableChannels, availableNetworks, recentMentionNicks) {
         suggestSlashArguments(
             draftFieldValue.text,
             members.map { it.nick },
             availableChannels,
             availableNetworks,
+            recentNicks = recentMentionNicks,
         )
     }
 
@@ -358,6 +794,10 @@ fun ChatScreen(
         val newValue = TextFieldValue(newText, TextRange(newCursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(newText)
+        recentMentionNicks = listOf(nick) + recentMentionNicks
+            .filterNot { it.equals(nick, ignoreCase = true) }
+            .take(15)
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
     }
 
@@ -366,6 +806,7 @@ fun ChatScreen(
         val newValue = TextFieldValue(completion.text, TextRange(completion.cursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(completion.text)
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
     }
     fun completeSlashArgument(suggestion: SlashArgumentSuggestion) {
@@ -373,7 +814,34 @@ fun ChatScreen(
         val newValue = TextFieldValue(completion.text, TextRange(completion.cursor))
         draftFieldValue = newValue
         viewModel.onDraftChange(completion.text)
+        if (members.any { it.nick.equals(suggestion.value, ignoreCase = true) }) {
+            recentMentionNicks = listOf(suggestion.value) + recentMentionNicks
+                .filterNot { it.equals(suggestion.value, ignoreCase = true) }
+                .take(15)
+        }
+        selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
+    }
+    val activeSuggestionCount = when {
+        mentionSuggestions.isNotEmpty() -> mentionSuggestions.size
+        slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.size
+        slashSuggestions.isNotEmpty() -> slashSuggestions.size
+        else -> 0
+    }
+    LaunchedEffect(activeMention?.query, draftFieldValue.text, activeSuggestionCount) {
+        selectedSuggestionIndex = 0
+    }
+    fun moveSuggestionSelection(step: Int) {
+        selectedSuggestionIndex = cycleSuggestionIndex(selectedSuggestionIndex, step, activeSuggestionCount)
+    }
+    fun selectActiveSuggestion(): Boolean {
+        when {
+            mentionSuggestions.isNotEmpty() -> mentionSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeMention(it.nick) }
+            slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashArgument(it) }
+            slashSuggestions.isNotEmpty() -> slashSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashCommand(it) }
+            else -> return false
+        }
+        return true
     }
     val openReferencedChannel = remember(channelName, viewModel) {
         { referencedChannel: String ->
@@ -410,10 +878,19 @@ fun ChatScreen(
     val highlightNotice by viewModel.highlightNotice.collectAsState()
     val pendingDccOffers by viewModel.pendingDccOffers.collectAsState()
     val showCredits by viewModel.showCredits.collectAsState()
-    var initialListIndex by remember { mutableStateOf<Int?>(null) }
-    val positioned = initialListIndex != null
-    val listState = remember(initialListIndex) {
-        LazyListState(firstVisibleItemIndex = initialListIndex ?: 0)
+    // A normal channel can use raw paging only when the smart presence filter and
+    // unread divider are inactive. Those two features depend on rows outside the
+    // currently loaded page; keeping them on the full timeline preserves behavior.
+    val pagingEligible = messageCount > 300 &&
+        initialReadCursorReady &&
+        initialReadCursor == null &&
+        readCursor == null &&
+        (isQuery || isServer || !smartPresenceFilter)
+    var initialListIndex by remember(networkSlug, channelName) { mutableStateOf<Int?>(null) }
+    var initialScrollApplied by remember(networkSlug, channelName) { mutableStateOf(false) }
+    val positioned = pagingEligible || initialListIndex != null
+    val listState = remember(initialListIndex, pagingEligible) {
+        LazyListState(firstVisibleItemIndex = if (pagingEligible) 0 else initialListIndex ?: 0)
     }
     val showHistoryLoading = messages.isEmpty() && (!initialHistoryReady || isRefreshing)
     val showHistoryError = messages.isEmpty() && initialHistoryReady && error != null && !isRefreshing
@@ -434,6 +911,21 @@ fun ChatScreen(
     // Long-press message menu target (Copy / Reply / !addquote / Select… / user
     // card — cicchetto MessageContextMenu parity). Null = menu closed.
     var messageMenuTarget by remember { mutableStateOf<MessageMenuTarget?>(null) }
+    val stableReply: (String, String) -> Unit = remember(viewModel) {
+        { nick, body -> viewModel.reply(nick, body) }
+    }
+    val stableMessageMenu: (MessageMenuTarget) -> Unit = remember {
+        { target -> messageMenuTarget = target }
+    }
+    val togglePresence: (Long) -> Unit = remember {
+        { burstKey ->
+            expandedPresenceBursts = if (burstKey in expandedPresenceBursts) {
+                expandedPresenceBursts - burstKey
+            } else {
+                expandedPresenceBursts + burstKey
+            }
+        }
+    }
     // Text-selection latch: the one message id whose body renders inside a
     // SelectionContainer (cicchetto's "Select…" escape hatch). Gestures on that
     // row are disabled while latched; back clears it.
@@ -441,8 +933,12 @@ fun ChatScreen(
     if (selectingMessageId != null) {
         BackHandler { selectingMessageId = null }
     }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let(viewModel::uploadFile)
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        uris.forEach(viewModel::uploadFile)
+    }
+
+    if (composerToolsOpen) {
+        BackHandler { composerToolsOpen = false }
     }
 
     LaunchedEffect(Unit) {
@@ -461,11 +957,6 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.scrollToLatestAfterSend.collect {
-            listState.animateToChatBottom()
-        }
-    }
 
     // Position (within the displayed timeline) of the first row past the read cursor —
     // also where the "Hai letto fino a qui" divider renders. During the first layout
@@ -474,19 +965,73 @@ fun ChatScreen(
     // confirmed read, without requiring a navigation away and back.
     // Null when there's nothing to mark (cursor still loading, never read anything, or
     // everything is already read).
-    val dividerCursor = if (positioned) readCursor ?: initialReadCursor else initialReadCursor
+    val dividerCursor = if (initialScrollApplied) readCursor ?: initialReadCursor else initialReadCursor
     val smartFilterActive = smartPresenceFilter && !searchOpen && !revealAllPresenceEvents && !isQuery && !isServer
     val timelineMessages = if (revealAllPresenceEvents) allMessages else messages
-    val timelineRows = remember(timelineMessages, dividerCursor, smartFilterActive, myNick) {
-        buildChatTimeline(
-            timelineMessages,
-            dividerCursor,
-            smartPresenceFilterEnabled = smartFilterActive,
-            alwaysVisibleSender = myNick,
-        )
+    var timelineRows by remember(networkSlug, channelName) { mutableStateOf<List<ChatTimelineRow>>(emptyList()) }
+    LaunchedEffect(timelineMessages, dividerCursor, smartFilterActive, myNick, pagingEligible) {
+        if (pagingEligible) {
+            timelineRows = emptyList()
+        } else {
+            timelineRows = withContext(Dispatchers.Default) {
+                buildChatTimeline(
+                    timelineMessages,
+                    dividerCursor,
+                    smartPresenceFilterEnabled = smartFilterActive,
+                    alwaysVisibleSender = myNick,
+                )
+            }
+        }
     }
     val dividerIndex = dividerCursor?.let { cursor ->
-        timelineRows.indexOfFirst { row -> row.messages.any { it.id > cursor } }.takeIf { it >= 0 }
+        timelineRows.indexOfFirst { row ->
+            row.messages.any { message ->
+                message.id > cursor && !message.sender.equals(myNick, ignoreCase = true)
+            }
+        }.takeIf { it >= 0 }
+    }
+    val usePaging = pagingEligible && !searchOpen && !revealAllPresenceEvents && dividerIndex == null
+    var pagedInitialPositioned by remember(usePaging) { mutableStateOf(false) }
+    val autoFollowTracker = remember(networkSlug, channelName) { ChatAutoFollowTracker() }
+    // F2 — un solo proprietario dello scroll: follow, jump espliciti, IME,
+    // tools e send condividono la stessa coda seriale così due animazioni non
+    // possono combattere sullo stesso LazyListState nello stesso frame.
+    val chatScrollMutex = remember(networkSlug, channelName) { Mutex() }
+    var programmaticScrolls by remember(networkSlug, channelName) { mutableStateOf(0) }
+    var explicitScrollInProgress by remember(networkSlug, channelName) { mutableStateOf(false) }
+    val positionSettled = if (usePaging) pagedInitialPositioned else initialScrollApplied
+
+    suspend fun scrollToChatIndex(index: Int, animate: Boolean) {
+        chatScrollMutex.withLock {
+            programmaticScrolls++
+            try {
+                if (animate) listState.animateScrollToItem(index)
+                else listState.scrollToItem(index)
+            } finally {
+                programmaticScrolls--
+            }
+        }
+    }
+
+    suspend fun requestChatTail() {
+        if (explicitScrollInProgress) return
+        chatScrollMutex.withLock {
+            autoFollowTracker.requestFollow()
+            programmaticScrolls++
+            try {
+                // First request: apply the anchor together with the incoming row.
+                listState.requestScrollToItem(0)
+                withFrameNanos { }
+                // Second request: reinforce the anchor after the new row and the composer
+                // have both completed their following layout pass.
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.requestScrollToItem(0)
+                }
+                withFrameNanos { }
+            } finally {
+                programmaticScrolls--
+            }
+        }
     }
 
     // List indices of the mention rows (own nick / /hilight match from another
@@ -500,10 +1045,12 @@ fun ChatScreen(
             val indices = mutableListOf<Int>()
             timelineRows.forEachIndexed { index, row ->
                 if (row.messages.any { isMentionRow(it, myNick, isQuery, highlightPatterns) }) {
-                    indices.add(index + if (divider != null && index >= divider) 1 else 0)
+                    val renderedIndex = timelineRows.lastIndex - index
+                    val renderedDivider = divider?.let { timelineRows.size - it }
+                    indices.add(renderedIndex + if (renderedDivider != null && renderedIndex >= renderedDivider) 1 else 0)
                 }
             }
-            indices
+            indices.sorted()
         }
     }
 
@@ -511,8 +1058,9 @@ fun ChatScreen(
         if (!searchOpen || selectedSearchMessageId == null) return@LaunchedEffect
         val rowIndex = timelineRows.indexOfFirst { row -> row.messages.any { it.id == selectedSearchMessageId } }
         if (rowIndex < 0) return@LaunchedEffect
-        val listIndex = rowIndex + if (dividerIndex != null && rowIndex >= dividerIndex) 1 else 0
-        listState.animateScrollToItem(listIndex)
+        val listIndex = reverseChatListIndex(rowIndex, timelineRows.size, dividerIndex)
+        autoFollowTracker.stopFollowing()
+        scrollToChatIndex(listIndex, animate = true)
     }
 
     LaunchedEffect(pendingActivityJumpId, timelineRows, dividerIndex) {
@@ -523,8 +1071,9 @@ fun ChatScreen(
         if (row is ChatTimelineRow.PresenceSummary) {
             expandedPresenceBursts = expandedPresenceBursts + row.messages.first().id
         }
-        val listIndex = rowIndex + if (dividerIndex != null && rowIndex >= dividerIndex) 1 else 0
-        listState.animateScrollToItem(listIndex)
+        val listIndex = reverseChatListIndex(rowIndex, timelineRows.size, dividerIndex)
+        autoFollowTracker.stopFollowing()
+        scrollToChatIndex(listIndex, animate = true)
         pendingActivityJumpId = null
     }
 
@@ -536,7 +1085,7 @@ fun ChatScreen(
     var mentionJumpConsumed by remember(jumpToServerTime) { mutableStateOf(false) }
     LaunchedEffect(jumpToServerTime, messages, initialHistoryReady) {
         if (jumpToServerTime <= 0L || mentionJumpConsumed || messages.isEmpty()) return@LaunchedEffect
-        val hit = messages.filter { it.serverTime >= jumpToServerTime }.minByOrNull { it.serverTime }
+        val hit = ChatJumpResolver.firstAtOrAfterTime(messages, jumpToServerTime)
         if (hit != null) {
             pendingActivityJumpId = hit.id
             mentionJumpConsumed = true
@@ -550,10 +1099,33 @@ fun ChatScreen(
     // Land on the first unread message (per the server's read-cursor), not always the
     // bottom — only once, and only once we actually know where that is (see
     // ChatViewModel.initialReadCursorReady: null is ambiguous between "not loaded yet"
-    // and "never read anything").
-    LaunchedEffect(timelineRows, initialReadCursorReady) {
-        if (initialListIndex != null || !initialReadCursorReady || messages.isEmpty()) return@LaunchedEffect
-        initialListIndex = dividerIndex ?: (timelineRows.size - 1)
+    // and "never read anything"). F4: a parità di cursore (niente unread) la
+    // viewport salvata vince sul fondo — reopen a metà storia atterra dove
+    // lasciato; il jump da mentions ha sempre precedenza e usa il suo effetto.
+    LaunchedEffect(timelineRows, initialReadCursorReady, pagingEligible) {
+        if (pagingEligible || initialListIndex != null || !initialReadCursorReady || messages.isEmpty() || timelineRows.isEmpty()) return@LaunchedEffect
+        val viewportKey = "$networkSlug/$channelName"
+        initialListIndex = when {
+            jumpToServerTime > 0L -> dividerIndex?.let { timelineRows.size - it } ?: 0
+            dividerIndex != null -> timelineRows.size - dividerIndex
+            ChatScrollPositionStore.isParkedAtBottom(viewportKey) -> 0
+            else -> ChatScrollPositionStore.anchor(viewportKey)
+                ?.let { anchorListIndex(timelineRows, dividerIndex, it) } ?: 0
+        }
+    }
+
+    // The last message is not the same as the actual bottom: the list also owns a
+    // tail anchor after the messages. Position once after that anchor has measured.
+    LaunchedEffect(initialListIndex) {
+        if (pagingEligible || initialScrollApplied || initialListIndex == null || timelineRows.isEmpty()) {
+            return@LaunchedEffect
+        }
+        withFrameNanos { }
+        val targetIndex = dividerIndex?.let { timelineRows.size - it } ?: 0
+        if (targetIndex >= 0) {
+            scrollToChatIndex(targetIndex, animate = false)
+            initialScrollApplied = true
+        }
     }
 
     // Keep the bottom status based on the actual last composed row. In this screen
@@ -567,7 +1139,7 @@ fun ChatScreen(
     // the badge picks up a new mention the moment it lands.
     var mentionBadgeCount by remember { mutableStateOf(0) }
     var nextMentionRowIndex by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(listState, positioned, messages.isNotEmpty(), mentionRowIndices) {
+    LaunchedEffect(listState, positioned, positionSettled, messagesState.value.lastOrNull()?.id, mentionRowIndices) {
         if (!positioned || messages.isEmpty()) {
             isAtBottom = true
             showJumpToBottom = false
@@ -578,22 +1150,99 @@ fun ChatScreen(
 
         snapshotFlow {
             val info = listState.layoutInfo
-            val lastVisible = info.visibleItemsInfo.lastOrNull()
-            val totalItems = info.totalItemsCount
-            val lastVisibleIndex = lastVisible?.index ?: -1
-            val lastVisibleEnd = lastVisible?.let { it.offset + it.size } ?: Int.MIN_VALUE
-            val viewportEnd = info.viewportEndOffset
-            Triple(totalItems, lastVisibleIndex, lastVisibleEnd <= viewportEnd)
-        }.collect { (totalItems, lastVisibleIndex, lastVisibleIsFullyVisible) ->
-            val atBottom = totalItems > 0 &&
-                lastVisibleIndex >= totalItems - 1 &&
-                lastVisibleIsFullyVisible
+            val firstVisibleIndex = listState.firstVisibleItemIndex
+            val atBottom = info.totalItemsCount > 0 &&
+                firstVisibleIndex == 0 &&
+                listState.firstVisibleItemScrollOffset <= AUTO_FOLLOW_BOTTOM_TOLERANCE_PX
+            Triple(info.totalItemsCount, firstVisibleIndex, atBottom)
+        }.collect { (_, firstVisibleIndex, atBottom) ->
             isAtBottom = atBottom
             showJumpToBottom = !atBottom
-            val below = MentionScroll.mentionRowsBelowFold(mentionRowIndices, lastVisibleIndex)
-            mentionBadgeCount = below.size
-            nextMentionRowIndex = below.firstOrNull()
+            val before = MentionScroll.mentionRowsBeforeFold(mentionRowIndices, firstVisibleIndex)
+            mentionBadgeCount = before.size
+            nextMentionRowIndex = before.firstOrNull()
         }
+    }
+
+    // F4 — salva la viewport come ancora di messaggio (mai indice, mai cursor).
+    // Solo scroll utente reale: niente durante animazioni programmatiche o jump
+    // espliciti, altrimenti salveremmo la destinazione invece della lettura.
+    LaunchedEffect(listState, positionSettled) {
+        if (!positionSettled) return@LaunchedEffect
+        snapshotFlow { listState.firstVisibleItemIndex to listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (firstVisible, scrolling) ->
+                if (scrolling || programmaticScrolls > 0 || explicitScrollInProgress) return@collect
+                if (timelineRows.isEmpty()) return@collect
+                val viewportKey = "$networkSlug/$channelName"
+                val renderedDivider = dividerIndex?.let { timelineRows.size - it }
+                val rowIndex = if (renderedDivider == null || firstVisible < renderedDivider) {
+                    timelineRows.lastIndex - firstVisible
+                } else {
+                    timelineRows.lastIndex - (firstVisible - 1)
+                }
+                val anchorId = timelineRows.getOrNull(rowIndex)?.messages?.lastOrNull()?.id
+                if (anchorId != null) {
+                    ChatScrollPositionStore.putAnchor(viewportKey, anchorId)
+                    ChatScrollPositionStore.unpark(viewportKey)
+                }
+            }
+    }
+
+    var flightText by remember(networkSlug, channelName) { mutableStateOf<String?>(null) }
+    var flightToken by remember(networkSlug, channelName) { mutableStateOf(0L) }
+    var flightStart by remember(networkSlug, channelName) { mutableStateOf<Offset?>(null) }
+    var flightTight by remember(networkSlug, channelName) { mutableStateOf(false) }
+    var flightSentAt by remember(networkSlug, channelName) { mutableStateOf(0L) }
+    var flightErrorAtLaunch by remember(networkSlug, channelName) { mutableStateOf<String?>(null) }
+    val flightProgress = remember(networkSlug, channelName) { Animatable(0f) }
+    var composerFieldPosWin by remember { mutableStateOf<Offset?>(null) }
+    var composerFieldSizePx by remember { mutableStateOf<IntSize?>(null) }
+    var listBoxWin by remember { mutableStateOf<Offset?>(null) }
+    var listBoxSize by remember { mutableStateOf(IntSize.Zero) }
+    val flightLineHeightPx = with(LocalDensity.current) {
+        MaterialTheme.typography.bodyLarge.lineHeight.toPx()
+    }
+    val flightTextStartPadPx = with(LocalDensity.current) { 56.dp.toPx() }
+    val flightScope = rememberCoroutineScope()
+    var ghostHpx by remember(networkSlug, channelName) { mutableStateOf<Int?>(null) }
+    var newestAtTap by remember(networkSlug, channelName) { mutableStateOf<Long?>(null) }
+    var runwayHoldPx by remember(networkSlug, channelName) { mutableStateOf<Float?>(null) }
+    var runwayDraining by remember(networkSlug, channelName) { mutableStateOf(false) }
+    val runwayDrain = remember(networkSlug, channelName) { Animatable(0f) }
+    val runwayEstPx = with(LocalDensity.current) { 64.dp.toPx() }
+    val tailNewestId = messagesState.value.lastOrNull()?.id
+
+    // Mark the read cursor only after the list is settled at the tail. Updating it
+    // while an animation is still running removes the unread divider from the
+    // LazyColumn and forces a structural remeasure in the middle of the motion.
+    LaunchedEffect(listState, positionSettled, explicitScrollInProgress, messagesState.value.lastOrNull()?.id) {
+        if (!positionSettled) return@LaunchedEffect
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                explicitScrollInProgress,
+                listState.isAtChatTail(),
+            )
+        }
+            .distinctUntilChanged()
+            .collect { (scrolling, explicit, atTail) ->
+                // Il volo/runway possiede già la coda: marcare letto qui
+                // rimuoverebbe il divider (remisura strutturale) nel mezzo
+                // del moto. Tocca al prossimo evento a volo finito.
+                if (scrolling || explicit || !atTail) return@collect
+                if (flightText != null || runwayHoldPx != null || runwayDraining) return@collect
+                withFrameNanos { }
+                if (listState.isScrollInProgress || explicitScrollInProgress || !listState.isAtChatTail()) {
+                    return@collect
+                }
+                val renderedNewestId = timelineRows.lastOrNull()?.messages?.lastOrNull()?.id
+                val newestId = renderedNewestId ?: messagesState.value.lastOrNull()?.id
+                newestId?.let(viewModel::markRead)
+                // F4 — il lettore ha lasciato la stanza in fondo: al reopen
+                // (senza unread) si torna al fondo, non a un'ancora vecchia.
+                ChatScrollPositionStore.markParkedAtBottom("$networkSlug/$channelName")
+            }
     }
 
     // Opening the IME reduces the list viewport, but it does not change the
@@ -602,48 +1251,323 @@ fun ChatScreen(
     // composer received focus and restore that position after the IME resizes
     // the layout. If the user was reading history, keep their position.
     var shouldScrollToBottomOnIme by remember { mutableStateOf(false) }
+    var shouldScrollToBottomOnComposerTools by remember { mutableStateOf(false) }
     // Track multiline growth too: IME insets stay constant while the composer gets taller.
     var composerHeightPx by remember { mutableStateOf(0) }
+    var composerBarHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
-    LaunchedEffect(listState, composerHeightPx) {
-        snapshotFlow {
-            val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
-            Triple(
-                imeInsets.getBottom(density),
-                shouldScrollToBottomOnIme && positioned,
-                bottomIndex,
-            )
-        }.collectLatest { (imeBottom, shouldFollow, bottomIndex) ->
-            if (imeBottom <= 0 || !shouldFollow || bottomIndex < 0) return@collectLatest
-            // IME insets animate over multiple frames. Keep the tail aligned
-            // after each inset change, once the current layout has measured.
-            withFrameNanos { }
-            listState.scrollToItem(bottomIndex)
-        }
-    }
 
-    // Only auto-follow to the tail when the reader was already there — landing on the
-    // unread divider (potentially far above the bottom, e.g. after a big backfill) must
-    // NOT get yanked down the instant one more message arrives; a still-unread backlog
-    // stays exactly where the reader put it. loadOlder() prepends at the head, which
-    // doesn't change `lastOrNull()?.id`, so this never fires for that case either.
-    LaunchedEffect(messages.lastOrNull()?.id) {
-        if (positioned && messages.isNotEmpty() && isAtBottom) {
-            val bottomIndex = timelineRows.size + if (dividerIndex != null) 1 else 0
-            // During the initial REST fill, follow the cache with a snap. Once the
-            // history is ready, live messages can use the normal smooth follow.
-            if (initialHistoryReady) {
-                listState.animateScrollToItem(bottomIndex)
+    suspend fun runExplicitChatScroll(index: Int, followTail: Boolean) {
+        if (explicitScrollInProgress) return
+        chatScrollMutex.withLock {
+            explicitScrollInProgress = true
+            shouldScrollToBottomOnIme = false
+            shouldScrollToBottomOnComposerTools = false
+            if (followTail) {
+                autoFollowTracker.requestFollow()
             } else {
-                listState.scrollToItem(bottomIndex)
+                autoFollowTracker.stopFollowing()
+            }
+            programmaticScrolls++
+            try {
+                listState.animateScrollToItem(index.coerceAtLeast(0))
+                if (followTail) {
+                    // Re-anchor after the final animation frame. This handles a message
+                    // inserted while the explicit jump was running without allowing a
+                    // second scroll owner to fight the animation.
+                    listState.requestScrollToItem(0)
+                    withFrameNanos { }
+                    if (listState.layoutInfo.totalItemsCount > 0) {
+                        listState.requestScrollToItem(0)
+                    }
+                    withFrameNanos { }
+                }
+            } finally {
+                programmaticScrolls--
+                explicitScrollInProgress = false
             }
         }
     }
 
+    LaunchedEffect(listState, composerHeightPx, composerBarHeightPx, usePaging) {
+        snapshotFlow {
+            val bottomIndex = 0
+            Triple(
+                imeInsets.getBottom(density),
+                Pair(
+                    shouldScrollToBottomOnIme && positioned,
+                    shouldScrollToBottomOnComposerTools && positioned,
+                ),
+                bottomIndex,
+            )
+        }.collectLatest { (_, follows, bottomIndex) ->
+            if (usePaging) return@collectLatest
+            val shouldFollowIme = follows.first
+            val shouldFollowTools = follows.second
+            if ((!shouldFollowIme && !shouldFollowTools) || bottomIndex < 0) {
+                return@collectLatest
+            }
+            if (explicitScrollInProgress) {
+                return@collectLatest
+            }
+            // The tools animation has its own frame-by-frame anchoring below.
+            // Letting both effects scroll at once causes visible jumps while the
+            // composer grows or collapses.
+            if (shouldFollowTools) {
+                return@collectLatest
+            }
+            // IME insets animate over multiple frames. Keep the tail aligned
+            // after each inset change, once the current layout has measured.
+            withFrameNanos { }
+            scrollToChatIndex(bottomIndex, animate = false)
+            // The tools transition effect owns the flag until the panel settles.
+        }
+    }
+
+    // Keep the transcript anchored to the tail during both opening and closing.
+    // AnimatedVisibility changes the bottom bar height over several frames.
+    LaunchedEffect(composerToolsOpen) {
+        if (usePaging || !positioned || !shouldScrollToBottomOnComposerTools) return@LaunchedEffect
+        repeat(60) {
+            withFrameNanos { }
+            if (!explicitScrollInProgress) {
+                val bottomIndex = 0
+                if (bottomIndex >= 0) scrollToChatIndex(bottomIndex, animate = false)
+            }
+        }
+        shouldScrollToBottomOnComposerTools = false
+    }
+    // Keep follow intent independent from list mutations. The effect is long-lived so a
+    // message arriving during a measure/animation cannot cancel the previous follow.
+    LaunchedEffect(listState, positionSettled) {
+        if (!positionSettled) return@LaunchedEffect
+        snapshotFlow { listState.isScrollInProgress to (programmaticScrolls > 0) }
+            .distinctUntilChanged()
+            .collect { (_, programmatic) ->
+                autoFollowTracker.onScrollStateChanged(
+                    programmatic = programmatic,
+                    atBottom = listState.isAtChatTail(),
+                )
+            }
+    }
+
+    LaunchedEffect(listState, usePaging, positionSettled) {
+        if (!positionSettled) return@LaunchedEffect
+        var initialized = false
+        snapshotFlow {
+            val newestMessageId = if (usePaging) {
+                pagedMessages.itemSnapshotList.items.firstOrNull()?.id
+            } else {
+                messagesState.value.lastOrNull()?.id
+            }
+            val itemCount = if (usePaging) {
+                pagedMessages.itemSnapshotList.items.size
+            } else {
+                messagesState.value.size
+            }
+            Triple(itemCount, newestMessageId, listState.isAtChatTail())
+        }
+            .distinctUntilChanged()
+            .collect { (_, newestMessageId, _) ->
+                if (!initialized) {
+                    autoFollowTracker.reset(
+                        atBottom = listState.isAtChatTail(),
+                        newestMessageId = newestMessageId,
+                    )
+                    initialized = true
+                    return@collect
+                }
+                if (autoFollowTracker.onTimelineChanged(newestMessageId)) {
+                    // Let LazyColumn apply the anchor in the same remeasure that
+                    // inserts the new row. This avoids landing one item behind when
+                    // Room and the composer resize are committed in adjacent frames.
+                    requestChatTail()
+                }
+            }
+    }
+
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .collect { index -> if (index == 0 && messages.isNotEmpty()) viewModel.loadOlder() }
+        viewModel.scrollToLatestAfterSend.collect {
+            // Sending is an explicit newest-message request: even if the reader was
+            // looking at history, the just-sent message must become visible. Ma se
+            // il volo è partito al tap siamo già in coda: basta l'ancoraggio,
+            // senza una seconda animazione in fila a quella del follow-effect.
+            withFrameNanos { }
+            if (flightText != null || listState.isAtChatTail()) {
+                requestChatTail()
+            } else {
+                runExplicitChatScroll(index = 0, followTail = true)
+            }
+        }
+    }
+
+    // Send-flight ghost (motd-style), launched on TAP so the tapped line never
+    // vanishes: the ghost stays pinned glyph-for-glyph where the composer had
+    // it, morphs toward the outgoing side, then rises to the tail slot while
+    // the list scrolls there. Timed, draw-phase only. Cancelled when the send
+    // cannot produce a row (error, multiline confirm dialog); slash commands
+    // never fly (see sendFlightEligible).
+    // seriale degli altri scroll), non all'arrivo della riga via rete.
+    // (Stati volo/runway dichiarati sopra, prima dell'effetto markRead.)
+    fun startRunwayDrain() {
+        val hold = runwayHoldPx ?: return
+        if (runwayDraining) return
+        runwayDraining = true
+        flightScope.launch {
+            runwayDrain.snapTo(hold)
+            runwayDrain.animateTo(0f, tween(150))
+            runwayHoldPx = null
+            runwayDraining = false
+        }
+    }
+
+    fun cancelFlight() {
+        if (flightText == null && runwayHoldPx == null) return
+        flightText = null
+        val current = runwayHoldPx
+            ?: ((ghostHpx?.toFloat() ?: runwayEstPx) * sendFlightRise(flightProgress.value))
+        if (current > 0.5f) {
+            runwayHoldPx = current
+            startRunwayDrain()
+        } else {
+            runwayHoldPx = null
+        }
+    }
+
+    fun beginFlight(snapshot: String) {
+        if (!sendFlightEligible(snapshot, displayMode == ChatDisplayMode.IRC_LINE, isServer)) {
+            flightLog("skip eligible=false textLen=${snapshot.length} ircLine=${displayMode == ChatDisplayMode.IRC_LINE} server=$isServer")
+            return
+        }
+        val fieldPos = composerFieldPosWin
+        val fieldSize = composerFieldSizePx
+        val box = listBoxWin
+        if (fieldPos == null || fieldSize == null || box == null) {
+            flightLog("skip measure-null field=$fieldPos size=$fieldSize box=$box")
+            return
+        }
+        // Glyph origin ≈ text start: past the 48dp leading icon + inner padding,
+        // vertically centered on the bodyLarge line (single-line flights only).
+        // Tight/grouping come farà la lista: il ghost deve coincidere con la
+        // riga d'atterraggio o l'ora salta inline<->sotto all'handoff.
+        val now = System.currentTimeMillis()
+        val sender = myNick ?: viewerUsername
+        flightTight = ghostTightFor(
+            timelineRows.lastOrNull()?.messages?.lastOrNull(),
+            now,
+            sender,
+        )
+        flightSentAt = now
+        flightStart = Offset(
+            fieldPos.x + flightTextStartPadPx,
+            fieldPos.y + (fieldSize.height - flightLineHeightPx) / 2f,
+        ) - box
+        ghostHpx = null
+        runwayHoldPx = null
+        newestAtTap = tailNewestId
+        flightErrorAtLaunch = error
+        flightText = snapshot
+        flightToken++
+        flightLog("begin token=$flightToken start=$flightStart tight=$flightTight newestAtTap=$newestAtTap")
+        // Coda ottimistica: la lista va in coda subito al tap (stessa coda
+        // seriale degli altri scroll), non all'arrivo della riga via rete.
+        flightScope.launch { requestChatTail() }
+    }
+
+    val runwayShift: () -> Float = {
+        when {
+            runwayDraining -> runwayDrain.value
+            flightText != null -> (ghostHpx?.toFloat() ?: runwayEstPx) * sendFlightRise(flightProgress.value)
+            runwayHoldPx != null -> (runwayHoldPx ?: 0f)
+            else -> 0f
+        }
+    }
+
+    LaunchedEffect(flightToken) {
+        if (flightText == null) return@LaunchedEffect
+        flightProgress.snapTo(0f)
+        val token = flightToken
+        try {
+            flightProgress.animateTo(1f, tween(SEND_FLIGHT_DURATION_MS))
+        } catch (e: CancellationException) {
+            // Atterraggio precoce (watcher tailNewestId sotto): l'animazione da
+            // 120ms ha preso il possesso del driver, si cade nel cleanup normale.
+        }
+        if (flightToken != token) return@LaunchedEffect
+        if (messagesState.value.lastOrNull()?.id != newestAtTap) {
+            flightLog("end landed newest=${messagesState.value.lastOrNull()?.id}")
+            flightText = null
+        } else {
+            // Rete lenta: la riga non c'è ancora, tieni il varco finché arriva.
+            flightLog("end hold")
+            runwayHoldPx = ghostHpx?.toFloat() ?: runwayEstPx
+            flightText = null
+        }
+    }
+    // A send that raises an error or the multiline dialog leaves no row behind.
+    LaunchedEffect(error) {
+        if (flightText != null && error != null && error != flightErrorAtLaunch) cancelFlight()
+    }
+    LaunchedEffect(pendingMultiLineSend) {
+        if (flightText != null && pendingMultiLineSend != null) cancelFlight()
+    }
+    // La riga vera è arrivata: se il volo è ancora in corso lo si completa in
+    // fretta invece di farlo volare sopra la riga (doppio testo visibile),
+    // altrimenti si drena il varco tenuto.
+    LaunchedEffect(tailNewestId) {
+        if (tailNewestId == null || tailNewestId == newestAtTap) return@LaunchedEffect
+        if (flightText != null) {
+            flightLog("early-finish newest=$tailNewestId")
+            flightScope.launch { flightProgress.animateTo(1f, tween(120)) }
+        } else if (runwayHoldPx != null) {
+            startRunwayDrain()
+        }
+    }
+    LaunchedEffect(runwayHoldPx) {
+        if (runwayHoldPx == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(3000)
+        startRunwayDrain()
+    }
+    LaunchedEffect(listState, usePaging) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .collect { index ->
+                val atHistoryEdge = index >= listState.layoutInfo.totalItemsCount - 1
+                if (!usePaging && !isAtBottom && atHistoryEdge && messages.isNotEmpty()) viewModel.loadOlder()
+            }
+    }
+
+    LaunchedEffect(usePaging, pagedMessages.itemCount) {
+        if (!usePaging || pagedMessages.itemCount == 0 || pagedInitialPositioned) return@LaunchedEffect
+        withFrameNanos { }
+        scrollToChatIndex(0, animate = false)
+        pagedInitialPositioned = true
+    }
+
+
+    LaunchedEffect(usePaging) {
+        if (!usePaging) return@LaunchedEffect
+        snapshotFlow { pagedMessages.loadState.append }
+            .collectLatest { state ->
+                if (state is LoadState.NotLoading && state.endOfPaginationReached) {
+                    viewModel.loadOlder()
+                }
+            }
+    }
+
+    // Channel-scoped paging refresh. The PagingSource deliberately observes no
+    // table (Room invalidation is table-wide: any other chat's traffic would
+    // rebuild this list mid-read). This channel's own row count drives refresh()
+    // instead; the refresh anchors on the visible row, so the reader keeps
+    // their position while new arrivals prepend on demand.
+    LaunchedEffect(usePaging) {
+        if (!usePaging) return@LaunchedEffect
+        var lastCount: Int? = null
+        snapshotFlow { messageCount }
+            .collect { count ->
+                if (lastCount != null && count != lastCount) pagedMessages.refresh()
+                lastCount = count
+            }
     }
 
     CompositionLocalProvider(
@@ -1003,92 +1927,188 @@ fun ChatScreen(
                     .navigationBarsPadding()
                     .imePadding(),
             ) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    thickness = 1.dp,
+                )
                 if (slashSuggestions.isNotEmpty()) {
                     SlashCommandSuggestions(
                         suggestions = slashSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
                         onSelect = ::completeSlashCommand,
                     )
                 }
                 if (slashArgumentSuggestions.isNotEmpty()) {
                     SlashArgumentSuggestions(
                         suggestions = slashArgumentSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
                         onSelect = ::completeSlashArgument,
                     )
                 }
                 if (mentionSuggestions.isNotEmpty()) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceContainer,
-                        tonalElevation = 3.dp,
-                    ) {
-                        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-                            mentionSuggestions.forEach { member ->
-                                item(key = "mention-${member.nick}") {
-                                    DropdownMenuItem(
-                                        text = { Text(member.nick) },
-                                        onClick = { completeMention(member.nick) },
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    MentionSuggestions(
+                        suggestions = mentionSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
+                        onSelect = { completeMention(it.nick) },
+                    )
                 }
+                val draftEmpty = draftFieldValue.text.isEmpty()
                 val canSendDraft = draftFieldValue.text.isNotBlank()
+                val canSendAttachment = pendingUploads.any { !it.requiresConfirmation }
+                val hasSendableText = canSendDraft || canSendAttachment
                 val slashCommandsLabel = stringResource(R.string.cd_slash_commands)
-                Surface(
+                val attachFileLabel = stringResource(R.string.cd_attach_file)
+                val composerToolsLabel = stringResource(if (composerToolsOpen) R.string.composer_tools_close else R.string.composer_tools_open)
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                    ),
-                    tonalElevation = 0.dp,
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Row(
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(
-                            onClick = { filePicker.launch("*/*") },
-                            enabled = !isUploading,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.surfaceContainer,
-                                    CircleShape,
+                            .widthIn(max = 720.dp)
+                            .onSizeChanged { composerBarHeightPx = it.height },
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 3.dp,
+                ) {
+                    Column {
+                        AnimatedVisibility(
+                            visible = pendingReply != null,
+                            enter = expandVertically(animationSpec = tween(220)) +
+                                fadeIn(animationSpec = tween(170)) +
+                                slideInVertically(
+                                    initialOffsetY = { height -> -height / 4 },
+                                    animationSpec = tween(220),
+                                ),
+                            exit = shrinkVertically(animationSpec = tween(180)) +
+                                fadeOut(animationSpec = tween(120)) +
+                                slideOutVertically(
+                                    targetOffsetY = { height -> -height / 4 },
+                                    animationSpec = tween(180),
                                 ),
                         ) {
-                            if (isUploading) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(
-                                    Icons.Outlined.AttachFile,
-                                    contentDescription = stringResource(R.string.cd_attach_file),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            pendingReply?.let { reply ->
+                                AnimatedReplyComposerBar(
+                                    reply = reply,
+                                    coloredNicklist = coloredNicklist,
+                                    onCancel = viewModel::cancelReply,
                                 )
                             }
                         }
-                        TextField(
+                        AnimatedVisibility(
+                            visible = pendingUploads.isNotEmpty(),
+                            enter = expandVertically(animationSpec = tween(200)) +
+                                fadeIn(animationSpec = tween(160)),
+                            exit = shrinkVertically(animationSpec = tween(160)) +
+                                fadeOut(animationSpec = tween(110)),
+                        ) {
+                            pendingUploads.forEachIndexed { index, attachment ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                    )
+                                }
+                                AttachmentPreviewCard(
+                                    attachment = attachment,
+                                    isUploading = uploadingUri == attachment.uri,
+                                    isFailed = attachment.uri in failedUploadUris,
+                                    onRemove = { viewModel.removePendingUpload(attachment.uri) },
+                                    onRetry = { viewModel.retryPendingUpload(attachment.uri) },
+                                )
+                            }
+                        }
+                    ComposerTools(
+                        visible = composerToolsOpen,
+                        isUploading = isUploading,
+                        onAttachFile = { filePicker.launch("*/*") },
+                        value = draftFieldValue,
+                        onValueChange = { newValue ->
+                            draftFieldValue = newValue
+                            viewModel.onDraftChange(newValue.text)
+                        },
+                        onFocusComposer = { draftFocusRequester.requestFocus() },
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(30.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                            ) {
+                                TextField(
                             value = draftFieldValue,
                             onValueChange = { newValue ->
                                 draftFieldValue = newValue
                                 viewModel.onDraftChange(newValue.text)
                             },
+                            leadingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        val opening = !composerToolsOpen
+                                        val atActualTail = isAtBottom || listState.isAtChatTail()
+                                        if (opening) {
+                                            shouldScrollToBottomOnComposerTools = positioned && atActualTail
+                                        }
+                                        composerToolsOpen = opening
+                                    },
+                                    modifier = Modifier
+                                        .size(48.dp)
+
+                                        .semantics(mergeDescendants = true) {
+                                            contentDescription = composerToolsLabel
+                                        },
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.graphicsLayer {
+                                            rotationZ = if (composerToolsOpen) 45f else 0f
+                                        },
+                                        tint = if (composerToolsOpen) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(max = 120.dp)
                                 .onSizeChanged { composerHeightPx = it.height }
+                                .onGloballyPositioned {
+                                    composerFieldPosWin = it.positionInWindow()
+                                    composerFieldSizePx = it.size
+                                }
                                 .focusRequester(draftFocusRequester)
                                 .onFocusChanged { focusState ->
                                     shouldScrollToBottomOnIme = if (focusState.isFocused) {
-                                        positioned && isAtBottom
+                                        val atActualTail = isAtBottom || listState.isAtChatTail()
+                                        positioned && atActualTail
                                     } else {
                                         false
+                                    }
+                                }
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type != KeyEventType.KeyDown || activeSuggestionCount == 0) {
+                                        false
+                                    } else {
+                                        when (event.key) {
+                                            Key.DirectionDown -> { moveSuggestionSelection(1); true }
+                                            Key.DirectionUp -> { moveSuggestionSelection(-1); true }
+                                            Key.Enter, Key.Tab -> if (event.key == Key.Enter && event.isShiftPressed) false else selectActiveSuggestion()
+                                            else -> false
+                                        }
                                     }
                                 },
                             placeholder = {
@@ -1102,9 +2122,10 @@ fun ChatScreen(
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 fontFamily = LocalResentinChatFontFamily.current,
                             ),
+                            visualTransformation = MircComposerVisualTransformation,
                             minLines = 1,
                             maxLines = 4,
-                            shape = MaterialTheme.shapes.medium,
+                            shape = RoundedCornerShape(28.dp),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                                 unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -1113,7 +2134,11 @@ fun ChatScreen(
                                 unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
                             ),
                         )
-                        if (draftFieldValue.text.isEmpty()) {
+                        AnimatedVisibility(
+                            visible = draftEmpty,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                        ) {
                             IconButton(
                                 onClick = {
                                     val commandStarter = TextFieldValue("/", TextRange(1))
@@ -1122,11 +2147,8 @@ fun ChatScreen(
                                     draftFocusRequester.requestFocus()
                                 },
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceContainer,
-                                        CircleShape,
-                                    )
+                                    .size(48.dp)
+
                                     .semantics(mergeDescendants = true) {
                                         contentDescription = slashCommandsLabel
                                     },
@@ -1139,39 +2161,75 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        IconButton(
-                            onClick = viewModel::send,
-                            enabled = !isSending && canSendDraft,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(
-                                    color = if (canSendDraft) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.surfaceContainer,
-                                    shape = CircleShape,
-                                ),
+                        AnimatedVisibility(
+                            visible = draftEmpty && !composerToolsOpen,
+                            enter = fadeIn(animationSpec = tween(150)),
+                            exit = fadeOut(animationSpec = tween(120)),
                         ) {
-                            if (isSending) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            } else {
-                                Icon(
-                                    Icons.AutoMirrored.Outlined.Send,
-                                    contentDescription = stringResource(R.string.cd_send),
-                                    tint = if (canSendDraft) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                            IconButton(
+                                onClick = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    filePicker.launch("*/*")
+                                },
+                                enabled = !isUploading,
+                                modifier = Modifier
+                                    .size(48.dp)
+
+                                    .semantics(mergeDescendants = true) {
+                                        contentDescription = attachFileLabel
+                                    },
+                            ) {
+                                if (isUploading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(
+                                        Icons.Outlined.AttachFile,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
+                            }
+                        }
+                        FilledIconButton(
+                            onClick = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                val snapshot = draftFieldValue.text
+                                viewModel.send()
+                                beginFlight(snapshot)
+                            },
+                            enabled = !isUploading && hasSendableText,
+                            modifier = Modifier.size(52.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.Send,
+                                contentDescription = stringResource(R.string.cd_send),
+                                tint = if (hasSendableText) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    }
                     }
                 }
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .onGloballyPositioned { listBoxWin = it.positionInWindow() }
+                .onSizeChanged { listBoxSize = it },
+        ) {
             when {
                 showHistoryLoading -> {
                     ResentinLoadingState(
@@ -1204,99 +2262,57 @@ fun ChatScreen(
                     // state has been positioned, avoiding the visible top-to-unread jump.
                 }
                 else -> {
-            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                timelineRows.forEachIndexed { index, row ->
-                    if (index == dividerIndex) {
-                        item(key = "unread-divider") { UnreadDivider(density = messageDensity) }
-                    }
-                    when (row) {
-                        is ChatTimelineRow.Message -> item(key = row.key) {
-                            val message = row.message
-                            val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
-                            val gapFromPrevious = previous?.let { message.serverTime - it.serverTime }
-                            val tight = previous != null &&
-                                index != dividerIndex &&
-                                gapFromPrevious != null && gapFromPrevious in 0..MESSAGE_GROUP_WINDOW_MS &&
-                                previous.kind !in SYSTEM_EVENT_KINDS &&
-                                message.kind !in SYSTEM_EVENT_KINDS &&
-                                previous.sender.equals(message.sender, ignoreCase = true)
-                            ChatTimelineMessageItem(
-                                message = message,
-                                members = members,
-                                displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                                density = messageDensity,
-                                showSeconds = showSeconds,
-                                coloredNicklist = coloredNicklist,
-                                showHostmaskInEvents = showHostmaskInEvents,
-                                isMention = isMentionRow(message, myNick, isQuery, highlightPatterns),
-                                isQuery = isQuery,
-                                isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
-                                isSelected = message.id == selectedSearchMessageId,
-                                onReply = viewModel::reply,
-                                onMessageMenu = { target -> messageMenuTarget = target },
-                                selectingMessageId = selectingMessageId,
-                                tight = tight,
-                            )
-                        }
-                        is ChatTimelineRow.PresenceSummary -> item(key = row.key) {
-                            val burstKey = row.messages.first().id
-                            val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
-                            val expanded = selectedInBurst || burstKey in expandedPresenceBursts
-                            val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
-                            val senderLabel = row.sender ?: pluralStringResource(
-                                R.plurals.chat_activity_users,
-                                uniqueUsers,
-                                uniqueUsers,
-                            )
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                PresenceBurstSummaryRow(
-                                    sender = senderLabel,
-                                    joins = row.joins,
-                                    leaves = row.leaves,
-                                    time = formatTime(row.messages.last().serverTime, showSeconds),
-                                    isIrcLine = isServer || displayMode == ChatDisplayMode.IRC_LINE,
-                                    expanded = expanded,
-                                    selected = selectedInBurst,
-                                    onToggle = {
-                                        expandedPresenceBursts = if (burstKey in expandedPresenceBursts) {
-                                            expandedPresenceBursts - burstKey
-                                        } else {
-                                            expandedPresenceBursts + burstKey
-                                        }
-                                    },
-                                )
-                                if (expanded) {
-                                    row.messages.forEach { event ->
-                                        ChatTimelineMessageItem(
-                                            message = event,
-                                            members = members,
-                                            displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                                            density = messageDensity,
-                                            showSeconds = showSeconds,
-                                            coloredNicklist = coloredNicklist,
-                                            showHostmaskInEvents = showHostmaskInEvents,
-                                            isMention = false,
-                                            isQuery = isQuery,
-                                            isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
-                                            isSelected = event.id == selectedSearchMessageId,
-                                            onReply = viewModel::reply,
-                                            onMessageMenu = { target -> messageMenuTarget = target },
-                                            selectingMessageId = selectingMessageId,
-                                            tight = false,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // A dedicated final row makes "go to bottom" unambiguous. Scrolling
-                // to the last message alone can leave a long message clipped; this
-                // anchor is always the final row and therefore clamps at the true
-                // end of the viewport.
-                item(key = "chat-bottom-anchor") {
-                    Spacer(Modifier.size(1.dp))
-                }
+            val messageListData = remember(timelineRows, members, highlightPatterns, expandedPresenceBursts) {
+                ChatMessageListData(
+                    timelineRows = timelineRows,
+                    members = members,
+                    highlightPatterns = highlightPatterns,
+                    expandedPresenceBursts = expandedPresenceBursts,
+                )
+            }
+            ChatMessageList(
+                listState = listState,
+                renderCache = renderCache,
+                data = messageListData,
+                dividerIndex = dividerIndex,
+                displayMode = displayMode,
+                messageDensity = messageDensity,
+                showSeconds = showSeconds,
+                coloredNicklist = coloredNicklist,
+                showHostmaskInEvents = showHostmaskInEvents,
+                myNick = myNick,
+                isQuery = isQuery,
+                isServer = isServer,
+                viewerUsername = viewerUsername,
+                selectedSearchMessageId = selectedSearchMessageId,
+                selectingMessageId = selectingMessageId,
+                onTogglePresence = togglePresence,
+                onReply = stableReply,
+                onMessageMenu = stableMessageMenu,
+                pagedMessages = pagedMessages.takeIf { usePaging },
+                channelKey = "$networkSlug/$channelName",
+                listShift = runwayShift,
+            )
+            val flyingText = flightText
+            val flyingStart = flightStart
+            if (flyingText != null && flyingStart != null && listBoxSize != IntSize.Zero) {
+                SendFlightOverlay(
+                    text = flyingText,
+                    senderNick = myNick ?: viewerUsername,
+                    networkSlug = networkSlug,
+                    channelName = channelName,
+                    progress = { flightProgress.value },
+                    start = flyingStart,
+                    boxSize = listBoxSize,
+                    renderCache = renderCache,
+                    members = members,
+                    density = messageDensity,
+                    showSeconds = showSeconds,
+                    coloredNicklist = coloredNicklist,
+                    tight = flightTight,
+                    sentAt = flightSentAt,
+                    onMeasuredHeightPx = { ghostHpx = it },
+                )
             }
             if (isLoadingOlder) {
                 Surface(
@@ -1335,8 +2351,10 @@ fun ChatScreen(
                     if (timelineRows.isEmpty()) {
                         null
                     } else {
-                        val first = listState.firstVisibleItemIndex
-                        val rowIndex = if (dividerIndex != null && first > dividerIndex) first - 1 else first
+                        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                        val renderedDivider = dividerIndex?.let { timelineRows.size - it }
+                        val rowIndex = timelineRows.lastIndex -
+                            (last - if (renderedDivider != null && last > renderedDivider) 1 else 0)
                         timelineRows.getOrNull(rowIndex.coerceIn(timelineRows.indices))?.messages?.firstOrNull()?.serverTime
                     }
                 }
@@ -1404,11 +2422,13 @@ fun ChatScreen(
                                 // scrolling to the following row would hide the
                                 // very mention this button is meant to reveal.
                                 scope.launch {
-                                    val maxRow = listState.layoutInfo.totalItemsCount - 1
-                                    listState.animateScrollToItem(target.coerceAtMost(maxRow))
+                                    val maxRow = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                                    runExplicitChatScroll(target.coerceAtMost(maxRow), followTail = false)
                                 }
                             } else {
-                                scope.launch { listState.animateToChatBottom() }
+                                scope.launch {
+                                    runExplicitChatScroll(index = 0, followTail = true)
+                                }
                             }
                         },
                     ) {
@@ -1553,6 +2573,7 @@ fun ChatScreen(
                                 )
                                 ChatTimelineMessageItem(
                                     message = event,
+                                    renderCache = renderCache,
                                     members = members,
                                     displayMode = ChatDisplayMode.IRC_LINE,
                                     density = messageDensity,
@@ -1567,6 +2588,7 @@ fun ChatScreen(
                                     onMessageMenu = { target -> messageMenuTarget = target },
                                     selectingMessageId = selectingMessageId,
                                     tight = false,
+                                    deferRichContent = false,
                                 )
                             }
                         }
@@ -1601,7 +2623,8 @@ fun ChatScreen(
     }
 
     val whoisValue = whois
-    if (whoisValue != null) {        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initial = false)
+    if (whoisValue != null) {
+        val ignored by viewModel.isIgnored(whoisValue.target).collectAsState(initialValue = false)
         val avatar by viewModel.avatarBitmap.collectAsState()
         UserCardSheet(
             whois = whoisValue,
@@ -2149,7 +3172,10 @@ fun ChatScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = viewModel::confirmMultiLineSend) {
+                TextButton(onClick = {
+                    beginFlight(pendingSend.substringAfterLast('\n'))
+                    viewModel.confirmMultiLineSend()
+                }) {
                     Text(stringResource(R.string.cd_send))
                 }
             },
@@ -2164,14 +3190,14 @@ fun ChatScreen(
 
     // #1883 — pre-upload confirm (opt-in, server-side). The staged file goes out
     // only on Send, with the TTL picked here (a per-batch choice, not saved).
-    val stagedUpload = pendingUpload
-    if (stagedUpload != null) {
+    val stagedUpload = pendingUploads.firstOrNull { it.requiresConfirmation }
+    if (stagedUpload != null && !isUploading) {
         UploadConfirmDialog(
             pending = stagedUpload,
             channelName = channelName,
             onTtlChange = viewModel::onPendingUploadTtlChange,
-            onConfirm = viewModel::confirmPendingUpload,
-            onDismiss = viewModel::dismissPendingUpload,
+            onConfirm = viewModel::confirmPendingUploads,
+            onDismiss = viewModel::dismissPendingUploads,
         )
     }
     }
@@ -2410,8 +3436,46 @@ private fun LusersCard(bundle: LusersBundleDto, onDismiss: () -> Unit) {
 }
 
 @Composable
+internal fun MentionSuggestions(
+    suggestions: List<MemberEntity>,
+    selectedIndex: Int = -1,
+    onSelect: (MemberEntity) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("mention-suggestions"),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp,
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, member -> "mention-${member.nick}" }) { index, member ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("mention-${member.nick}"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    text = { Text(member.nick, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(member) },
+                )
+            }
+        }
+    }
+}
+@Composable
 internal fun SlashCommandSuggestions(
     suggestions: List<SlashCommandSpec>,
+    selectedIndex: Int = -1,
     onSelect: (SlashCommandSpec) -> Unit,
 ) {
     Surface(
@@ -2419,22 +3483,32 @@ internal fun SlashCommandSuggestions(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 3.dp,
     ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-            suggestions.forEach { command ->
-                item(key = "slash-command-${command.name}") {
-                    DropdownMenuItem(
-                        modifier = Modifier.testTag("slash-command-${command.name}"),
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, command -> "slash-command-${command.name}" }) { index, command ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("slash-command-${command.name}"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         text = {
-                            Column {
-                                Text("/${command.name}", fontWeight = FontWeight.Medium)
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    stringResource(command.syntaxRes),
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = "/${command.name} - ${stringResource(command.syntaxRes)}",
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    stringResource(command.descriptionRes),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = stringResource(command.descriptionRes),
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         },
@@ -2444,11 +3518,11 @@ internal fun SlashCommandSuggestions(
             }
         }
     }
-}
 
 @Composable
 internal fun SlashArgumentSuggestions(
     suggestions: List<SlashArgumentSuggestion>,
+    selectedIndex: Int = -1,
     onSelect: (SlashArgumentSuggestion) -> Unit,
 ) {
     Surface(
@@ -2456,15 +3530,21 @@ internal fun SlashArgumentSuggestions(
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 3.dp,
     ) {
-        LazyColumn(modifier = Modifier.heightIn(max = 240.dp)) {
-            suggestions.forEach { suggestion ->
-                item(key = "slash-argument-${suggestion.value}") {
-                    DropdownMenuItem(
-                        modifier = Modifier.testTag("slash-argument-${suggestion.value}"),
-                        text = { Text(suggestion.label) },
-                        onClick = { onSelect(suggestion) },
-                    )
-                }
+        LazyColumn(modifier = Modifier.heightIn(max = 208.dp).padding(vertical = 4.dp)) {
+            itemsIndexed(suggestions, key = { _, suggestion -> "slash-argument-${suggestion.value}" }) { index, suggestion ->
+                DropdownMenuItem(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            if (index == selectedIndex) MaterialTheme.colorScheme.primaryContainer
+                            else androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .testTag("slash-argument-${suggestion.value}"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    text = { Text(suggestion.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(suggestion) },
+                )
             }
         }
     }
@@ -2510,12 +3590,12 @@ private fun mentionQueryAtCursor(value: TextFieldValue): MentionQuery? {
     return MentionQuery(start = atIndex, end = cursor, query = query)
 }
 
-private fun findMentionSuggestions(query: String, members: List<MemberEntity>): List<MemberEntity> =
+private fun findMentionSuggestions(query: String, members: List<MemberEntity>, recentNicks: List<String>): List<MemberEntity> =
     members
         .asSequence()
         .filter { query.isBlank() || it.nick.contains(query, ignoreCase = true) }
         .distinctBy { it.nick.lowercase() }
-        .sortedWith(compareBy<MemberEntity>({ !it.nick.startsWith(query, ignoreCase = true) }, { it.nick.lowercase() }))
+        .sortedWith(compareBy<MemberEntity>({ recentSuggestionRank(it.nick, recentNicks) }, { !it.nick.startsWith(query, ignoreCase = true) }, { it.nick.lowercase() }))
         .take(8)
         .toList()
 
@@ -2549,7 +3629,7 @@ private fun DateChip(timeMillis: Long, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun UnreadDivider(density: MessageDensity) {
+internal fun UnreadDivider(density: MessageDensity) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = density.dividerVertical()),
         verticalAlignment = Alignment.CenterVertically,
@@ -2580,7 +3660,7 @@ private fun UnreadDivider(density: MessageDensity) {
 
 /** The nick's highest-priority role sigil (~&@%+), or "" if they hold none / aren't a
  * known member (e.g. a query partner, who never appears in a channel's member list). */
-private fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
+internal fun nickPrefixFor(nick: String, members: List<MemberEntity>): String {
     val member = members.find { it.nick.equals(nick, ignoreCase = true) } ?: return ""
     return highestSigil(sigilsOf(member))?.toString().orEmpty()
 }
@@ -2624,7 +3704,7 @@ private fun MentionCountBadge(count: Int, modifier: Modifier = Modifier) {
  * would "mention" you and highlighting all of them would just be noise, not a signal).
  * Once the `/hilight` watchlist has loaded, matching upgrades to cicchetto's
  * own-nick-UNION-patterns word-boundary match instead of the plain substring. */
-private fun isMentionRow(
+internal fun isMentionRow(
     message: MessageEntity,
     myNick: String?,
     isQuery: Boolean,
@@ -2674,9 +3754,62 @@ private fun systemEventText(event: FormattedEvent.System, showHostmask: Boolean)
     is FormattedEvent.System.TopicChanged -> stringResource(R.string.event_topic_changed, event.sender)
 }
 
+
+
+internal class MessageRenderCache {
+    private data class Entry(
+        val fingerprint: Int,
+        val formatted: FormattedEvent,
+    )
+
+    private data class TextKey(
+        val text: String,
+        val lightTheme: Boolean,
+        val stripFormatting: Boolean,
+        val deferRichContent: Boolean,
+    )
+
+    private val entries = object : LinkedHashMap<Long, Entry>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Entry>?): Boolean =
+            size > 512
+    }
+
+    private val richTextEntries = object : LinkedHashMap<TextKey, AnnotatedString>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TextKey, AnnotatedString>?): Boolean =
+            size > 512
+    }
+
+    fun formatted(message: MessageEntity): FormattedEvent {
+        val fingerprint = 31 * message.kind.hashCode() +
+            31 * message.sender.hashCode() +
+            31 * (message.body?.hashCode() ?: 0) +
+            message.metaJson.hashCode()
+        entries[message.id]?.takeIf { it.fingerprint == fingerprint }?.let { return it.formatted }
+
+        val meta = runCatching {
+            AppJson.parseToJsonElement(message.metaJson).jsonObject
+        }.getOrDefault(JsonObject(emptyMap()))
+        val formatted = SystemEventFormatter.format(message.kind, message.sender, message.body, meta)
+        entries[message.id] = Entry(fingerprint, formatted)
+        return formatted
+    }
+
+    fun messageText(text: String, lightTheme: Boolean, stripFormatting: Boolean, deferRichContent: Boolean): AnnotatedString {
+        val key = TextKey(text, lightTheme, stripFormatting, deferRichContent)
+        return if (deferRichContent) {
+            richTextEntries.getOrPut(key) {
+                buildAnnotatedString { append(if (stripFormatting) stripMircCodes(text) else text) }
+            }
+        } else {
+            richTextEntries.getOrPut(key) { mircAnnotatedString(text, lightTheme, stripFormatting) }
+        }
+    }
+}
+
 @Composable
-private fun ChatTimelineMessageItem(
+internal fun ChatTimelineMessageItem(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     members: List<MemberEntity>,
     displayMode: ChatDisplayMode,
     density: MessageDensity,
@@ -2691,6 +3824,7 @@ private fun ChatTimelineMessageItem(
     onMessageMenu: (MessageMenuTarget) -> Unit,
     selectingMessageId: Long?,
     tight: Boolean,
+    deferRichContent: Boolean,
 ) {
     Box(
         modifier = Modifier
@@ -2702,6 +3836,7 @@ private fun ChatTimelineMessageItem(
     ) {
         MessageRow(
             message = message,
+            renderCache = renderCache,
             members = members,
             displayMode = displayMode,
             density = density,
@@ -2715,12 +3850,13 @@ private fun ChatTimelineMessageItem(
             onMessageMenu = onMessageMenu,
             selectingMessageId = selectingMessageId,
             tight = tight,
+            deferRichContent = deferRichContent,
         )
     }
 }
 
 @Composable
-private fun PresenceBurstSummaryRow(
+internal fun PresenceBurstSummaryRow(
     sender: String,
     joins: Int,
     leaves: Int,
@@ -2785,6 +3921,7 @@ private fun PresenceBurstSummaryRow(
 @Composable
 private fun MessageRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     members: List<MemberEntity>,
     displayMode: ChatDisplayMode,
     density: MessageDensity,
@@ -2798,13 +3935,10 @@ private fun MessageRow(
     onMessageMenu: (MessageMenuTarget) -> Unit,
     selectingMessageId: Long?,
     tight: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
-    val meta = remember(message.metaJson) {
-        runCatching { AppJson.parseToJsonElement(message.metaJson).jsonObject }
-            .getOrDefault(JsonObject(emptyMap()))
-    }
-    val formatted = remember(message.kind, message.sender, message.body, meta) {
-        SystemEventFormatter.format(message.kind, message.sender, message.body, meta)
+    val formatted = remember(message.id, message.kind, message.sender, message.body, message.metaJson) {
+        renderCache.formatted(message)
     }
     val time = remember(message.serverTime, showSeconds) { formatTime(message.serverTime, showSeconds) }
     val prefix = remember(message.sender, members) { nickPrefixFor(message.sender, members) }
@@ -2886,14 +4020,17 @@ private fun MessageRow(
             ) {
                 val selecting = selectingMessageId == message.id
                 if (displayMode == ChatDisplayMode.IRC_LINE) {
-                    IrcLineRow(message, formatted, prefix, time, coloredNicklist, isMention, density, selecting)
+                    IrcLineRow(message, renderCache, formatted, prefix, time, coloredNicklist, isMention, density, selecting, deferRichContent)
                 } else {
                     BubbleRow(
-                        message, formatted, prefix, time, coloredNicklist, isMention,
+                        message,
+                        renderCache,
+                        formatted, prefix, time, coloredNicklist, isMention,
                         isMine = isMine,
                         tight = tight,
                         density = density,
                         selecting = selecting,
+                        deferRichContent = deferRichContent,
                     )
                 }
             }
@@ -2904,6 +4041,23 @@ private fun MessageRow(
 /** Nick color (when [coloredNicklist] is on) applies to the bare nick only — the role
  * prefix sigil (`@`/`+`/...) and any "* "/"< >"/"(notice)" decoration around it stay
  * the surrounding text's own color, matching how real IRC clients color-code nicks. */
+private fun renderMessageText(
+    renderCache: MessageRenderCache,
+    text: String,
+    lightTheme: Boolean,
+    stripFormatting: Boolean,
+    deferRichContent: Boolean,
+    onDccFileClick: (path: String, filename: String?) -> Unit,
+    onChannelClick: ((channelName: String) -> Unit)?,
+): AnnotatedString {
+    val base = renderCache.messageText(text, lightTheme, stripFormatting, deferRichContent)
+    return if (deferRichContent) base else withClickableLinks(
+        base,
+        linkStylesFor(lightTheme),
+        onDccFileClick,
+        onChannelClick,
+    )
+}
 private fun buildNickLine(
     before: String,
     prefix: String,
@@ -2915,6 +4069,8 @@ private fun buildNickLine(
     onDccFileClick: (path: String, filename: String?) -> Unit = { _, _ -> },
     stripFormatting: Boolean = false,
     onChannelClick: ((channelName: String) -> Unit)? = null,
+    renderCache: MessageRenderCache,
+    deferRichContent: Boolean = false,
 ) = buildAnnotatedString {
     append(before)
     append(prefix)
@@ -2924,11 +4080,11 @@ private fun buildNickLine(
         append(sender)
     }
     append(after)
-    append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick, onChannelClick))
+    append(renderMessageText(renderCache, body, lightTheme, stripFormatting, deferRichContent, onDccFileClick, onChannelClick))
 }
 
-private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
-private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
+internal const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
+internal val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
 private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 
@@ -2996,8 +4152,9 @@ private fun QuoteHeadBlock(head: String, barColor: androidx.compose.ui.graphics.
 }
 
 @Composable
-private fun BubbleRow(
+internal fun BubbleRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     formatted: FormattedEvent.Chat,
     prefix: String,
     time: String,
@@ -3007,6 +4164,7 @@ private fun BubbleRow(
     tight: Boolean = false,
     density: MessageDensity = MessageDensity.NORMAL,
     selecting: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
     // WhatsApp-style: i messaggi propri stanno a destra, gli altri a sinistra.
     // isMention non scatta mai per i propri (vedi isMentionRow), ma resta primo
@@ -3039,12 +4197,13 @@ private fun BubbleRow(
     val (quoteHead, quoteRest) = remember(formatted.text, formatted.isAction) {
         if (formatted.isAction) null to formatted.text else splitQuoteHead(formatted.text)
     }
-    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler) {
+    val inlineImageUrl = remember(quoteRest) { inlineImageUrlFromText(quoteRest) }
+    val bodyWithTime = remember(quoteRest, formatted.isNotice, continuesGroup, time, lightTheme, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent) {
         buildAnnotatedString {
             if (formatted.isNotice && continuesGroup) {
                 withStyle(timestampStyle) { append("(notice) ") }
             }
-            append(withClickableLinks(mircAnnotatedString(quoteRest, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
+            append(renderMessageText(renderCache, quoteRest, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -3052,7 +4211,7 @@ private fun BubbleRow(
         }
     }
     val actionWithTime = remember(
-        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler,
+        prefix, message.sender, formatted.text, coloredNicklist, lightTheme, continuesGroup, time, timestampStyle, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent,
     ) {
         buildAnnotatedString {
             if (continuesGroup) {
@@ -3070,12 +4229,13 @@ private fun BubbleRow(
                         onDccFileClick = dccFileHandler,
                         stripFormatting = stripFormatting,
                         onChannelClick = channelClickHandler,
+                        renderCache = renderCache,
                     ),
                 )
                 withStyle(timestampStyle) { append(time) }
                 append(" ")
             }
-            append(withClickableLinks(mircAnnotatedString(formatted.text, lightTheme, stripFormatting), linkStylesFor(lightTheme), dccFileHandler, channelClickHandler))
+            append(renderMessageText(renderCache, formatted.text, lightTheme, stripFormatting, deferRichContent, dccFileHandler, channelClickHandler))
             if (continuesGroup) {
                 append("  ")
                 withStyle(timestampStyle) { append(time) }
@@ -3187,6 +4347,7 @@ private fun BubbleRow(
                                 lightTheme = lightTheme,
                             )
                         }
+                        inlineImageUrl?.let { InlineAttachmentImage(it) }
                         val bodyStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontFamily = LocalResentinChatFontFamily.current,
                         )
@@ -3221,6 +4382,7 @@ private fun BubbleRow(
 @Composable
 private fun IrcLineRow(
     message: MessageEntity,
+    renderCache: MessageRenderCache,
     formatted: FormattedEvent.Chat,
     prefix: String,
     time: String,
@@ -3228,18 +4390,19 @@ private fun IrcLineRow(
     isMention: Boolean,
     density: MessageDensity = MessageDensity.NORMAL,
     selecting: Boolean = false,
+    deferRichContent: Boolean = false,
 ) {
     val lightTheme = isLightTheme()
     val dccFileHandler = LocalDccFileDownloadHandler.current
     val stripFormatting = LocalStripMircFormatting.current
     val channelClickHandler = LocalIrcChannelLinkHandler.current
     val annotated = remember(
-        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler,
+        message.sender, formatted.text, formatted.isAction, formatted.isNotice, prefix, time, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, deferRichContent,
     ) {
         when {
-            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
-            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
-            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler)
+            formatted.isAction -> buildNickLine("[$time] * ", prefix, message.sender, " ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
+            formatted.isNotice -> buildNickLine("[$time] -", prefix, message.sender, "- ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
+            else -> buildNickLine("[$time] <", prefix, message.sender, "> ", formatted.text, coloredNicklist, lightTheme, dccFileHandler, stripFormatting, channelClickHandler, renderCache, deferRichContent)
         }
     }
     val body: @Composable () -> Unit = {

@@ -3,6 +3,7 @@ package pm.antani.resentin.ui.chat
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.paging.PagingData
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import androidx.paging.cachedIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -65,9 +67,10 @@ sealed interface ChatCommandEffect {
     data object OpenAppSettings : ChatCommandEffect
 }
 
-/** #1883 — a picked/shared file staged behind the pre-upload confirm dialog.
- * Non-null while the dialog is up; the bytes are read only on confirm, so a
- * declined pick never pays the read. */
+/** A picked file kept in the composer until the user sends or removes it.
+ * The bytes are read only when the upload starts, so removing a preview never
+ * pays the file-read cost. [requiresConfirmation] keeps the existing optional
+ * pre-upload confirmation flow intact. */
 data class PendingUploadConfirm(
     val uri: Uri,
     val fileName: String,
@@ -75,7 +78,15 @@ data class PendingUploadConfirm(
     val mimeType: String,
     /** TTL choice in seconds, preselected with the effective default. */
     val ttlSeconds: Int,
+    val requiresConfirmation: Boolean = true,
+    val id: Long = 0L,
 )
+/** A reply selected in the composer, kept separate from the text being written. */
+data class PendingReply(
+    val nick: String,
+    val messageBody: String,
+)
+
 class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val networksRepository: NetworksRepository,
@@ -280,6 +291,14 @@ class ChatViewModel(
     // presence preference hides them from the main transcript.
     val allMessages: StateFlow<List<MessageEntity>> = chatRepository.observeMessages(networkSlug, channelName)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val messageCount: StateFlow<Int> = chatRepository.observeMessageCount(networkSlug, channelName)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    /** Paging stream used by the long-transcript renderer. It is cached in the
+     * ViewModel so rotation/recomposition does not restart the Room source. */
+    val pagedMessages: Flow<PagingData<MessageEntity>> =
+        chatRepository.observeMessagesPaged(networkSlug, channelName)
+            .cachedIn(viewModelScope)
 
     // The server filters historical pages for a hidden presence pin. Apply the same
     // rule locally to live WS rows, which the server still delivers for membership
@@ -353,8 +372,23 @@ class ChatViewModel(
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
-    private val _pendingUpload = MutableStateFlow<PendingUploadConfirm?>(null)
-    val pendingUpload: StateFlow<PendingUploadConfirm?> = _pendingUpload.asStateFlow()
+    private val _uploadingUri = MutableStateFlow<Uri?>(null)
+    val uploadingUri: StateFlow<Uri?> = _uploadingUri.asStateFlow()
+
+    private val _failedUploadUris = MutableStateFlow<Set<Uri>>(emptySet())
+    val failedUploadUris: StateFlow<Set<Uri>> = _failedUploadUris.asStateFlow()
+
+    private val _pendingUploads = MutableStateFlow<List<PendingUploadConfirm>>(emptyList())
+    val pendingUploads: StateFlow<List<PendingUploadConfirm>> = _pendingUploads.asStateFlow()
+
+    /** Compatibility view for the existing single-file confirmation dialog. */
+    val pendingUpload: StateFlow<PendingUploadConfirm?> = pendingUploads
+        .map { it.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val uploadMutex = Mutex()
+    private val queuedUploadUris = mutableSetOf<Uri>()
+    private var nextPendingUploadId = 0L
 
     // #1883/#2095 — server upload prefs, loaded on open. Failures keep the
     // server defaults (confirm off, no TTL pref) so an upload never blocks on
@@ -367,6 +401,9 @@ class ChatViewModel(
     // changes the draft's TEXT, which doesn't imply focus or cursor position on its own.
     private val _replyFocusRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val replyFocusRequests: SharedFlow<Unit> = _replyFocusRequests.asSharedFlow()
+
+    private val _pendingReply = MutableStateFlow<PendingReply?>(null)
+    val pendingReply: StateFlow<PendingReply?> = _pendingReply.asStateFlow()
 
     private val _commandEffects = MutableSharedFlow<ChatCommandEffect>(extraBufferCapacity = 1)
     val commandEffects: SharedFlow<ChatCommandEffect> = _commandEffects.asSharedFlow()
@@ -383,7 +420,7 @@ class ChatViewModel(
         // before navigating in) — upload each one now, exactly like tapping the attach
         // button once per file. Consumed once so re-entering this chat later doesn't
         // re-upload the same share.
-        pendingShareHolder.consume().forEach { uploadFile(it) }
+        pendingShareHolder.consume().forEach { uploadFile(it, sendImmediately = true) }
         viewModelScope.launch {
             userCard.error.collect { message -> message?.let { postError(it) } }
         }
@@ -414,7 +451,15 @@ class ChatViewModel(
                 if (_initialReadCursor.value == null) {
                     val cursor = networksRepository.getStoredReadCursor(networkSlug, channelName)
                     _initialReadCursor.value = cursor
-                    _readCursor.value = cursor
+                    // markRead may already have advanced past the stored cursor while
+                    // the join reply was in flight: take the max so the visible
+                    // divider never rewinds and no redundant markRead fires.
+                    val current = _readCursor.value
+                    _readCursor.value = when {
+                        cursor == null -> current
+                        current == null -> cursor
+                        else -> maxOf(current, cursor)
+                    }
                 }
             }.onFailure {
                 if (!channelReady.isCompleted) channelReady.completeExceptionally(it)
@@ -423,12 +468,9 @@ class ChatViewModel(
             chatRepository.backfill(networkSlug, channelName).onFailure { postError(it.message) }
             _initialHistoryReady.value = true
         }
-        // Marks the newest loaded message as read whenever it changes — the chat being
-        // open (this ViewModel existing) is already the "the user is looking at this"
-        // signal the rest of the app (OpenChatTracker) relies on.
-        viewModelScope.launch {
-            messages.collect { list -> list.maxByOrNull { it.id }?.let { markRead(it.id) } }
-        }
+        // Read state is advanced by the chat viewport only after the initial entry position settles
+        // and the user is actually at the reverse-list tail. Loading Room rows alone must not consume
+        // the unread divider while the screen is still deciding where to land.
         // Server-query replies for this network only — bundles carry no window
         // context, so anything for another network belongs to a different chat.
         viewModelScope.launch {
@@ -474,14 +516,15 @@ class ChatViewModel(
         }
     }
 
-    private fun markRead(messageId: Long) {
+    fun markRead(messageId: Long) {
         if (messageId <= lastMarkedRead) return
         lastMarkedRead = messageId
+        // The chat is already visible to the user, so update the local divider
+        // immediately. Persisting the cursor remains asynchronous; waiting for
+        // the server response makes every newly sent message flash as unread.
+        _readCursor.value = maxOf(_readCursor.value ?: Long.MIN_VALUE, messageId)
         viewModelScope.launch {
             chatRepository.markRead(networkSlug, channelName, messageId)
-                .onSuccess {
-                    _readCursor.value = maxOf(_readCursor.value ?: Long.MIN_VALUE, messageId)
-                }
         }
     }
 
@@ -532,20 +575,17 @@ class ChatViewModel(
         }
     }
 
-    /** Swipe-to-reply: prefills the draft using the active reply-style template
-     * (Settings) — plain `nick: ` by default, optionally a quoted preview of the
-     * original message, or a fully custom template. IRC has no real threaded replies,
-     * this is just the addressing/quoting convention most bouncers highlight on. */
+    /** Selects a message for the visual reply bar. The configured reply template is
+     * expanded only at send time, so the user's draft stays plain and editable. */
     fun reply(nick: String, messageBody: String) {
-        viewModelScope.launch {
-            val style = appPreferences.replyStyle.first()
-            val customTemplate = appPreferences.replyCustomTemplate.first()
-            val prefix = buildReplyPrefix(style, customTemplate, nick, messageBody)
-            if (!_draft.value.startsWith(prefix)) setDraft(prefix + _draft.value)
-            _replyFocusRequests.tryEmit(Unit)
-        }
+        if (messageBody.isBlank()) return
+        _pendingReply.value = PendingReply(nick = nick, messageBody = messageBody)
+        _replyFocusRequests.tryEmit(Unit)
     }
 
+    fun cancelReply() {
+        _pendingReply.value = null
+    }
     /** Message-menu `!addquote`: appends the archive command for [messageBody] to
      * the draft and stops — nothing is sent, whatever quote bot sits in the
      * channel interprets it (cicchetto #1107 parity). The payload carries the
@@ -566,36 +606,35 @@ class ChatViewModel(
     }
 
     fun send() {
-        val rawText = _draft.value
-        val text = rawText.trim()
-        if (text.isBlank()) return
-        if (!rawText.startsWith("/")) {
-            // Paste flood guard: a multi-line draft becomes one PRIVMSG per line,
-            // so a block taller than the threshold is a burst the operator did not
-            // compose by hand. Ask before it goes out; 1–3 lines stay frictionless.
-            val lines = MessageLines.splitMessageLines(text)
-            if (lines.size > MULTI_LINE_CONFIRM_MESSAGES) {
-                _pendingMultiLineSend.value = text
-                return
-            }
-            // Anything multi-line — confirmed or not — must still fan out per line:
-            // the server rejects a body carrying CR/LF (invalid_line), so the
-            // unconfirmed 1–3-line carve-out cannot go out as one frame.
-            if (lines.size > 1) {
-                sendMultiline(text)
-                return
-            }
-            sendMessage(text)
-            return
-        }
-        if (_isSending.value) return
-        _isSending.value = true
         viewModelScope.launch {
+            val rawText = _draft.value
+            val text = composeOutgoingText(rawText)
+            if (text.isBlank()) {
+                sendPendingAttachmentIfAny()
+                return@launch
+            }
+            if (!rawText.trimStart().startsWith("/")) {
+                val lines = MessageLines.splitMessageLines(text)
+                if (lines.size > MULTI_LINE_CONFIRM_MESSAGES) {
+                    _pendingMultiLineSend.value = text
+                    return@launch
+                }
+                if (lines.size > 1) {
+                    sendMultiline(text, rawText)
+                    sendPendingAttachmentIfAny()
+                    return@launch
+                }
+                sendMessage(text, rawText)
+                sendPendingAttachmentIfAny()
+                return@launch
+            }
+            if (_isSending.value) return@launch
+            _isSending.value = true
             try {
                 val aliases = userSettingsRepository.getAliases().getOrDefault(emptyMap())
                 val expanded = expandUserSlashAlias(rawText, aliases) ?: rawText
                 when (val parsed = parseSlashCommand(expanded)) {
-                    SlashCommandParseResult.NotACommand -> sendMessage(text)
+                    SlashCommandParseResult.NotACommand -> sendMessage(text, rawText)
                     SlashCommandParseResult.Incomplete -> showSlashError(R.string.chat_slash_command_incomplete)
                     is SlashCommandParseResult.Invalid -> showSlashError(
                         when (parsed.error) {
@@ -603,10 +642,13 @@ class ChatViewModel(
                             SlashCommandError.MissingArgument -> R.string.chat_slash_command_missing_argument
                             SlashCommandError.InvalidArgument -> R.string.chat_slash_command_invalid_argument
                         },
-                        "/${parsed.token}",
+                        "/" + parsed.token,
                     )
+                    // The reply bar survives Incomplete/Invalid/failed commands: nothing
+                    // was sent, so dropping it would discard the user's context.
                     is SlashCommandParseResult.Parsed -> runCatching { executeSlashCommand(parsed.command) }
-                        .onFailure { failure -> postError(failure.message ?: appContext.getString(R.string.chat_slash_command_unsupported, "/${parsed.command.name}")) }
+                        .onSuccess { _pendingReply.value = null }
+                        .onFailure { failure -> postError(failure.message ?: appContext.getString(R.string.chat_slash_command_unsupported, "/" + parsed.command.name)) }
                 }
             } finally {
                 _isSending.value = false
@@ -614,7 +656,26 @@ class ChatViewModel(
         }
     }
 
-    private fun sendMessage(text: String) {
+    private fun sendPendingAttachmentIfAny() {
+        _pendingUploads.value
+            .filterNot { it.requiresConfirmation }
+            .forEach { pending ->
+                sendUpload(pending.uri, pending.ttlSeconds, pending.id)
+            }
+    }
+    private suspend fun composeOutgoingText(rawText: String): String {
+        // A blank draft with a selected reply must stay blank: ("nick: " + "")
+        // would trim to a ghost "nick:" mention that sends an empty ping.
+        if (rawText.isBlank()) return ""
+        if (rawText.trimStart().startsWith("/")) return rawText.trim()
+        val pending = _pendingReply.value ?: return rawText.trim()
+        val style = appPreferences.replyStyle.first()
+        val customTemplate = appPreferences.replyCustomTemplate.first()
+        val prefix = buildReplyPrefix(style, customTemplate, pending.nick, pending.messageBody)
+        return (prefix + rawText).trim()
+    }
+
+    private fun sendMessage(text: String, draftSnapshot: String = _draft.value) {
         // Set this synchronously before launching: a second tap can otherwise enqueue
         // another identical request while the first one awaits the network response.
         if (_isSending.value) return
@@ -626,7 +687,10 @@ class ChatViewModel(
                     chatRepository.sendMessage(networkSlug, channelName, text).getOrThrow()
                 }.onSuccess {
                     _scrollToLatestAfterSend.tryEmit(Unit)
-                    if (_draft.value.trim() == text) setDraft("")
+                    if (_draft.value.trim() == draftSnapshot.trim()) {
+                        setDraft("")
+                        _pendingReply.value = null
+                    }
                 }.onFailure { postError(it.message) }
             } finally {
                 _isSending.value = false
@@ -638,7 +702,8 @@ class ChatViewModel(
     fun confirmMultiLineSend() {
         val text = _pendingMultiLineSend.value ?: return
         _pendingMultiLineSend.value = null
-        sendMultiline(text)
+        sendMultiline(text, _draft.value)
+        sendPendingAttachmentIfAny()
     }
 
     /** User cancelled the multi-line dialog — the draft stays untouched for editing. */
@@ -651,7 +716,7 @@ class ChatViewModel(
     // same line is retried after the server's retry-after; on any other failure
     // the unsent remainder (the failed line onward) is mirrored back into the
     // draft so the operator loses nothing that has not gone out.
-    private fun sendMultiline(text: String) {
+    private fun sendMultiline(text: String, draftSnapshot: String = _draft.value) {
         if (_isSending.value) return
         val lines = MessageLines.splitMessageLines(text)
         _isSending.value = true
@@ -676,9 +741,21 @@ class ChatViewModel(
                 if (sent > 0) _scrollToLatestAfterSend.tryEmit(Unit)
                 val residue = lines.drop(sent)
                 if (residue.isNotEmpty()) {
-                    setDraft(residue.joinToString("\n"))
-                } else if (_draft.value.trim() == text) {
+                    // When nothing went out (sent == 0, e.g. the first line failed),
+                    // the residue still carries the reply prefix baked into its first
+                    // line while the reply stays selected: rebuild it from the
+                    // unprefixed draft so the next send attaches it exactly once
+                    // instead of stacking a second attribution head.
+                    val redraft = if (sent == 0) {
+                        MessageLines.splitMessageLines(draftSnapshot).joinToString("\n")
+                    } else {
+                        residue.joinToString("\n")
+                    }
+                    setDraft(redraft)
+                    if (sent > 0) _pendingReply.value = null
+                } else if (_draft.value.trim() == draftSnapshot.trim()) {
                     setDraft("")
+                    _pendingReply.value = null
                 }
             } finally {
                 _isSending.value = false
@@ -1045,56 +1122,109 @@ class ChatViewModel(
         }
     }
 
-    fun uploadFile(uri: Uri) {
+    fun uploadFile(uri: Uri, sendImmediately: Boolean = false) {
         viewModelScope.launch {
             runCatching { channelReady.await() }
                 .onFailure { postError(it.message); return@launch }
             val meta = readUploadMeta(appContext, uri)
                 ?: run { postError(appContext.getString(R.string.chat_upload_failed)); return@launch }
-            if (uploadConfirmEnabled && _pendingUpload.value == null) {
-                // #1883 — stage behind the confirm dialog instead of sending.
-                // A second pick arriving while one is staged (e.g. a multi-file
-                // OS share) goes straight out: the dialog holds a single file.
-                _pendingUpload.value = PendingUploadConfirm(
-                    uri = meta.uri,
-                    fileName = meta.fileName,
-                    sizeBytes = meta.sizeBytes,
-                    mimeType = meta.mimeType,
-                    ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
+            val pending = PendingUploadConfirm(
+                uri = meta.uri,
+                fileName = meta.fileName,
+                sizeBytes = meta.sizeBytes,
+                mimeType = meta.mimeType,
+                ttlSeconds = effectiveUploadTtlSeconds(uploadTtlPreference),
+                requiresConfirmation = uploadConfirmEnabled && !sendImmediately,
+                id = ++nextPendingUploadId,
+            )
+            _pendingUploads.value = _pendingUploads.value
+                .filterNot { it.uri == pending.uri }
+                .plus(pending)
+            if (sendImmediately) {
+                sendUpload(
+                    pending.uri,
+                    uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS },
+                    pending.id,
                 )
-            } else {
-                sendUpload(meta.uri, uploadTtlPreference.takeIf { it in UPLOAD_TTL_LADDER_SECONDS })
             }
         }
     }
 
     fun onPendingUploadTtlChange(seconds: Int) {
-        _pendingUpload.value = _pendingUpload.value?.copy(ttlSeconds = seconds)
+        _pendingUploads.value = _pendingUploads.value.map { pending ->
+            if (pending.requiresConfirmation) pending.copy(ttlSeconds = seconds) else pending
+        }
     }
 
-    /** The dialog's Send: uploads the staged file with the chosen TTL. The
-     * choice is per-batch only — it is NOT written back to the stored
-     * preference (same as cicchetto: a one-off stays a one-off). */
-    fun confirmPendingUpload() {
-        val pending = _pendingUpload.value ?: return
-        _pendingUpload.value = null
-        sendUpload(pending.uri, pending.ttlSeconds)
+    /** Sends every staged file that is waiting for the opt-in confirmation. */
+    fun confirmPendingUploads() {
+        _pendingUploads.value
+            .filter { it.requiresConfirmation }
+            .forEach { pending ->
+                sendUpload(pending.uri, pending.ttlSeconds, pending.id)
+            }
     }
 
-    fun dismissPendingUpload() {
-        _pendingUpload.value = null
+    /** Compatibility entry point used by older callers. */
+    fun confirmPendingUpload() = confirmPendingUploads()
+
+    fun removePendingUpload(uri: Uri) {
+        if (_uploadingUri.value == uri) return
+        _pendingUploads.value = _pendingUploads.value.filterNot { it.uri == uri }
+        _failedUploadUris.value = _failedUploadUris.value - uri
     }
 
-    private fun sendUpload(uri: Uri, expireSeconds: Int?) {
+    fun retryPendingUpload(uri: Uri) {
+        val pending = _pendingUploads.value.firstOrNull { it.uri == uri } ?: return
+        _failedUploadUris.value = _failedUploadUris.value - uri
+        sendUpload(pending.uri, pending.ttlSeconds, pending.id)
+    }
+
+    fun dismissPendingUploads() {
+        _pendingUploads.value = _pendingUploads.value.filterNot { it.requiresConfirmation }
+    }
+
+    /** Compatibility entry point used by older callers. */
+    fun dismissPendingUpload() = dismissPendingUploads()
+
+    private fun sendUpload(uri: Uri, expireSeconds: Int?, pendingId: Long) {
+        synchronized(queuedUploadUris) {
+            if (!queuedUploadUris.add(uri)) return
+        }
         viewModelScope.launch {
-            runCatching {
+            uploadMutex.withLock {
+                val staged = _pendingUploads.value.firstOrNull {
+                    it.uri == uri && (pendingId == 0L || it.id == pendingId)
+                } ?: return@withLock
+                _uploadingUri.value = uri
                 _isUploading.value = true
-                val pending = readUploadFile(appContext, uri)
-                    ?: error(appContext.getString(R.string.chat_upload_failed))
-                chatRepository.uploadAndSend(networkSlug, channelName, pending.bytes, pending.fileName, pending.mimeType, expireSeconds)
-                    .getOrThrow()
-            }.onFailure { postError(it.message) }
-            _isUploading.value = false
+                val result = runCatching {
+                    val pending = readUploadFile(appContext, uri)
+                        ?: error(appContext.getString(R.string.chat_upload_failed))
+                    chatRepository.uploadAndSend(
+                        networkSlug,
+                        channelName,
+                        pending.bytes,
+                        pending.fileName,
+                        pending.mimeType,
+                        expireSeconds,
+                    ).getOrThrow()
+                }
+                if (result.isSuccess) {
+                    _pendingUploads.value = _pendingUploads.value.filterNot {
+                        it.uri == uri && (pendingId == 0L || it.id == pendingId)
+                    }
+                    _failedUploadUris.value = _failedUploadUris.value - uri
+                } else {
+                    _failedUploadUris.value = _failedUploadUris.value + uri
+                    postError(result.exceptionOrNull()?.message)
+                }
+                _isUploading.value = false
+                _uploadingUri.value = null
+            }
+            synchronized(queuedUploadUris) {
+                queuedUploadUris.remove(uri)
+            }
         }
     }
 

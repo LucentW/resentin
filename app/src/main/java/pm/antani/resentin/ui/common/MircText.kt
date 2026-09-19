@@ -71,7 +71,10 @@ private val mircColorsLight = listOf(
 )
 
 private fun mircColorOrNull(code: Int?, lightTheme: Boolean): Color? =
-    code?.let { (if (lightTheme) mircColorsLight else mircColorsDark).getOrNull(it) }
+    code?.let {
+        if (lightTheme && it in mircColorsLight.indices) mircColorsLight[it]
+        else MircPaletteArgb.getOrNull(it)?.let { rgb -> Color(0xFF000000L or rgb.toLong()) }
+    }
 
 /** Whether the app is currently rendering on a light surface — derived from the
  * theme's own background (not the OS setting) so the forced Sistema/Chiaro/Scuro
