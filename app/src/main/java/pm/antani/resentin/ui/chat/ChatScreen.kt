@@ -183,6 +183,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -243,7 +245,7 @@ private fun LazyListState.isAtChatTail(): Boolean {
         firstVisibleItemIndex == 0 &&
         firstVisibleItemScrollOffset <= AUTO_FOLLOW_BOTTOM_TOLERANCE_PX
 }
-private fun reverseChatListIndex(rowIndex: Int, rowCount: Int, dividerIndex: Int?): Int {
+internal fun reverseChatListIndex(rowIndex: Int, rowCount: Int, dividerIndex: Int?): Int {
     val renderedIndex = rowCount - 1 - rowIndex
     val renderedDivider = dividerIndex?.let { rowCount - it }
     return renderedIndex + if (renderedDivider != null && renderedIndex >= renderedDivider) 1 else 0
@@ -629,7 +631,7 @@ private fun AnimatedReplyComposerBar(
         )
     }
 }
-private fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
+internal fun formatTime(epochMillis: Long, showSeconds: Boolean): String {
     val formatter = if (showSeconds) TIME_FORMATTER_WITH_SECONDS else TIME_FORMATTER
     return Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).format(formatter)
 }
@@ -983,36 +985,44 @@ fun ChatScreen(
     val usePaging = pagingEligible && !searchOpen && !revealAllPresenceEvents && dividerIndex == null
     var pagedInitialPositioned by remember(usePaging) { mutableStateOf(false) }
     val autoFollowTracker = remember(networkSlug, channelName) { ChatAutoFollowTracker() }
+    // F2 — un solo proprietario dello scroll: follow, jump espliciti, IME,
+    // tools e send condividono la stessa coda seriale così due animazioni non
+    // possono combattere sullo stesso LazyListState nello stesso frame.
+    val chatScrollMutex = remember(networkSlug, channelName) { Mutex() }
     var programmaticScrolls by remember(networkSlug, channelName) { mutableStateOf(0) }
     var explicitScrollInProgress by remember(networkSlug, channelName) { mutableStateOf(false) }
     val positionSettled = if (usePaging) pagedInitialPositioned else initialScrollApplied
 
     suspend fun scrollToChatIndex(index: Int, animate: Boolean) {
-        programmaticScrolls++
-        try {
-            if (animate) listState.animateScrollToItem(index)
-            else listState.scrollToItem(index)
-        } finally {
-            programmaticScrolls--
+        chatScrollMutex.withLock {
+            programmaticScrolls++
+            try {
+                if (animate) listState.animateScrollToItem(index)
+                else listState.scrollToItem(index)
+            } finally {
+                programmaticScrolls--
+            }
         }
     }
 
     suspend fun requestChatTail() {
         if (explicitScrollInProgress) return
-        autoFollowTracker.requestFollow()
-        programmaticScrolls++
-        try {
-            // First request: apply the anchor together with the incoming row.
-            listState.requestScrollToItem(0)
-            withFrameNanos { }
-            // Second request: reinforce the anchor after the new row and the composer
-            // have both completed their following layout pass.
-            if (listState.layoutInfo.totalItemsCount > 0) {
+        chatScrollMutex.withLock {
+            autoFollowTracker.requestFollow()
+            programmaticScrolls++
+            try {
+                // First request: apply the anchor together with the incoming row.
                 listState.requestScrollToItem(0)
+                withFrameNanos { }
+                // Second request: reinforce the anchor after the new row and the composer
+                // have both completed their following layout pass.
+                if (listState.layoutInfo.totalItemsCount > 0) {
+                    listState.requestScrollToItem(0)
+                }
+                withFrameNanos { }
+            } finally {
+                programmaticScrolls--
             }
-            withFrameNanos { }
-        } finally {
-            programmaticScrolls--
         }
     }
 
@@ -1067,7 +1077,7 @@ fun ChatScreen(
     var mentionJumpConsumed by remember(jumpToServerTime) { mutableStateOf(false) }
     LaunchedEffect(jumpToServerTime, messages, initialHistoryReady) {
         if (jumpToServerTime <= 0L || mentionJumpConsumed || messages.isEmpty()) return@LaunchedEffect
-        val hit = messages.filter { it.serverTime >= jumpToServerTime }.minByOrNull { it.serverTime }
+        val hit = ChatJumpResolver.firstAtOrAfterTime(messages, jumpToServerTime)
         if (hit != null) {
             pendingActivityJumpId = hit.id
             mentionJumpConsumed = true
@@ -1081,10 +1091,19 @@ fun ChatScreen(
     // Land on the first unread message (per the server's read-cursor), not always the
     // bottom — only once, and only once we actually know where that is (see
     // ChatViewModel.initialReadCursorReady: null is ambiguous between "not loaded yet"
-    // and "never read anything").
+    // and "never read anything"). F4: a parità di cursore (niente unread) la
+    // viewport salvata vince sul fondo — reopen a metà storia atterra dove
+    // lasciato; il jump da mentions ha sempre precedenza e usa il suo effetto.
     LaunchedEffect(timelineRows, initialReadCursorReady, pagingEligible) {
         if (pagingEligible || initialListIndex != null || !initialReadCursorReady || messages.isEmpty() || timelineRows.isEmpty()) return@LaunchedEffect
-        initialListIndex = dividerIndex?.let { timelineRows.size - it } ?: 0
+        val viewportKey = "$networkSlug/$channelName"
+        initialListIndex = when {
+            jumpToServerTime > 0L -> dividerIndex?.let { timelineRows.size - it } ?: 0
+            dividerIndex != null -> timelineRows.size - dividerIndex
+            ChatScrollPositionStore.isParkedAtBottom(viewportKey) -> 0
+            else -> ChatScrollPositionStore.anchor(viewportKey)
+                ?.let { anchorListIndex(timelineRows, dividerIndex, it) } ?: 0
+        }
     }
 
     // The last message is not the same as the actual bottom: the list also owns a
@@ -1137,6 +1156,31 @@ fun ChatScreen(
         }
     }
 
+    // F4 — salva la viewport come ancora di messaggio (mai indice, mai cursor).
+    // Solo scroll utente reale: niente durante animazioni programmatiche o jump
+    // espliciti, altrimenti salveremmo la destinazione invece della lettura.
+    LaunchedEffect(listState, positionSettled) {
+        if (!positionSettled) return@LaunchedEffect
+        snapshotFlow { listState.firstVisibleItemIndex to listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { (firstVisible, scrolling) ->
+                if (scrolling || programmaticScrolls > 0 || explicitScrollInProgress) return@collect
+                if (timelineRows.isEmpty()) return@collect
+                val viewportKey = "$networkSlug/$channelName"
+                val renderedDivider = dividerIndex?.let { timelineRows.size - it }
+                val rowIndex = if (renderedDivider == null || firstVisible < renderedDivider) {
+                    timelineRows.lastIndex - firstVisible
+                } else {
+                    timelineRows.lastIndex - (firstVisible - 1)
+                }
+                val anchorId = timelineRows.getOrNull(rowIndex)?.messages?.lastOrNull()?.id
+                if (anchorId != null) {
+                    ChatScrollPositionStore.putAnchor(viewportKey, anchorId)
+                    ChatScrollPositionStore.unpark(viewportKey)
+                }
+            }
+    }
+
     // Mark the read cursor only after the list is settled at the tail. Updating it
     // while an animation is still running removes the unread divider from the
     // LazyColumn and forces a structural remeasure in the middle of the motion.
@@ -1159,6 +1203,9 @@ fun ChatScreen(
                 val renderedNewestId = timelineRows.lastOrNull()?.messages?.lastOrNull()?.id
                 val newestId = renderedNewestId ?: messagesState.value.lastOrNull()?.id
                 newestId?.let(viewModel::markRead)
+                // F4 — il lettore ha lasciato la stanza in fondo: al reopen
+                // (senza unread) si torna al fondo, non a un'ancora vecchia.
+                ChatScrollPositionStore.markParkedAtBottom("$networkSlug/$channelName")
             }
     }
 
@@ -1177,31 +1224,33 @@ fun ChatScreen(
 
     suspend fun runExplicitChatScroll(index: Int, followTail: Boolean) {
         if (explicitScrollInProgress) return
-        explicitScrollInProgress = true
-        shouldScrollToBottomOnIme = false
-        shouldScrollToBottomOnComposerTools = false
-        if (followTail) {
-            autoFollowTracker.requestFollow()
-        } else {
-            autoFollowTracker.stopFollowing()
-        }
-        programmaticScrolls++
-        try {
-            listState.animateScrollToItem(index.coerceAtLeast(0))
+        chatScrollMutex.withLock {
+            explicitScrollInProgress = true
+            shouldScrollToBottomOnIme = false
+            shouldScrollToBottomOnComposerTools = false
             if (followTail) {
-                // Re-anchor after the final animation frame. This handles a message
-                // inserted while the explicit jump was running without allowing a
-                // second scroll owner to fight the animation.
-                listState.requestScrollToItem(0)
-                withFrameNanos { }
-                if (listState.layoutInfo.totalItemsCount > 0) {
-                    listState.requestScrollToItem(0)
-                }
-                withFrameNanos { }
+                autoFollowTracker.requestFollow()
+            } else {
+                autoFollowTracker.stopFollowing()
             }
-        } finally {
-            programmaticScrolls--
-            explicitScrollInProgress = false
+            programmaticScrolls++
+            try {
+                listState.animateScrollToItem(index.coerceAtLeast(0))
+                if (followTail) {
+                    // Re-anchor after the final animation frame. This handles a message
+                    // inserted while the explicit jump was running without allowing a
+                    // second scroll owner to fight the animation.
+                    listState.requestScrollToItem(0)
+                    withFrameNanos { }
+                    if (listState.layoutInfo.totalItemsCount > 0) {
+                        listState.requestScrollToItem(0)
+                    }
+                    withFrameNanos { }
+                }
+            } finally {
+                programmaticScrolls--
+                explicitScrollInProgress = false
+            }
         }
     }
 
@@ -2096,6 +2145,7 @@ fun ChatScreen(
                 onReply = stableReply,
                 onMessageMenu = stableMessageMenu,
                 pagedMessages = pagedMessages.takeIf { usePaging },
+                channelKey = "$networkSlug/$channelName",
             )
             if (isLoadingOlder) {
                 Surface(
@@ -3409,7 +3459,7 @@ private fun DateChip(timeMillis: Long, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun UnreadDivider(density: MessageDensity) {
+internal fun UnreadDivider(density: MessageDensity) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = density.dividerVertical()),
         verticalAlignment = Alignment.CenterVertically,
@@ -3484,7 +3534,7 @@ private fun MentionCountBadge(count: Int, modifier: Modifier = Modifier) {
  * would "mention" you and highlighting all of them would just be noise, not a signal).
  * Once the `/hilight` watchlist has loaded, matching upgrades to cicchetto's
  * own-nick-UNION-patterns word-boundary match instead of the plain substring. */
-private fun isMentionRow(
+internal fun isMentionRow(
     message: MessageEntity,
     myNick: String?,
     isQuery: Boolean,
@@ -3536,7 +3586,7 @@ private fun systemEventText(event: FormattedEvent.System, showHostmask: Boolean)
 
 
 
-private class MessageRenderCache {
+internal class MessageRenderCache {
     private data class Entry(
         val fingerprint: Int,
         val formatted: FormattedEvent,
@@ -3586,191 +3636,8 @@ private class MessageRenderCache {
     }
 }
 
-@Immutable
-private data class ChatMessageListData(
-    val timelineRows: List<ChatTimelineRow>,
-    val members: List<MemberEntity>,
-    val highlightPatterns: List<String>?,
-    val expandedPresenceBursts: Set<Long>,
-)
-
 @Composable
-private fun ChatMessageList(
-    listState: LazyListState,
-    renderCache: MessageRenderCache,
-    data: ChatMessageListData,
-    pagedMessages: LazyPagingItems<MessageEntity>? = null,
-    dividerIndex: Int?,
-
-    displayMode: ChatDisplayMode,
-    messageDensity: MessageDensity,
-    showSeconds: Boolean,
-    coloredNicklist: Boolean,
-    showHostmaskInEvents: Boolean,
-    myNick: String?,
-    isQuery: Boolean,
-    isServer: Boolean,
-    viewerUsername: String,
-
-    selectedSearchMessageId: Long?,
-    selectingMessageId: Long?,
-
-    onTogglePresence: (Long) -> Unit,
-    onReply: (String, String) -> Unit,
-    onMessageMenu: (MessageMenuTarget) -> Unit,
-) {
-    val scrolling by remember(listState) {
-        derivedStateOf { listState.isScrollInProgress }
-    }
-
-    val renderedDividerIndex = dividerIndex?.let { data.timelineRows.size - it }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        reverseLayout = true,
-        contentPadding = PaddingValues(vertical = 8.dp),
-    ) {
-        if (pagedMessages == null) {
-        data.timelineRows.asReversed().forEachIndexed { index, row ->
-            val originalIndex = data.timelineRows.lastIndex - index
-            if (index == renderedDividerIndex) {
-                item(key = "unread-divider", contentType = "unread-divider") {
-                    UnreadDivider(density = messageDensity)
-                }
-            }
-            when (row) {
-                is ChatTimelineRow.Message -> item(
-                    key = row.key,
-                    contentType = timelineContentType(row),
-                ) {
-                    val message = row.message
-                    val previous = data.timelineRows.getOrNull(originalIndex - 1)?.messages?.lastOrNull()
-                    val gapFromPrevious = previous?.let { message.serverTime - it.serverTime }
-                    val tight = previous != null &&
-                        originalIndex != dividerIndex &&
-                        gapFromPrevious != null && gapFromPrevious in 0..MESSAGE_GROUP_WINDOW_MS &&
-                        previous.kind !in SYSTEM_EVENT_KINDS &&
-                        message.kind !in SYSTEM_EVENT_KINDS &&
-                        previous.sender.equals(message.sender, ignoreCase = true)
-                    ChatTimelineMessageItem(
-                        message = message,
-                        renderCache = renderCache,
-                        members = data.members,
-                        displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                        density = messageDensity,
-                        showSeconds = showSeconds,
-                        coloredNicklist = coloredNicklist,
-                        showHostmaskInEvents = showHostmaskInEvents,
-                        isMention = isMentionRow(message, myNick, isQuery, data.highlightPatterns),
-                        isQuery = isQuery,
-                        isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
-                        isSelected = message.id == selectedSearchMessageId,
-                        onReply = onReply,
-                        onMessageMenu = onMessageMenu,
-                        selectingMessageId = selectingMessageId,
-                        tight = tight,
-                        deferRichContent = scrolling,
-                    )
-                }
-
-                is ChatTimelineRow.PresenceSummary -> item(
-                    key = row.key,
-                    contentType = "presence-summary",
-                ) {
-                    val burstKey = row.messages.first().id
-                    val selectedInBurst = row.messages.any { it.id == selectedSearchMessageId }
-                    val expanded = selectedInBurst || burstKey in data.expandedPresenceBursts
-                    val uniqueUsers = row.messages.map { it.sender.lowercase() }.distinct().size
-                    val senderLabel = row.sender ?: pluralStringResource(
-                        R.plurals.chat_activity_users,
-                        uniqueUsers,
-                        uniqueUsers,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        PresenceBurstSummaryRow(
-                            sender = senderLabel,
-                            joins = row.joins,
-                            leaves = row.leaves,
-                            time = formatTime(row.messages.last().serverTime, showSeconds),
-                            isIrcLine = isServer || displayMode == ChatDisplayMode.IRC_LINE,
-                            expanded = expanded,
-                            selected = selectedInBurst,
-                            onToggle = { onTogglePresence(burstKey) },
-                        )
-                        if (expanded) {
-                            row.messages.forEach { event ->
-                                ChatTimelineMessageItem(
-                                    message = event,
-                                    renderCache = renderCache,
-                                    members = data.members,
-                                    displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                                    density = messageDensity,
-                                    showSeconds = showSeconds,
-                                    coloredNicklist = coloredNicklist,
-                                    showHostmaskInEvents = showHostmaskInEvents,
-                                    isMention = false,
-                                    isQuery = isQuery,
-                                    isMine = (myNick ?: viewerUsername).equals(event.sender, ignoreCase = true),
-                                    isSelected = event.id == selectedSearchMessageId,
-                                    onReply = onReply,
-                                    onMessageMenu = onMessageMenu,
-                                    selectingMessageId = selectingMessageId,
-                                    tight = false,
-                                    deferRichContent = scrolling,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        } else {
-            val pagingItems = pagedMessages
-            items(
-                count = pagingItems.itemCount,
-                key = pagingItems.itemKey { it.id },
-                contentType = pagingItems.itemContentType { pagingContentType(it) },
-            ) { index ->
-                val message = pagingItems[index]
-                if (message == null) {
-                    Spacer(Modifier.fillMaxWidth().height(48.dp))
-                } else {
-                    ChatTimelineMessageItem(
-                        message = message,
-                        renderCache = renderCache,
-                        members = data.members,
-                        displayMode = if (isServer) ChatDisplayMode.IRC_LINE else displayMode,
-                        density = messageDensity,
-                        showSeconds = showSeconds,
-                        coloredNicklist = coloredNicklist,
-                        showHostmaskInEvents = showHostmaskInEvents,
-                        isMention = isMentionRow(message, myNick, isQuery, data.highlightPatterns),
-                        isQuery = isQuery,
-                        isMine = (myNick ?: viewerUsername).equals(message.sender, ignoreCase = true),
-                        isSelected = message.id == selectedSearchMessageId,
-                        onReply = onReply,
-                        onMessageMenu = onMessageMenu,
-                        selectingMessageId = selectingMessageId,
-                        tight = false,
-                        deferRichContent = scrolling,
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun pagingContentType(message: MessageEntity): String = if (message.kind in SYSTEM_EVENT_KINDS) "system-message" else "chat-message"
-
-private fun timelineContentType(row: ChatTimelineRow): String = when (row) {
-    is ChatTimelineRow.Message ->
-        if (row.message.kind in SYSTEM_EVENT_KINDS) "system-message" else "chat-message"
-    is ChatTimelineRow.PresenceSummary -> "presence-summary"
-}
-
-
-@Composable
-private fun ChatTimelineMessageItem(
+internal fun ChatTimelineMessageItem(
     message: MessageEntity,
     renderCache: MessageRenderCache,
     members: List<MemberEntity>,
@@ -3813,12 +3680,13 @@ private fun ChatTimelineMessageItem(
             onMessageMenu = onMessageMenu,
             selectingMessageId = selectingMessageId,
             tight = tight,
+            deferRichContent = deferRichContent,
         )
     }
 }
 
 @Composable
-private fun PresenceBurstSummaryRow(
+internal fun PresenceBurstSummaryRow(
     sender: String,
     joins: Int,
     leaves: Int,
@@ -4045,8 +3913,8 @@ private fun buildNickLine(
     append(renderMessageText(renderCache, body, lightTheme, stripFormatting, deferRichContent, onDccFileClick, onChannelClick))
 }
 
-private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
-private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
+internal const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
+internal val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
 private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
 
