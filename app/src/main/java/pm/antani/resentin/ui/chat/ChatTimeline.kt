@@ -149,8 +149,6 @@ private fun hasRecentChatActivity(
 private fun MessageEntity.isPresenceTransition(): Boolean =
     kind == "join" || kind == "part" || kind == "quit"
 
-private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
-
 private const val MIN_PRESENCE_BURST_SIZE = 3
 private const val MIN_SUPPRESSED_PRESENCE_SUMMARY_SIZE = 2
 private const val SMART_PRESENCE_ACTIVE_WINDOW_MS = 10 * 60_000L
