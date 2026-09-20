@@ -3821,9 +3821,14 @@ internal class MessageRenderCache {
     fun messageText(text: String, lightTheme: Boolean, stripFormatting: Boolean, deferRichContent: Boolean): AnnotatedString {
         val key = TextKey(text, lightTheme, stripFormatting, deferRichContent)
         return if (deferRichContent) {
-            richTextEntries.getOrPut(key) {
-                buildAnnotatedString { append(if (stripFormatting) stripMircCodes(text) else text) }
-            }
+            // Mid-fling fast path: skip mircAnnotatedString's per-span SpanStyle/
+            // withStyle/link-detection work, but ALWAYS strip the raw mIRC control
+            // bytes first — regardless of the stripFormatting setting. Appending
+            // the untouched `text` when stripFormatting was off (the default, i.e.
+            // colors wanted) used to leave \x03/\x02/... control codes literally in
+            // the rendered string: not just "no color", but the color code's own
+            // digits showing up as stray leading characters while scrolling.
+            richTextEntries.getOrPut(key) { buildAnnotatedString { append(stripMircCodes(text)) } }
         } else {
             richTextEntries.getOrPut(key) { mircAnnotatedString(text, lightTheme, stripFormatting) }
         }
