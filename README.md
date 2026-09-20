@@ -86,8 +86,9 @@ due opzioni indipendenti in Impostazioni:
   endpoint reale con crittografia Web Push (VAPID + RFC 8291), esattamente
   come farebbe un service worker da browser: il payload è cifrato end-to-end
   fino al dispositivo, il distributore fa solo da relay. Lato server serve
-  [grappa-irc](https://github.com/vjt/grappa-irc) con supporto UnifiedPush
-  (attualmente in revisione, [PR #1261](https://github.com/vjt/grappa-irc/pull/1261)).
+  [grappa-irc](https://github.com/vjt/grappa-irc) con supporto UnifiedPush,
+  in mainline dalla v1.1.0 ([PR #1261](https://github.com/vjt/grappa-irc/pull/1261),
+  mergiata — sulla carta non esistono più istanze che non lo supportano).
 - **Resta connesso in background**, la vecchia modalità always-on, se
   preferisci non installare un distributore.
 
