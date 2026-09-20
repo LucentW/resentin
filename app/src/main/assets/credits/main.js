@@ -21,6 +21,12 @@ const RESENTIN_VERSION = params.get("version") ?? "";
 const ROLL_SPEED_PX_S = 42; // cic's own roll settles around ~34-40px/s.
 const INTERLUDE_MS = 3200; // the parked "pure rain" pause between passes.
 const BLOCK_FADE_START = 0.9; // fraction of the travel where a block dissolves.
+// Fast forward (vjt, #grappa: "un bottone fast forward che velocizza lo
+// scroll?"), same multiplier as cicchetto's own button. Resentin drives the
+// scroll from a plain px/s number rather than a CSS Animation's playbackRate,
+// so this is a straight multiplier on ROLL_SPEED_PX_S in tick() — no rate to
+// re-apply after a restart, no durations to divide it back out of.
+const FAST_FORWARD_RATE = 5;
 
 const $roll = document.getElementById("roll");
 const $viewport = document.getElementById("viewport");
@@ -28,6 +34,7 @@ const $canvas = document.getElementById("rain-canvas");
 const $movement = document.getElementById("movement-label");
 const $muteBtn = document.getElementById("mute-btn");
 const $closeBtn = document.getElementById("close-btn");
+const $ffBtn = document.getElementById("ff-btn");
 
 let muted = localStorage.getItem("credits-muted") === "1";
 $muteBtn.setAttribute("aria-pressed", String(muted));
@@ -39,6 +46,7 @@ let fadingBlock = null; // the DOM node currently mid-dissolve, or null
 let travelY = 0; // px translated up from the start position, this pass
 let travelDistance = 0; // this pass's total travel (viewport + roll height)
 let lastFrameAt = 0;
+let fastForward = false; // held down: see fastForwardOn/Off below.
 
 const deck = createProseDeck();
 // Two separate first-block passes, not one concatenated block: combining the
@@ -65,6 +73,34 @@ $muteBtn.addEventListener("click", () => {
   localStorage.setItem("credits-muted", muted ? "1" : "0");
   $muteBtn.setAttribute("aria-pressed", String(muted));
   arpeggio?.setMuted(muted);
+});
+
+// Press and hold, like the button on a tape deck (cic's own wording): the
+// roll runs at FAST_FORWARD_RATE for exactly as long as the finger is down,
+// not a toggle a second press has to undo — a fast-forward left latched by a
+// missed release would never slow back down. Pointer capture on the button
+// itself means a release outside its bounds (drag off, or the finger simply
+// lifting past the edge) still reaches fastForwardOff.
+function fastForwardOn(event) {
+  $ffBtn.setPointerCapture?.(event.pointerId);
+  fastForward = true;
+  $ffBtn.setAttribute("aria-pressed", "true");
+}
+function fastForwardOff() {
+  if (!fastForward) return;
+  fastForward = false;
+  $ffBtn.setAttribute("aria-pressed", "false");
+}
+$ffBtn.addEventListener("pointerdown", fastForwardOn);
+$ffBtn.addEventListener("pointerup", fastForwardOff);
+$ffBtn.addEventListener("pointercancel", fastForwardOff);
+$ffBtn.addEventListener("lostpointercapture", fastForwardOff);
+// The backstop for what capture cannot cover: the app going away mid-hold
+// (task switcher, lock button, a call) does not always deliver a pointer
+// event on the way out, and a roll left stuck at 5x behind a hidden tab is
+// exactly the state this guards against.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") fastForwardOff();
 });
 
 function personRow(name, nick, commits) {
@@ -274,7 +310,8 @@ function tick(now) {
   const dtMs = Math.min(now - lastFrameAt, MAX_FRAME_DT_MS);
   lastFrameAt = now;
 
-  travelY += (ROLL_SPEED_PX_S * dtMs) / 1000;
+  const speed = fastForward ? ROLL_SPEED_PX_S * FAST_FORWARD_RATE : ROLL_SPEED_PX_S;
+  travelY += (speed * dtMs) / 1000;
   $roll.style.transform = `translateY(${passVh - travelY}px)`;
 
   if (fadingBlock !== null) {

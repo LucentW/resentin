@@ -17,6 +17,12 @@
     <button type="button" id="mute-btn" aria-pressed="false" aria-label="mute">&#128266;</button>
     <button type="button" id="close-btn" aria-label="close">&#10005;</button>
   </div>
+  <!-- Bottom right, opposite the chrome (vjt, #grappa: "in basso a dx?") — one-
+       press buttons up top, a held one down here, so a mis-tap can't reach
+       mute/close mid-hold. Press and hold, not a toggle: see main.js. -->
+  <div class="credits-ff">
+    <button type="button" id="ff-btn" class="credits-ff-button" aria-pressed="false" aria-label="fast forward the credits">&#9193;</button>
+  </div>
 </div>
 <!-- Generated at build time by the resentin-credits GitHub Actions step
      (scripts/credits.sh) from `git shortlog`. Falls back to an empty roll

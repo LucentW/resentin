@@ -59,7 +59,8 @@ html, body {
   gap: 0.5rem;
 }
 
-.credits-chrome button {
+.credits-chrome button,
+.credits-ff-button {
   font: inherit;
   color: var(--fg);
   background: rgba(0, 0, 0, 0.4);
@@ -69,9 +70,26 @@ html, body {
   cursor: pointer;
 }
 
-.credits-chrome button[aria-pressed="true"] {
+.credits-chrome button[aria-pressed="true"],
+.credits-ff-button[aria-pressed="true"] {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* Bottom right, mirroring .credits-movement's bottom-left placement — see
+   index.html for why it lives in its own corner away from the chrome. */
+.credits-ff {
+  position: absolute;
+  z-index: 2;
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.credits-ff-button {
+  /* .credits-modal already carries touch-action: none, but this is the
+     element that actually takes the pointer capture on hold — saying it
+     here too means a browser pan gesture can never claim the release. */
+  touch-action: none;
 }
 
 .credits-movement {
@@ -314,6 +332,13 @@ html, body {
   position: static;
   animation: none;
   padding: max(3rem, env(safe-area-inset-top)) 1.5rem max(3rem, env(safe-area-inset-bottom));
+}
+
+/* Nothing left to speed through once the roll is static — the finale (or the
+   reduced-motion fallback, which reuses this same "ended" class) has nothing
+   for it to fast-forward. */
+.credits-viewport.ended ~ .credits-ff {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
