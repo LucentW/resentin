@@ -26,6 +26,9 @@ sealed interface SlashCommandParseResult {
     data class Invalid(val error: SlashCommandError, val token: String) : SlashCommandParseResult
 }
 
+/** IRC CTCP ACTION envelope used by /me. */
+internal fun ctcpActionBody(text: String): String = "\u0001ACTION $text\u0001"
+
 private fun supported(
     name: String,
     syntaxRes: Int,

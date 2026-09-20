@@ -768,7 +768,15 @@ class ChatViewModel(
         val argument = args.firstOrNull()
         when (command.name) {
             "me" -> {
-                chatRepository.sendMessage(networkSlug, channelName, args.joinToString(" "), channelName).getOrThrow()
+                // /me is an ordinary PRIVMSG whose body carries the CTCP ACTION
+                // envelope. ctcpTarget is reserved for /ctcp and /ping relays;
+                // sending the active channel there makes Grappa route this as a
+                // non-ACTION CTCP request and reject it with HTTP 400.
+                chatRepository.sendMessage(
+                    networkSlug,
+                    channelName,
+                    ctcpActionBody(args.joinToString(" ")),
+                ).getOrThrow()
                 setDraft("")
             }
             "join" -> {
