@@ -51,6 +51,16 @@ enum class ThemeMode {
     DARK,
 }
 
+/** When the app lock engages after the app goes to background. Cold start
+ * always locks when the lock itself is enabled — this only controls the
+ * background → foreground grace period, chosen by the user in Settings. */
+enum class AppLockTimeout(val seconds: Long) {
+    IMMEDIATELY(0),
+    AFTER_1_MIN(60),
+    AFTER_5_MIN(300),
+    AFTER_15_MIN(900),
+}
+
 /** Bundled monospace families available to the app. SYSTEM keeps the platform
  * default for the regular UI and the platform monospace face for code/IRC rows. */
 enum class AppFontFamily {
@@ -92,6 +102,9 @@ class AppPreferences(private val context: Context) {
     private val keyLineSpacing = stringPreferencesKey("line_spacing")
     private val keyLineHeightScale = floatPreferencesKey("line_height_scale")
     private val keyDismissedUpdateVersion = stringPreferencesKey("dismissed_update_version")
+    private val keyAppLockEnabled = booleanPreferencesKey("app_lock_enabled")
+    private val keyAppLockTimeout = stringPreferencesKey("app_lock_timeout")
+    private val keyAppLockHidePreview = booleanPreferencesKey("app_lock_hide_preview")
 
     val pinnedChannels: Flow<Set<String>> = context.dataStore.data.map { it[keyPinnedChannels] ?: emptySet() }
 
@@ -348,5 +361,31 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit {
             if (epochMillis != null) it[keyPushDecryptionFailureAt] = epochMillis else it.remove(keyPushDecryptionFailureAt)
         }
+    }
+
+    /** App lock (Settings → Sicurezza): UI gate via the system
+     * BiometricPrompt (fingerprint/face or device PIN/pattern/password).
+     * Off by default; enabling requires the device to have a screen lock. */
+    val appLockEnabled: Flow<Boolean> = context.dataStore.data.map { it[keyAppLockEnabled] ?: false }
+
+    suspend fun setAppLockEnabled(value: Boolean) {
+        context.dataStore.edit { it[keyAppLockEnabled] = value }
+    }
+
+    /** Grace period after backgrounding before the lock re-engages. */
+    val appLockTimeout: Flow<AppLockTimeout> = context.dataStore.data.map {
+        runCatching { AppLockTimeout.valueOf(it[keyAppLockTimeout] ?: AppLockTimeout.IMMEDIATELY.name) }
+            .getOrDefault(AppLockTimeout.IMMEDIATELY)
+    }
+
+    suspend fun setAppLockTimeout(timeout: AppLockTimeout) {
+        context.dataStore.edit { it[keyAppLockTimeout] = timeout.name }
+    }
+
+    /** Hides the app preview in the recent-apps switcher (FLAG_SECURE). */
+    val appLockHidePreview: Flow<Boolean> = context.dataStore.data.map { it[keyAppLockHidePreview] ?: false }
+
+    suspend fun setAppLockHidePreview(value: Boolean) {
+        context.dataStore.edit { it[keyAppLockHidePreview] = value }
     }
 }
