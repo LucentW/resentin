@@ -1213,13 +1213,13 @@ fun ChatScreen(
                         is ChatTimelineRow.Message -> item(key = row.key) {
                             val message = row.message
                             val previous = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
-                            val gapFromPrevious = previous?.let { message.serverTime - it.serverTime }
-                            val tight = previous != null &&
-                                index != dividerIndex &&
-                                gapFromPrevious != null && gapFromPrevious in 0..MESSAGE_GROUP_WINDOW_MS &&
-                                previous.kind !in SYSTEM_EVENT_KINDS &&
-                                message.kind !in SYSTEM_EVENT_KINDS &&
-                                previous.sender.equals(message.sender, ignoreCase = true)
+                            // Persistent in-list day chip (motd parity): drawn inside this
+                            // row's own item, so item indexes, keys and jump math never shift.
+                            val showDay = previous == null || !isSameDay(previous.serverTime, message.serverTime)
+                            val tight = index != dividerIndex &&
+                                continuesMessageGroup(previous, message)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (showDay) DaySeparatorRow(timeMillis = message.serverTime, density = messageDensity)
                             ChatTimelineMessageItem(
                                 message = message,
                                 members = members,
@@ -1237,6 +1237,7 @@ fun ChatScreen(
                                 selectingMessageId = selectingMessageId,
                                 tight = tight,
                             )
+                            }
                         }
                         is ChatTimelineRow.PresenceSummary -> item(key = row.key) {
                             val burstKey = row.messages.first().id
@@ -1248,6 +1249,14 @@ fun ChatScreen(
                                 uniqueUsers,
                                 uniqueUsers,
                             )
+                            // Same day chip as message rows: the burst is one visual unit,
+                            // so the chip goes above it, never between its events.
+                            val burstPrevious = timelineRows.getOrNull(index - 1)?.messages?.lastOrNull()
+                            val burstFirst = row.messages.first()
+                            val showBurstDay = burstPrevious == null ||
+                                !isSameDay(burstPrevious.serverTime, burstFirst.serverTime)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (showBurstDay) DaySeparatorRow(timeMillis = burstFirst.serverTime, density = messageDensity)
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 PresenceBurstSummaryRow(
                                     sender = senderLabel,
@@ -1286,6 +1295,7 @@ fun ChatScreen(
                                         )
                                     }
                                 }
+                            }
                             }
                         }
                     }
@@ -2548,6 +2558,20 @@ private fun DateChip(timeMillis: Long, modifier: Modifier = Modifier) {
     }
 }
 
+/** Persistent in-list day chip (motd parity): same look as the floating
+ * DateChip shown while scrolling, but always visible. Drawn inside the
+ * opening row's own LazyColumn item (never a separate item), so item
+ * indexes, keys and jump math never shift. Works in both display modes. */
+@Composable
+private fun DaySeparatorRow(timeMillis: Long, density: MessageDensity) {
+    Box(
+        modifier = Modifier.fillMaxWidth().padding(vertical = density.dividerVertical()),
+        contentAlignment = Alignment.Center,
+    ) {
+        DateChip(timeMillis = timeMillis)
+    }
+}
+
 @Composable
 private fun UnreadDivider(density: MessageDensity) {
     Row(
@@ -2927,7 +2951,7 @@ private fun buildNickLine(
     append(withClickableLinks(mircAnnotatedString(body, lightTheme, stripFormatting), linkStylesFor(lightTheme), onDccFileClick, onChannelClick))
 }
 
-private const val MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000L
+// MESSAGE_GROUP_WINDOW_MS lives in ChatTimeline.kt next to continuesMessageGroup.
 private val SYSTEM_EVENT_KINDS = setOf("join", "part", "quit", "kick", "mode", "nick_change", "topic")
 private val PRESENCE_EVENT_KINDS = setOf("join", "part", "quit")
 private enum class ActivityFilter { ALL, PRESENCE, OTHER }
