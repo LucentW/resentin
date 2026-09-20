@@ -33,7 +33,11 @@ function cowSaying(said) {
 
 const CREDITS_COW = cowSaying(COW_SAYS);
 
-/** vjt's special thanks, exactly as dictated on issue 1929 — copied verbatim. */
+/** vjt's special thanks, dictated on issue 1929 and added to by order since —
+ * copied verbatim, in order. Sythos was added on vjt's order, #grappa
+ * 2026-09-20: "metti sythos in special thanks nei credits" (cicchetto
+ * b499f01a), for Cordiale, a native Rust + Slint desktop client written
+ * against the published protocol rather than the source. */
 const CREDITS_SPECIAL_THANKS = [
   { who: "Hypnotize, Mezmerize, Sonic, scorpion, joep", why: "for keeping Azzurra standing" },
   { who: "DeepSET / Johnny^Lizard", why: "for embracing grappa and spreading it far and wide" },
@@ -42,6 +46,7 @@ const CREDITS_SPECIAL_THANKS = [
   { who: "nextime", why: "for shottino" },
   { who: "Lucy", why: "for resentin" },
   { who: "Sonic", why: "for bicchierino" },
+  { who: "Sythos", why: "for Cordiale" },
   { who: "morph", why: "for spreading grappa, bringing people back, and throwing himself at the ircd and the services again" },
   { who: "the whole #sniffo crew", why: "for still being here" },
 ];

@@ -29,6 +29,7 @@ OUT="${REPO_ROOT}/app/src/main/assets/credits/credits-data.js"
 sha=""
 date=""
 shortlog=""
+shallow=""
 
 # `.git` absent (a source tarball, not how this repo ships today but the
 # same honest-degrade posture as grappa's script) yields nulls/empty rather
@@ -36,9 +37,23 @@ shortlog=""
 if [ -e "${REPO_ROOT}/.git" ]; then
 	sha="$(git -C "${REPO_ROOT}" rev-parse --short HEAD 2>/dev/null || true)"
 	date="$(git -C "${REPO_ROOT}" log -1 --format=%cI 2>/dev/null || true)"
-	# --no-merges: a merge commit must not credit the merger with the work
-	# of whoever authored the branch.
-	shortlog="$(git -C "${REPO_ROOT}" shortlog -sn --no-merges HEAD 2>/dev/null || true)"
+	# grappa-irc issue 1773: on a SHALLOW clone, `shortlog` aggregates over
+	# history it doesn't have, and answers CONFIDENTLY WRONG rather than
+	# emptily — it credits the whole roll to whoever authored the one commit
+	# that happened to be fetched, in the exact shape a correct answer has.
+	# CI passes `fetch-depth: 0` (see the header comment) so this never fires
+	# there; the gate exists for the local run this script's own docstring
+	# invites, where a shallow clone is plausible. sha/date stay: a shallow
+	# repo knows both exactly, and nulling them would claim no history at
+	# all, a different (and false) fact. `--is-shallow-repository` needs git
+	# 2.15+; an older git leaves this empty, which reads as not-shallow and
+	# preserves the previous (ungated) behavior exactly.
+	shallow="$(git -C "${REPO_ROOT}" rev-parse --is-shallow-repository 2>/dev/null || true)"
+	if [ "${shallow}" != "true" ]; then
+		# --no-merges: a merge commit must not credit the merger with the
+		# work of whoever authored the branch.
+		shortlog="$(git -C "${REPO_ROOT}" shortlog -sn --no-merges HEAD 2>/dev/null || true)"
+	fi
 fi
 
 # `<git author name><TAB><nick>`, `#` comments and blanks skipped. Optional —
