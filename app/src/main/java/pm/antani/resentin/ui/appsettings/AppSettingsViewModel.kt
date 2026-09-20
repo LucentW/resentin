@@ -5,9 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -28,6 +31,8 @@ import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.PushRepository
 import pm.antani.resentin.domain.repository.UserSettingsRepository
+import pm.antani.resentin.domain.update.AvailableUpdate
+import pm.antani.resentin.domain.update.UpdateChecker
 import pm.antani.resentin.net.dto.DisplayPrefsDto
 import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
 import pm.antani.resentin.net.dto.VhostOptionDto
@@ -77,6 +82,7 @@ class AppSettingsViewModel(
     private val pushRepository: PushRepository,
     private val authRepository: AuthRepository,
     private val chatRepository: ChatRepository,
+    private val updateChecker: UpdateChecker,
     private val appContext: Context,
 ) : ViewModel() {
 
@@ -89,6 +95,34 @@ class AppSettingsViewModel(
 
     private val _messageDbSizeBytes = MutableStateFlow(0L)
     val messageDbSizeBytes: StateFlow<Long> = _messageDbSizeBytes.asStateFlow()
+
+    // The same singleton the Home banner watches (AppContainer.updateChecker),
+    // so a hit from this manual check shows up there too — no separate result
+    // to reconcile. Gated end-to-end by BuildConfig.UPDATE_CHECK_ENABLED: the
+    // row this feeds is hidden on a non-GitHub build, and UpdateChecker.check()
+    // itself no-ops there regardless.
+    val availableUpdate: StateFlow<AvailableUpdate?> = updateChecker.available
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _checkingForUpdate = MutableStateFlow(false)
+    val checkingForUpdate: StateFlow<Boolean> = _checkingForUpdate.asStateFlow()
+
+    private val _updateUpToDateEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val updateUpToDateEvents: SharedFlow<Unit> = _updateUpToDateEvents.asSharedFlow()
+
+    /** "Check now" for the row in Settings. A hit is picked up by [availableUpdate]
+     * exactly like the automatic startup check; a miss fires [updateUpToDateEvents]
+     * once, since that's the only way to tell "checked, still current" apart from
+     * "never checked" — [availableUpdate] alone reads the same (null) either way. */
+    fun checkForUpdates() {
+        if (_checkingForUpdate.value) return
+        viewModelScope.launch {
+            _checkingForUpdate.value = true
+            updateChecker.check()
+            _checkingForUpdate.value = false
+            if (updateChecker.available.value == null) _updateUpToDateEvents.emit(Unit)
+        }
+    }
 
     fun refreshMessageDbSize() {
         _messageDbSizeBytes.value = chatRepository.messageDatabaseSizeBytes()
@@ -640,6 +674,7 @@ class AppSettingsViewModel(
             pushRepository: PushRepository,
             authRepository: AuthRepository,
             chatRepository: ChatRepository,
+            updateChecker: UpdateChecker,
             appContext: Context,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
@@ -650,6 +685,7 @@ class AppSettingsViewModel(
                     pushRepository,
                     authRepository,
                     chatRepository,
+                    updateChecker,
                     appContext,
                 ) as T
             }

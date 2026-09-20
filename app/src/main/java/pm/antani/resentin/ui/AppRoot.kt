@@ -328,6 +328,7 @@ fun AppRoot(
                     container.pushRepository,
                     container.authRepository,
                     container.chatRepository,
+                    container.updateChecker,
                     appContext,
                 ),
             )

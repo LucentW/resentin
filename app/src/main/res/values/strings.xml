@@ -146,6 +146,11 @@
     <string name="settings_admin_panel_desc">Reti, vhost, utenti, sessioni e visitor</string>
     <string name="settings_credits">Crediti</string>
     <string name="settings_credits_desc">Contributor, ringraziamenti e musica</string>
+    <string name="settings_check_updates">Controlla aggiornamenti</string>
+    <string name="settings_check_updates_desc">Verifica se c\'è una versione più recente su GitHub</string>
+    <string name="settings_check_updates_checking">Verifica in corso…</string>
+    <string name="settings_check_updates_found">Versione %1$s disponibile — tocca per scaricare</string>
+    <string name="settings_check_updates_up_to_date">Resentin è già aggiornato</string>
     <string name="admin_title">Amministrazione</string>
     <string name="admin_tab_networks">Reti</string>
     <string name="admin_tab_vhosts">Vhost</string>

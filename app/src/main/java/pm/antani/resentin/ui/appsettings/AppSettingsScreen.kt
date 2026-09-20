@@ -8,6 +8,7 @@ import android.Manifest
 import android.app.LocaleManager
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import android.os.LocaleList
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Celebration
 import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material3.AlertDialog
@@ -65,6 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +77,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -83,6 +87,7 @@ import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import org.unifiedpush.android.connector.UnifiedPush
+import pm.antani.resentin.BuildConfig
 import pm.antani.resentin.R
 import pm.antani.resentin.data.prefs.AppLockTimeout
 import pm.antani.resentin.data.prefs.ChatDisplayMode
@@ -90,6 +95,7 @@ import pm.antani.resentin.data.prefs.AppFontFamily
 import pm.antani.resentin.data.prefs.MessageDensity
 import pm.antani.resentin.data.prefs.ReplyStyle
 import pm.antani.resentin.data.prefs.ThemeMode
+import pm.antani.resentin.domain.update.AvailableUpdate
 import pm.antani.resentin.net.dto.PushSubscriptionSummaryDto
 import pm.antani.resentin.net.dto.VhostOptionDto
 import pm.antani.resentin.ui.chat.CreditsScreen
@@ -213,6 +219,14 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     var showCredits by remember { mutableStateOf(false) }
     var appLockError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val availableUpdate by viewModel.availableUpdate.collectAsState()
+    val checkingForUpdate by viewModel.checkingForUpdate.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.updateUpToDateEvents.collect {
+            Toast.makeText(context, context.getString(R.string.settings_check_updates_up_to_date), Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -421,6 +435,11 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         onSelect = { selectedSection = it },
                         onAdminClick = onAdminClick,
                         onCreditsClick = { showCredits = true },
+                        showUpdateCheck = BuildConfig.UPDATE_CHECK_ENABLED,
+                        checkingForUpdate = checkingForUpdate,
+                        availableUpdate = availableUpdate,
+                        onCheckForUpdates = viewModel::checkForUpdates,
+                        onDownloadUpdate = { uriHandler.openUri(it) },
                     )
                 }
             }
@@ -1209,6 +1228,11 @@ private fun SettingsHubCard(
     onSelect: (SettingsSection) -> Unit,
     onAdminClick: () -> Unit,
     onCreditsClick: () -> Unit,
+    showUpdateCheck: Boolean,
+    checkingForUpdate: Boolean,
+    availableUpdate: AvailableUpdate?,
+    onCheckForUpdates: () -> Unit,
+    onDownloadUpdate: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1250,6 +1274,28 @@ private fun SettingsHubCard(
                         onCreditsClick,
                     ),
                 )
+                // Hidden entirely on a non-GitHub build (Play Store/F-Droid handle
+                // their own updates) — see BuildConfig.UPDATE_CHECK_ENABLED at the
+                // call site. Tapping either starts a check or, once one already
+                // found something, opens the release page — never both at once.
+                if (showUpdateCheck) {
+                    add(
+                        ExtraRow(
+                            Icons.Outlined.SystemUpdate,
+                            stringResource(R.string.settings_check_updates),
+                            when {
+                                checkingForUpdate -> stringResource(R.string.settings_check_updates_checking)
+                                availableUpdate != null -> stringResource(R.string.settings_check_updates_found, availableUpdate.version)
+                                else -> stringResource(R.string.settings_check_updates_desc)
+                            },
+                            when {
+                                checkingForUpdate -> ({})
+                                availableUpdate != null -> ({ onDownloadUpdate(availableUpdate.releaseUrl) })
+                                else -> onCheckForUpdates
+                            },
+                        ),
+                    )
+                }
             }
             sections.forEachIndexed { index, target ->
                 if (index > 0) {
