@@ -244,4 +244,5 @@ const CREDITS_MANIFESTO_ATTRIBUTION =
 const RESENTIN_THANKS = [
   { who: "grappa-irc & cicchetto", why: "the server and the API resentin talks to" },
   { who: "#grappa", why: "for the bug reports, the betatesting, and the company" },
+  { who: "Kerd", why: "for the extensive UI/UX enhancements :D" },
 ];
