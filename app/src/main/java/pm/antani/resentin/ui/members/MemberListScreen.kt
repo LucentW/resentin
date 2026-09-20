@@ -224,7 +224,12 @@ fun MemberListScreen(
             targetSigils = viewModel.sigilsFor(whoisValue.target),
             availableModes = privilegeModes,
             onDismiss = viewModel::dismissWhois,
-            onContactPrivately = viewModel::contactPrivately,
+            onContactPrivately = { nick ->
+                // Dismiss FIRST, synchronously — see ChatScreen's user card:
+                // navigating while the sheet dialog is open sticks the transition.
+                viewModel.dismissWhois()
+                viewModel.contactPrivately(nick)
+            },
             onKick = viewModel::kick,
             onBan = viewModel::ban,
             onSetMode = viewModel::setMode,
