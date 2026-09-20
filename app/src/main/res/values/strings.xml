@@ -432,6 +432,9 @@
     <string name="settings_colored_nicklist">Nick colorati</string>
     <string name="settings_strip_formatting">Nascondi formattazione mIRC</string>
     <string name="settings_strip_formatting_desc">Mostra colori, grassetto e sottolineature dei messaggi come testo semplice</string>
+    <string name="settings_auto_load_images">Anteprime immagini automatiche</string>
+    <string name="settings_auto_load_images_desc">Scarica e mostra in chat le immagini linkate. Se disattivato, tocca per scaricarle</string>
+    <string name="chat_image_preview_placeholder">Immagine — tocca per visualizzare</string>
     <string name="settings_reply_style_title">Comportamento di risposta</string>
     <string name="settings_reply_style_nick">Nick</string>
     <string name="settings_reply_style_quote">Citazione</string>

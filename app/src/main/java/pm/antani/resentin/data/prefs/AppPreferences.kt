@@ -82,6 +82,7 @@ class AppPreferences(private val context: Context) {
     private val keySmartPresenceFilter = booleanPreferencesKey("smart_presence_filter")
     private val keyColoredNicklist = booleanPreferencesKey("colored_nicklist")
     private val keyStripFormatting = booleanPreferencesKey("strip_formatting")
+    private val keyAutoLoadImages = booleanPreferencesKey("auto_load_images")
     private val keyReplyStyle = stringPreferencesKey("reply_style")
     private val keyReplyCustomTemplate = stringPreferencesKey("reply_custom_template")
     private val keyLastSyncedHost = stringPreferencesKey("last_synced_host")
@@ -288,6 +289,16 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setStripFormatting(value: Boolean) {
         context.dataStore.edit { it[keyStripFormatting] = value }
+    }
+
+    /** Purely local (unlike [stripFormatting], no server counterpart): off shows
+     * a tappable placeholder instead of auto-fetching a chat image link, so
+     * scrolling past one never spends data on an image nobody asked to see —
+     * see [pm.antani.resentin.ui.common.LocalAutoLoadImages]. */
+    val autoLoadImages: Flow<Boolean> = context.dataStore.data.map { it[keyAutoLoadImages] ?: true }
+
+    suspend fun setAutoLoadImages(value: Boolean) {
+        context.dataStore.edit { it[keyAutoLoadImages] = value }
     }
 
     val replyStyle: Flow<ReplyStyle> = context.dataStore.data.map {

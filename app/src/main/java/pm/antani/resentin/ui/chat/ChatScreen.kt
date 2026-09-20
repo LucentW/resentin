@@ -81,6 +81,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -212,6 +213,7 @@ import pm.antani.resentin.net.AppJson
 import pm.antani.resentin.domain.repository.PendingDccOffer
 import pm.antani.resentin.ui.common.LocalDccFileDownloadHandler
 import pm.antani.resentin.ui.common.LocalIrcChannelLinkHandler
+import pm.antani.resentin.ui.common.LocalAutoLoadImages
 import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.common.MircText
 import pm.antani.resentin.ui.common.stripMircCodes
@@ -517,39 +519,103 @@ private fun inlineImageUrlFromText(body: String): String? {
     return candidate.takeIf { imageExtensions.any(path::endsWith) }
 }
 
+// Chat-row thumbnail target: the row itself never renders above 240dp tall,
+// this just needs to stay sharp on a dense screen without decoding a whole
+// unsubsampled photo for something a third of the screen's height at most.
+private const val INLINE_PREVIEW_MAX_PX = 720
+
+// The lightbox used to reuse the thumbnail bitmap above, blown up to fill the
+// screen — which is exactly what made it look grainy, since that bitmap is
+// deliberately subsampled small. This is the full-quality decode instead,
+// capped rather than fully unsampled so a huge source photo still can't OOM
+// a single fullscreen ImageBitmap.
+private const val FULLSCREEN_VIEW_MAX_PX = 2048
+
+/** Raw bytes plus their decoded dimensions — fetched once per image so the
+ * thumbnail and the fullscreen decode below can each subsample from the SAME
+ * download instead of hitting the network twice for one tap. */
+private class RemoteImageBytes(val bytes: ByteArray, val width: Int, val height: Int)
+
 @Composable
 private fun InlineAttachmentImage(url: String) {
+    val autoLoad = LocalAutoLoadImages.current
     var viewerOpen by rememberSaveable(url) { mutableStateOf(false) }
-    val bitmap by produceState<Bitmap?>(initialValue = null, url) {
-        value = withContext(Dispatchers.IO) {
-            decodeRemoteThumbnail(url)
-        }
+    // With previews off, nothing is fetched until the placeholder below is
+    // actually tapped — scrolling past a link must never spend the user's
+    // data on an image they didn't ask to see.
+    val shouldFetch = autoLoad || viewerOpen
+    val imageBytes by produceState<RemoteImageBytes?>(initialValue = null, url, shouldFetch) {
+        value = if (shouldFetch) withContext(Dispatchers.IO) { fetchRemoteImageBytes(url) } else null
     }
-    bitmap?.let { loaded ->
+
+    if (autoLoad) {
+        val thumbnail by produceState<Bitmap?>(initialValue = null, imageBytes) {
+            value = imageBytes?.let { image ->
+                withContext(Dispatchers.IO) { decodeSampled(image, INLINE_PREVIEW_MAX_PX, Bitmap.Config.RGB_565) }
+            }
+        }
+        thumbnail?.let { loaded ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { viewerOpen = true },
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                ),
+            ) {
+                Image(
+                    bitmap = loaded.asImageBitmap(),
+                    contentDescription = url,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                )
+            }
+        }
+    } else {
+        // Auto-load off: a plain tappable row, nothing decoded yet — tapping
+        // still opens the same lightbox below, just fetched on demand.
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 240.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .clickable { viewerOpen = true },
             shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         ) {
-            Image(
-                bitmap = loaded.asImageBitmap(),
-                contentDescription = url,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp),
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Image,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.chat_image_preview_placeholder),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
-    if (viewerOpen && bitmap != null) {
+
+    if (viewerOpen) {
+        val fullImage by produceState<Bitmap?>(initialValue = null, imageBytes) {
+            value = imageBytes?.let { image ->
+                withContext(Dispatchers.IO) { decodeSampled(image, FULLSCREEN_VIEW_MAX_PX, Bitmap.Config.ARGB_8888) }
+            }
+        }
         Dialog(
             onDismissRequest = { viewerOpen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -559,15 +625,22 @@ private fun InlineAttachmentImage(url: String) {
                     .fillMaxSize()
                     .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.96f)),
             ) {
-                Image(
-                    bitmap = bitmap!!.asImageBitmap(),
-                    contentDescription = url,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .clickable { viewerOpen = false },
-                )
+                if (fullImage != null) {
+                    Image(
+                        bitmap = fullImage!!.asImageBitmap(),
+                        contentDescription = url,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                            .clickable { viewerOpen = false },
+                    )
+                } else {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center),
+                        color = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
                 IconButton(
                     onClick = { viewerOpen = false },
                     modifier = Modifier
@@ -586,7 +659,7 @@ private fun InlineAttachmentImage(url: String) {
     }
 }
 
-private fun decodeRemoteThumbnail(url: String): Bitmap? {
+private fun fetchRemoteImageBytes(url: String): RemoteImageBytes? {
     val connection = runCatching {
         URL(url).openConnection() as HttpURLConnection
     }.getOrNull() ?: return null
@@ -595,18 +668,42 @@ private fun decodeRemoteThumbnail(url: String): Bitmap? {
         connection.readTimeout = 12_000
         connection.instanceFollowRedirects = true
         if (connection.responseCode !in 200..299) return null
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = 4
-            inPreferredConfig = Bitmap.Config.RGB_565
-        }
-        connection.inputStream.use { stream ->
-            BitmapFactory.decodeStream(stream, null, options)
-        }
+        val bytes = connection.inputStream.use { it.readBytes() }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        RemoteImageBytes(bytes, bounds.outWidth, bounds.outHeight)
     } catch (_: Exception) {
         null
     } finally {
         connection.disconnect()
     }
+}
+
+/** Subsamples the SAME downloaded bytes to roughly [maxDimensionPx] on the
+ * longer edge — the thumbnail and the lightbox each call this once, at their
+ * own target size, rather than sharing one decode meant for the smaller of
+ * the two. */
+private fun decodeSampled(image: RemoteImageBytes, maxDimensionPx: Int, config: Bitmap.Config): Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = calculateInSampleSize(image.width, image.height, maxDimensionPx, maxDimensionPx)
+        inPreferredConfig = config
+    }
+    return runCatching { BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size, options) }.getOrNull()
+}
+
+/** Largest power-of-two subsample that still decodes to at least [reqWidth]x
+ * [reqHeight] — the standard Android two-pass-decode formula. */
+private fun calculateInSampleSize(width: Int, height: Int, reqWidth: Int, reqHeight: Int): Int {
+    var inSampleSize = 1
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight = height / 2
+        val halfWidth = width / 2
+        while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize
 }
 
 private fun formatFileSizeOrUnknown(bytes: Long): String =

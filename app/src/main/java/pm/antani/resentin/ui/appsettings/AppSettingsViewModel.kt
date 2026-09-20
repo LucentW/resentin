@@ -251,6 +251,13 @@ class AppSettingsViewModel(
         viewModelScope.launch { appPreferences.setDynamicColor(enabled) }
     }
 
+    val autoLoadImages: StateFlow<Boolean> = appPreferences.autoLoadImages
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun setAutoLoadImages(enabled: Boolean) {
+        viewModelScope.launch { appPreferences.setAutoLoadImages(enabled) }
+    }
+
     fun onReplyCustomTemplateChange(value: String) =
         _uiState.update { it.copy(replyCustomTemplate = value, replyCustomTemplateSaved = false) }
 

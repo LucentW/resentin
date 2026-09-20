@@ -118,6 +118,14 @@ fun stripMircCodes(text: String): String = MircParser.parse(text).joinToString("
  * composable (same shape as [LocalDccFileDownloadHandler]). */
 val LocalStripMircFormatting = staticCompositionLocalOf { false }
 
+/** Auto-load toggle for inline chat image previews (Settings): off shows a
+ * plain tappable placeholder instead of fetching, so scrolling past a link
+ * never spends data on an image nobody asked to see — the fullscreen lightbox
+ * still works either way, just fetched on demand when tapped. Provided once
+ * in AppRoot from the local AppPreferences mirror, same shape as
+ * [LocalStripMircFormatting]. */
+val LocalAutoLoadImages = staticCompositionLocalOf { true }
+
 fun mircAnnotatedString(text: String, lightTheme: Boolean = false, stripFormatting: Boolean = false): AnnotatedString = buildAnnotatedString {
     val spans = if (stripFormatting) listOf(MircSpan(text = stripMircCodes(text))) else MircParser.parse(text)
     spans.forEach { span ->

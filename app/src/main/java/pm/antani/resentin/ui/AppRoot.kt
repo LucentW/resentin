@@ -43,6 +43,7 @@ import pm.antani.resentin.ui.archive.ArchiveScreen
 import pm.antani.resentin.ui.archive.ArchiveViewModel
 import pm.antani.resentin.ui.chat.ChatScreen
 import pm.antani.resentin.ui.chat.ChatViewModel
+import pm.antani.resentin.ui.common.LocalAutoLoadImages
 import pm.antani.resentin.ui.common.LocalStripMircFormatting
 import pm.antani.resentin.ui.directory.DirectoryScreen
 import pm.antani.resentin.ui.directory.DirectoryViewModel
@@ -206,7 +207,11 @@ fun AppRoot(
     // mirror so every MircText and transcript row follows it (a cicchetto user who
     // turned colors off no longer gets them back here).
     val stripFormatting by container.appPreferences.stripFormatting.collectAsState(initial = false)
-    CompositionLocalProvider(LocalStripMircFormatting provides stripFormatting) {
+    val autoLoadImages by container.appPreferences.autoLoadImages.collectAsState(initial = true)
+    CompositionLocalProvider(
+        LocalStripMircFormatting provides stripFormatting,
+        LocalAutoLoadImages provides autoLoadImages,
+    ) {
     NavHost(
         navController = navController,
         startDestination = ROUTE_HOME,

@@ -432,6 +432,9 @@
     <string name="settings_colored_nicklist">Colored nicks</string>
     <string name="settings_strip_formatting">Hide mIRC formatting</string>
     <string name="settings_strip_formatting_desc">Show message colors, bold and underline as plain text</string>
+    <string name="settings_auto_load_images">Automatic image previews</string>
+    <string name="settings_auto_load_images_desc">Download and show linked images in chat. When off, tap to download them</string>
+    <string name="chat_image_preview_placeholder">Image — tap to view</string>
     <string name="settings_reply_style_title">Reply behavior</string>
     <string name="settings_reply_style_nick">Nick</string>
     <string name="settings_reply_style_quote">Quote</string>

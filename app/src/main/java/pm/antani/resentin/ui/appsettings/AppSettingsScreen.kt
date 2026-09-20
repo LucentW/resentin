@@ -208,6 +208,7 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
     val fontScale by viewModel.fontScale.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val dynamicColor by viewModel.dynamicColor.collectAsState()
+    val autoLoadImages by viewModel.autoLoadImages.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
     val chatFontFamily by viewModel.chatFontFamily.collectAsState()
     val fontFamilyOptions = appFontFamilyOptions()
@@ -719,6 +720,13 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                         description = stringResource(R.string.settings_strip_formatting_desc),
                         checked = state.displayPrefs.stripFormatting,
                         onCheckedChange = { viewModel.toggleStripFormatting() },
+                    )
+                    SettingsRowDivider()
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_auto_load_images),
+                        description = stringResource(R.string.settings_auto_load_images_desc),
+                        checked = autoLoadImages,
+                        onCheckedChange = viewModel::setAutoLoadImages,
                     )
                     SettingsRowDivider()
                     SettingsSwitchRow(
