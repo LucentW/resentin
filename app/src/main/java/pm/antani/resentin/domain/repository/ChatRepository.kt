@@ -119,13 +119,25 @@ class ChatRepository(
      * back down. Both must run outside any transaction and off the main thread — Room
      * forbids the latter (see AuthRepository.signIn's clearAllTables, the same footgun).
      * Not run after [pruneOldMessages]'s much smaller, once-per-launch trim: rewriting
-     * the whole file on every cold start isn't worth it for that. */
+     * the whole file on every cold start isn't worth it for that.
+     *
+     * VACUUM needs exclusive access to the database, and `deleteAll()` just invalidated
+     * the `messages` table — Room's InvalidationTracker reacts by re-running any Flow
+     * still observing it (e.g. Home's own latest-message-per-channel query, alive on
+     * the back stack under Settings) on another connection, right as VACUUM asks for
+     * exclusivity. Measured live: that race throws (`SQLiteException`, uncaught) and
+     * takes the whole app down over a disk-space reclaim, on an action whose actual
+     * point — the delete above — had already succeeded. Best-effort, like
+     * [pruneOldMessages]'s own swallowed failure: losing the reclaim leaves the
+     * `-wal` file merely un-shrunk, not the data un-deleted. */
     suspend fun clearAllMessages() {
         withContext(Dispatchers.IO) {
             db.messageDao().deleteAll()
-            val writable = db.openHelper.writableDatabase
-            writable.execSQL("VACUUM")
-            writable.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            runCatching {
+                val writable = db.openHelper.writableDatabase
+                writable.execSQL("VACUUM")
+                writable.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            }
         }
     }
 
@@ -232,6 +244,22 @@ class ChatRepository(
         val oldestId = db.messageDao().minId(networkSlug, canonicalChannelName) ?: return@runCatching
         val messages = api.getMessages(networkSlug, channelName, before = oldestId, limit = PAGE_LIMIT)
         recordIncoming(messages)
+    }
+
+    /** Called after the channel's presence-filter pin changes (Channel settings —
+     * "show"/"hide" join/part/quit/nick/mode). The server applies that pin (and the
+     * size-based default behind it) to the REST history endpoint itself, so a row
+     * suppressed under the OLD pin was never returned and never made it into Room —
+     * there is nothing local to "un-hide". [backfill]'s own incremental "after my
+     * last known id" model can't detect or re-fill that kind of gap either: the
+     * channel already has a `maxId`, so a plain backfill only reaches forward from
+     * there, never back over history that was already (wrongly, by the new pin's
+     * standard) skipped. Wiping this one channel's cache and re-fetching from
+     * scratch is the only way those rows can appear once the pin changes; ordinary
+     * chat history just re-downloads unchanged. */
+    suspend fun resyncChannelForPresenceFilterChange(networkSlug: String, channelName: String): Result<Unit> = runCatching {
+        db.messageDao().deleteChannel(networkSlug, canonicalTarget(channelName))
+        backfill(networkSlug, channelName).getOrThrow()
     }
 
     /** Tells the server we've read up to [messageId] (monotonic advance-only server-side,

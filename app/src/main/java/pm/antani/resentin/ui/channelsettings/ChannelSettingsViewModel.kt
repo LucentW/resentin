@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.channelKey
+import pm.antani.resentin.domain.repository.ChatRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
 import pm.antani.resentin.domain.repository.ServerMute
@@ -54,6 +55,7 @@ class ChannelSettingsViewModel(
     private val membersRepository: MembersRepository,
     private val userSettingsRepository: UserSettingsRepository,
     private val appPreferences: AppPreferences,
+    private val chatRepository: ChatRepository,
     private val networkSlug: String,
     private val channelName: String,
     private val username: String,
@@ -87,6 +89,16 @@ class ChannelSettingsViewModel(
         viewModelScope.launch {
             userSettingsRepository.setPresencePin(networkSlug, channelName, pin)
                 .onFailure { _uiState.update { s -> s.copy(error = it.message) } }
+                // The server applies this pin to the history endpoint too, so a
+                // join/part/quit/nick/mode row suppressed under the OLD pin was
+                // never fetched and never made it into the local cache — an
+                // ordinary backfill only reaches forward from what's already
+                // there, so it can never retroactively surface them. See
+                // ChatRepository.resyncChannelForPresenceFilterChange.
+                .onSuccess {
+                    chatRepository.resyncChannelForPresenceFilterChange(networkSlug, channelName)
+                        .onFailure { _uiState.update { s -> s.copy(error = it.message) } }
+                }
         }
     }
 
@@ -237,6 +249,7 @@ class ChannelSettingsViewModel(
             membersRepository: MembersRepository,
             userSettingsRepository: UserSettingsRepository,
             appPreferences: AppPreferences,
+            chatRepository: ChatRepository,
             networkSlug: String,
             channelName: String,
             username: String,
@@ -244,7 +257,7 @@ class ChannelSettingsViewModel(
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChannelSettingsViewModel(networksRepository, membersRepository, userSettingsRepository, appPreferences, networkSlug, channelName, username, subject) as T
+                return ChannelSettingsViewModel(networksRepository, membersRepository, userSettingsRepository, appPreferences, chatRepository, networkSlug, channelName, username, subject) as T
             }
         }
     }

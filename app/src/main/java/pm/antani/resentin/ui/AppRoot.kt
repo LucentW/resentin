@@ -541,6 +541,7 @@ fun AppRoot(
                     container.membersRepository,
                     container.userSettingsRepository,
                     container.appPreferences,
+                    container.chatRepository,
                     networkSlug,
                     channelName,
                     currentSession.username,
