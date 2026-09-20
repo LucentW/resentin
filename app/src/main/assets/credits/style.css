@@ -32,6 +32,13 @@ html, body {
   color: var(--fg);
   font-family: var(--font-mono);
   touch-action: none;
+  /* Nothing in this overlay is a document to select from. Without this,
+     Android's WebView starts its own long-press text selection on the
+     fast-forward button's glyph after ~500ms of holding it: the OS grabs
+     the pointer sequence for the selection handles, main.js never sees the
+     matching pointerup/lostpointercapture, and the roll is stuck at 5x. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .credits-rain {
