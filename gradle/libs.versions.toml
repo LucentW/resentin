@@ -16,7 +16,7 @@ datastore = "1.1.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 appcompat = "1.8.0"
-ksp = "2.3.10"
+ksp = "2.3.12"
 unifiedpushConnector = "3.3.5"
 zxingEmbedded = "4.3.0"
 
