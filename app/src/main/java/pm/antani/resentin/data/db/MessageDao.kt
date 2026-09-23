@@ -89,6 +89,14 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE networkSlug = :networkSlug AND channelName COLLATE NOCASE = :channelName")
     suspend fun deleteChannel(networkSlug: String, channelName: String)
 
+    /** Everything in one channel strictly older than [minId] — used when a catch-up
+     * lands on the newest server page instead of connecting to the local cache: rows
+     * below the resulting hole are dropped so the cache stays ONE contiguous range,
+     * and scroll-back (which resumes from the local minimum) asks the server for the
+     * backlog instead of being unable to cross the hole. */
+    @Query("DELETE FROM messages WHERE networkSlug = :networkSlug AND channelName COLLATE NOCASE = :channelName AND id < :minId")
+    suspend fun deleteChannelBefore(networkSlug: String, channelName: String, minId: Long)
+
     @Query("DELETE FROM messages WHERE serverTime < :cutoffMillis")
     suspend fun deleteOlderThan(cutoffMillis: Long)
 

@@ -1245,7 +1245,10 @@ class ChatViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             _error.value = null
-            chatRepository.backfill(networkSlug, channelName).onFailure { postError(it.message) }
+            // Manual reload = "start over from the server's newest page": drops any
+            // stale rows behind a hole and lets scroll-back pull the backlog again.
+            chatRepository.backfill(networkSlug, channelName, resetToTail = true)
+                .onFailure { postError(it.message) }
             _isRefreshing.value = false
         }
     }

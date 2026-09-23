@@ -216,11 +216,15 @@ class ChatRepository(
      * Pages forward up to [BACKFILL_MAX_PAGES] full pages so a gap bigger than one
      * 200-row fetch actually drains instead of silently stopping at the first page. A
      * gap wider than that (the app was away long enough, or the channel busy enough,
-     * to pile up 1000+ rows) is abandoned in favor of landing at the tail — the rows
-     * strictly between the old anchor and the new tail are a real, accepted gap;
-     * [loadOlder]'s backward pagination starts from the local minimum, which is on the
-     * OLD side of that gap, so it can't reach across it either. */
-    suspend fun backfill(networkSlug: String, channelName: String): Result<Unit> = runCatching {
+     * to pile up 1000+ rows) is abandoned in favor of landing on the newest page, and
+     * the stale rows below it are dropped ([landOnTail]) so no unreachable hole is left:
+     * [loadOlder] resumes from the local minimum, which is then the page's own start,
+     * and re-requests the backlog from the server. */
+    suspend fun backfill(
+        networkSlug: String,
+        channelName: String,
+        resetToTail: Boolean = false,
+    ): Result<Unit> = runCatching {
         val api = authRepository.api(MessagesApi::class.java)
         val canonicalChannelName = canonicalTarget(channelName)
         // The catch-up starts from the watermark, NOT from Room's max id: live WS rows,
@@ -229,12 +233,15 @@ class ChatRepository(
         // reconnect, and a send echoes instantly) would jump past everything missed
         // offline for good. A watermark is only trusted against a non-empty cache: an
         // emptied one (Settings wipe, host change) must re-fetch, not resume.
+        // [resetToTail] (the manual reload) distrusts it on purpose.
         val hasCache = db.messageDao().maxId(networkSlug, canonicalChannelName) != null
-        val watermark = if (hasCache) appPreferences.getBackfillWatermark(networkSlug, canonicalChannelName) else null
+        val watermark = if (hasCache && !resetToTail) {
+            appPreferences.getBackfillWatermark(networkSlug, canonicalChannelName)
+        } else {
+            null
+        }
         if (watermark == null) {
-            val page = api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT)
-            recordIncoming(page)
-            page.maxOfOrNull { it.id }?.let { appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, it) }
+            landOnTail(api, networkSlug, channelName, canonicalChannelName)
             return@runCatching
         }
 
@@ -250,9 +257,27 @@ class ChatRepository(
             }
             if (page.size < BACKFILL_LIMIT) return@runCatching
         }
+        landOnTail(api, networkSlug, channelName, canonicalChannelName)
+    }
+
+    /** Fetches the newest page and makes it the base of the local cache: rows older
+     * than it are dropped, so what's cached is one contiguous range ending at the
+     * server's head. Scroll-back resumes from the local minimum ([loadOlder]), which is
+     * now the page's own start — so the backlog beyond it is requested from the server
+     * instead of an unreachable hole being left between stale rows and the tail. Used
+     * when contiguity can't be shown: no watermark (first open, legacy cache), a gap
+     * wider than the drain cap, or the manual reload. */
+    private suspend fun landOnTail(
+        api: MessagesApi,
+        networkSlug: String,
+        channelName: String,
+        canonicalChannelName: String,
+    ) {
         val tail = api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT)
         recordIncoming(tail)
-        tail.maxOfOrNull { it.id }?.let { appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, it) }
+        val oldest = tail.minOfOrNull { it.id } ?: return
+        db.messageDao().deleteChannelBefore(networkSlug, canonicalChannelName, oldest)
+        appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, tail.maxOf { it.id })
     }
 
     /** Loads a page of history older than the earliest locally-known message, for
