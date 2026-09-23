@@ -117,6 +117,7 @@ class AuthRepository(
             // the main thread") and crashes outright the first time anyone actually
             // signs into a second, different host on the same install.
             withContext(Dispatchers.IO) { db.clearAllTables() }
+            appPreferences.clearAllBackfillWatermarks()
         }
         appPreferences.setLastSyncedHost(host)
         tokenStore.saveSession(host, token, username, wsSubject, kind)

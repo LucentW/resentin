@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "app_prefs")
 
+private const val BACKFILL_WATERMARK_PREFIX = "backfill_watermark_"
+
 /** Local per-chat flag key, "slug/lowercased-target" — never sent to the server,
  * unlike the server-persisted display prefs. Case-folded: "#Foo" and "#foo" are the
  * same IRC target under every common casemapping. */
@@ -146,6 +148,34 @@ class AppPreferences(private val context: Context) {
             val current = it[keyDismissedFeaturedChannels] ?: emptySet()
             val key = channelKey(networkSlug, channel)
             it[keyDismissedFeaturedChannels] = if (dismissed) current + key else current - key
+        }
+    }
+
+    private fun backfillWatermarkKey(networkSlug: String, channel: String) =
+        longPreferencesKey("$BACKFILL_WATERMARK_PREFIX${channelKey(networkSlug, channel)}")
+
+    /** Highest message id up to which this channel's local cache is known to be
+     * CONTIGUOUS with the server — advanced only by a completed backfill page, never
+     * by a live WS row or an echoed send. Room's own max id can't stand in for it: any
+     * newer row recorded before the catch-up ran moves that past everything missed
+     * while offline, and nothing would ever re-request it. */
+    suspend fun getBackfillWatermark(networkSlug: String, channel: String): Long? =
+        context.dataStore.data.first()[backfillWatermarkKey(networkSlug, channel)]
+
+    suspend fun setBackfillWatermark(networkSlug: String, channel: String, id: Long) {
+        context.dataStore.edit { it[backfillWatermarkKey(networkSlug, channel)] = id }
+    }
+
+    suspend fun clearBackfillWatermark(networkSlug: String, channel: String) {
+        context.dataStore.edit { it.remove(backfillWatermarkKey(networkSlug, channel)) }
+    }
+
+    /** The whole local message cache was wiped (Settings, host change): every watermark
+     * described rows that no longer exist. */
+    suspend fun clearAllBackfillWatermarks() {
+        context.dataStore.edit { prefs ->
+            prefs.asMap().keys.filter { it.name.startsWith(BACKFILL_WATERMARK_PREFIX) }
+                .forEach { prefs.remove(it) }
         }
     }
 

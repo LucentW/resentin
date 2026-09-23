@@ -46,7 +46,7 @@ class AppContainer(private val context: Context) {
     val updateChecker = UpdateChecker()
     val authRepository = AuthRepository(tokenStore, database, appPreferences, connectionManager, context.applicationContext)
     val networksRepository = NetworksRepository(authRepository, database, connectionManager)
-    val chatRepository = ChatRepository(authRepository, database, context.applicationContext)
+    val chatRepository = ChatRepository(authRepository, database, appPreferences, context.applicationContext)
     val membersRepository = MembersRepository(connectionManager, database)
     val ignoresRepository = IgnoresRepository(authRepository)
     val userSettingsRepository = UserSettingsRepository(authRepository, connectionManager)

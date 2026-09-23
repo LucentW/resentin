@@ -19,6 +19,7 @@ import pm.antani.resentin.R
 import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.MessageEntity
 import pm.antani.resentin.data.db.MessagePagingSource
+import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.data.prefs.channelKey
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.session.ConnectionManager
@@ -49,6 +50,7 @@ private const val MESSAGE_RETENTION_DAYS = 90L
 class ChatRepository(
     private val authRepository: AuthRepository,
     private val db: AppDatabase,
+    private val appPreferences: AppPreferences,
     private val context: Context,
 ) {
     /** Subscribes once, app-wide, to WS message events and writes them to Room — the
@@ -133,6 +135,7 @@ class ChatRepository(
     suspend fun clearAllMessages() {
         withContext(Dispatchers.IO) {
             db.messageDao().deleteAll()
+            appPreferences.clearAllBackfillWatermarks()
             runCatching {
                 val writable = db.openHelper.writableDatabase
                 writable.execSQL("VACUUM")
@@ -220,20 +223,36 @@ class ChatRepository(
     suspend fun backfill(networkSlug: String, channelName: String): Result<Unit> = runCatching {
         val api = authRepository.api(MessagesApi::class.java)
         val canonicalChannelName = canonicalTarget(channelName)
-        val lastId = db.messageDao().maxId(networkSlug, canonicalChannelName)
-        if (lastId == null) {
-            recordIncoming(api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT))
+        // The catch-up starts from the watermark, NOT from Room's max id: live WS rows,
+        // echoed sends and push-driven records all advance the latter, so a single newer
+        // row landing before this ran (very likely — joinAll precedes it on every
+        // reconnect, and a send echoes instantly) would jump past everything missed
+        // offline for good. A watermark is only trusted against a non-empty cache: an
+        // emptied one (Settings wipe, host change) must re-fetch, not resume.
+        val hasCache = db.messageDao().maxId(networkSlug, canonicalChannelName) != null
+        val watermark = if (hasCache) appPreferences.getBackfillWatermark(networkSlug, canonicalChannelName) else null
+        if (watermark == null) {
+            val page = api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT)
+            recordIncoming(page)
+            page.maxOfOrNull { it.id }?.let { appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, it) }
             return@runCatching
         }
 
-        var anchor = lastId
+        var anchor = watermark
         repeat(BACKFILL_MAX_PAGES) {
             val page = api.getMessages(networkSlug, channelName, after = anchor, limit = BACKFILL_LIMIT)
             recordIncoming(page)
+            if (page.isNotEmpty()) {
+                anchor = page.maxOf { it.id }
+                // Each page is contiguous with the previous one, so progress survives a
+                // failure halfway through a long drain.
+                appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, anchor)
+            }
             if (page.size < BACKFILL_LIMIT) return@runCatching
-            anchor = page.maxOf { it.id }
         }
-        recordIncoming(api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT))
+        val tail = api.getMessages(networkSlug, channelName, limit = BACKFILL_LIMIT)
+        recordIncoming(tail)
+        tail.maxOfOrNull { it.id }?.let { appPreferences.setBackfillWatermark(networkSlug, canonicalChannelName, it) }
     }
 
     /** Loads a page of history older than the earliest locally-known message, for
@@ -259,6 +278,7 @@ class ChatRepository(
      * chat history just re-downloads unchanged. */
     suspend fun resyncChannelForPresenceFilterChange(networkSlug: String, channelName: String): Result<Unit> = runCatching {
         db.messageDao().deleteChannel(networkSlug, canonicalTarget(channelName))
+        appPreferences.clearBackfillWatermark(networkSlug, canonicalTarget(channelName))
         backfill(networkSlug, channelName).getOrThrow()
     }
 
