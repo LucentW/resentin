@@ -190,6 +190,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -1136,8 +1138,20 @@ fun ChatScreen(
     // way cicchetto's badge reads the rows the highlight marks). The unread
     // divider shifts every displayed row after it by one. Precomputed so the
     // scroll-path decision stays a cheap filter.
-    val mentionRowIndices by remember(timelineRows, dividerIndex, myNick, highlightPatterns, isQuery) {
+    val mentionRowIndices by remember(timelineRows, dividerIndex, myNick, highlightPatterns, isQuery, pagingEligible, allMessages) {
         derivedStateOf {
+            if (pagingEligible) {
+                // Paged list: `timelineRows` is empty by design, so the mention rows
+                // must come from Room's full channel list instead. One item per Room
+                // row, newest first (index 0 = tail) — the same order the paging
+                // source serves, so a position here is a list index there. Rows not
+                // paged in yet still count; the jump loads pages until they exist.
+                return@derivedStateOf allMessages
+                    .sortedByDescending { it.id }
+                    .mapIndexedNotNull { index, message ->
+                        index.takeIf { isMentionRow(message, myNick, isQuery, highlightPatterns) }
+                    }
+            }
             val divider = dividerIndex
             val indices = mutableListOf<Int>()
             timelineRows.forEachIndexed { index, row ->
@@ -1354,6 +1368,22 @@ fun ChatScreen(
     var composerBarHeightPx by remember { mutableStateOf(0) }
     val imeInsets = WindowInsets.ime
     val density = LocalDensity.current
+
+    // Pages older rows in until list index [target] exists. Paging only appends when
+    // an item near the loaded end is touched, so park on the last loaded row and wait
+    // for the count to grow; stop once Room has nothing older (or a page stalls).
+    suspend fun loadPagedRowsThrough(target: Int) {
+        var stalls = 0
+        while (target >= pagedMessages.itemCount && stalls < 3) {
+            val loaded = pagedMessages.itemCount
+            if (loaded == 0 || pagedMessages.loadState.append.endOfPaginationReached) return
+            listState.scrollToItem(loaded - 1)
+            val grew = withTimeoutOrNull(4_000) {
+                snapshotFlow { pagedMessages.itemCount }.first { it > loaded }
+            }
+            if (grew == null) stalls++
+        }
+    }
 
     suspend fun runExplicitChatScroll(index: Int, followTail: Boolean) {
         if (explicitScrollInProgress) return
@@ -2519,6 +2549,10 @@ fun ChatScreen(
                                 // scrolling to the following row would hide the
                                 // very mention this button is meant to reveal.
                                 scope.launch {
+                                    if (usePaging) {
+                                        autoFollowTracker.stopFollowing()
+                                        loadPagedRowsThrough(target)
+                                    }
                                     val maxRow = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
                                     runExplicitChatScroll(target.coerceAtMost(maxRow), followTail = false)
                                 }
