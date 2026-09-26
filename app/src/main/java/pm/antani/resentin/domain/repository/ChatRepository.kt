@@ -290,6 +290,10 @@ class ChatRepository(
         recordIncoming(messages)
     }
 
+    /** When message [id] was sent, if it is in the local cache. */
+    suspend fun messageServerTime(networkSlug: String, channelName: String, id: Long): Long? =
+        db.messageDao().serverTimeOf(networkSlug, canonicalTarget(channelName), id)
+
     /** Called after the channel's presence-filter pin changes (Channel settings —
      * "show"/"hide" join/part/quit/nick/mode). The server applies that pin (and the
      * size-based default behind it) to the REST history endpoint itself, so a row

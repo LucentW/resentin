@@ -38,6 +38,9 @@ interface MessageDao {
     suspend fun loadOlderThan(networkSlug: String, channelName: String, maxId: Long, limit: Int): List<MessageEntity>
 
 
+    @Query("SELECT serverTime FROM messages WHERE networkSlug = :networkSlug AND channelName COLLATE NOCASE = :channelName AND id = :id")
+    suspend fun serverTimeOf(networkSlug: String, channelName: String, id: Long): Long?
+
     @Query("SELECT MAX(id) FROM messages WHERE networkSlug = :networkSlug AND channelName = :channelName")
     suspend fun maxId(networkSlug: String, channelName: String): Long?
 

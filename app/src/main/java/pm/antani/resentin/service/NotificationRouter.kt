@@ -135,6 +135,44 @@ class NotificationRouter(
                 }
             }
             .launchIn(scope)
+
+        // Read on another client: the cursor advance (live echo, or seeded from a join
+        // reply after a reconnect) is what proves it — see [dismissReadNotifications].
+        // Keyed on the cursors alone so an unrelated channel-row change (unread counts
+        // ticking on every message) never triggers a sweep.
+        db.networkDao().observeNetworksWithChannels()
+            .map { networks ->
+                networks.flatMap { nwc -> nwc.channels.map { (nwc.network.slug to it.name) to it.lastReadMessageId } }.toMap()
+            }
+            .distinctUntilChanged()
+            .onEach { runCatching { dismissReadNotifications() } }
+            .launchIn(scope)
+    }
+
+    /** Cancels every posted conversation notification whose newest message the server's
+     * read cursor has already passed — read on another client (cicchetto, a second
+     * phone). Decided against the CURSOR, not against the local unread counter: a
+     * notification delivered by push while the socket was down leaves that counter
+     * at a stale 0, and no "count went to 0" transition ever fires once the app
+     * reconnects and the seed says 0 again — which is exactly how those notifications
+     * used to outlive the read. A stale cursor can only be too LOW, so the worst case
+     * is a notification left in place, never one wrongly removed. A DM's read echo is
+     * keyed by our own nick rather than the partner's, so both rows are consulted. */
+    suspend fun dismissReadNotifications() {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val active = runCatching { manager.activeNotifications }.getOrNull() ?: return
+        for (posted in active) {
+            val extras = posted.notification.extras ?: continue
+            val slug = extras.getString(NOTIF_EXTRA_SLUG) ?: continue
+            val bucket = extras.getString(NOTIF_EXTRA_BUCKET) ?: continue
+            val messageId = extras.getLong(NOTIF_EXTRA_MESSAGE_ID, -1L).takeIf { it >= 0 } ?: continue
+            val ownNick = db.networkDao().nickForSlug(slug)
+            val readUpTo = maxOf(
+                db.channelDao().getLastReadMessageId(slug, bucket) ?: 0L,
+                ownNick?.let { db.channelDao().getLastReadMessageId(slug, it) } ?: 0L,
+            )
+            if (readUpTo >= messageId) NotificationManagerCompat.from(context).cancel(posted.id)
+        }
     }
 
     /** Entry point for a UnifiedPush wake-up (see `UnifiedPushService.onMessage`): the
@@ -368,6 +406,16 @@ class NotificationRouter(
             .setGroup(bucket)
             .addAction(replyAction(message, bucket, conversationId))
             .addAction(markReadAction(message, bucket, conversationId))
+            // Carried on the notification itself (survives process death, unlike an
+            // in-memory map) so [dismissReadNotifications] can tell later, against the
+            // server's read cursor, whether what it announces has since been read.
+            .addExtras(
+                android.os.Bundle().apply {
+                    putString(NOTIF_EXTRA_SLUG, message.network)
+                    putString(NOTIF_EXTRA_BUCKET, bucket)
+                    putLong(NOTIF_EXTRA_MESSAGE_ID, message.id)
+                },
+            )
             .build()
 
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -457,7 +505,7 @@ class NotificationRouter(
     }
 
     private fun conversationNotificationId(networkSlug: String, bucket: String): Int =
-        "$networkSlug/$bucket".hashCode()
+        "$networkSlug/${canonicalTarget(bucket)}".hashCode()
 
     /** Recovers prior messages from the currently-posted notification for this
      * conversation (if any) so a new message is appended to the existing thread instead
@@ -541,6 +589,9 @@ class NotificationRouter(
         const val INVITE_CHANNEL_ID = "invites"
         const val EXTRA_NETWORK_SLUG = "network_slug"
         const val EXTRA_CHANNEL_NAME = "channel_name"
+        private const val NOTIF_EXTRA_SLUG = "resentin.notif.slug"
+        private const val NOTIF_EXTRA_BUCKET = "resentin.notif.bucket"
+        private const val NOTIF_EXTRA_MESSAGE_ID = "resentin.notif.message_id"
         private const val TAG = "NotificationRouter"
     }
 }

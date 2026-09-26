@@ -158,7 +158,32 @@ class HomeViewModel(
     /** Mentions-while-away digests per network (passthrough of
      * [MembersRepository.mentionsByNetwork]) — one banner card per network
      * holding a bundle, opening the mentions pseudo-window. */
-    val mentionsBundles: StateFlow<Map<String, MentionsBundleDto>> = membersRepository.mentionsByNetwork
+    val mentionsBundles: StateFlow<Map<String, MentionsBundleDto>> = combine(
+        membersRepository.mentionsByNetwork,
+        networksRepository.networksWithChannels,
+    ) { bundles, networks -> bundles to networks }
+        .map { (bundles, networks) ->
+            // The digest is a snapshot from the away->back transition; reading those
+            // channels on another client afterwards must retire it too. A mention counts
+            // as read once the channel's read cursor points at a message sent at or after
+            // it (evidence of a read — an unknown cursor or an uncached row keeps it, so
+            // the banner can only linger, never vanish on missing data).
+            bundles.mapNotNull { (slug, bundle) ->
+                val channels = networks.firstOrNull { it.network.slug.equals(slug, ignoreCase = true) }
+                    ?.channels.orEmpty()
+                val readUpTo = mutableMapOf<String, Long?>()
+                val stillUnread = bundle.messages.filter { mention ->
+                    val cursor = channels.firstOrNull { it.name.equals(mention.channel, ignoreCase = true) }
+                        ?.lastReadMessageId
+                    val readTime = readUpTo.getOrPut(mention.channel.lowercase()) {
+                        cursor?.let { chatRepository.messageServerTime(slug, mention.channel, it) }
+                    }
+                    readTime == null || readTime < mention.serverTime
+                }
+                if (stillUnread.isEmpty()) null else slug to bundle.copy(messages = stillUnread)
+            }.toMap()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun dismissMentions(networkSlug: String) = membersRepository.clearMentions(networkSlug)
 
