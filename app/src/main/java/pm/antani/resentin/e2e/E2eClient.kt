@@ -80,6 +80,7 @@ class E2eClient(
                     if (m.toDid != own.did) continue // the push goes to every client of the account
                     if (m.id > session.state.inbox && !m.own && m.channel == null) {
                         val res = engine.receive(m.from, m.verb, m.fromDid, m.msgid, m.payload)
+                        routeSas(engine, res)
                         events += res.events
                         session.state.inbox = m.id
                         session.persist()
@@ -95,6 +96,34 @@ class E2eClient(
             }
             if (!more) return events
         }
+    }
+
+    // t:sas.* inner messages are the verifier's, not the chat's: hand them over and merge what it says back.
+    private fun routeSas(engine: E2eEngine, res: Result) {
+        val sas = res.events.filterIsInstance<E2eEvent.Received>().filter { (it.inner["t"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.startsWith("sas.") == true }
+        if (sas.isEmpty()) return
+        val verifier = E2eVerifier(engine, engine.state)
+        res.events.removeAll(sas.toSet())
+        sas.forEach { verifier.receive(it.nick, it.master, it.device, it.inner) }
+        val more = verifier.take()
+        res.events += more.events
+        res.outbound += more.outbound
+    }
+
+    /** The user's move in a verification (start | accept | match | mismatch | cancel). */
+    suspend fun sasStep(nick: String, step: String): List<E2eEvent> = run(nick = nick) { engine, _ ->
+        E2eVerifier(engine, engine.state).also { it.step(nick, step) }.take()
+    }
+
+    /** Ends what timed out, or what only a previous run of the app could have finished. */
+    suspend fun sasTick(): List<E2eEvent> = run(nick = "") { engine, _ ->
+        E2eVerifier(engine, engine.state).also { it.tick() }.take()
+    }
+
+    /** What the UI shows of the verification with [nick], if one runs. */
+    suspend fun sasView(nick: String): SasView? = store.withAccount(slot) { session ->
+        val own = session.own ?: return@withAccount null
+        E2eVerifier(E2eEngine(session.account, own, ownNick, session.state), session.state).view(nick)
     }
 
     private suspend fun run(nick: String, step: suspend (E2eEngine, OwnIdentity) -> Result): List<E2eEvent> =

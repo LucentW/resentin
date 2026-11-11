@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -75,6 +76,12 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eChatState())
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val sas: StateFlow<pm.antani.resentin.e2e.SasView?> = repo.changes
+        .flatMapLatest { kotlinx.coroutines.flow.flow { emit(repo.sasView(slug, peer)) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    fun sasStep(step: String) { viewModelScope.launch { repo.sasStep(slug, peer, step); loadKeys() } }
+
     val keys = kotlinx.coroutines.flow.MutableStateFlow<Pair<E2eRepository.OwnKeyInfo?, E2eRepository.PeerKeyInfo?>?>(null)
     fun loadKeys() { viewModelScope.launch { keys.value = repo.ownKeyInfo(slug) to repo.peerKeyInfo(slug, peer) } }
     fun closeKeys() { keys.value = null }
@@ -130,4 +137,5 @@ class E2eSettingsViewModel(private val repo: E2eRepository, private val prefs: p
         }
     }
 }
+
 

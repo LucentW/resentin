@@ -245,6 +245,7 @@ class E2eRepository(
             if (state != IdentityState.Ready) return@runCatching
             val c = client(slug) ?: return@runCatching
             apply(slug, c.drain())
+            apply(slug, c.sasTick())
             val requests = c.requests()
             _requests.update { it + (slug to requests) }
             // The peer accepted what we asked: open the chat's keys, then let the answer go.
@@ -253,7 +254,7 @@ class E2eRepository(
                 apply(slug, c.askKeys(r.peer))
                 c.dismissRequest(r.id)
             }
-        }.onFailure { Log.w(TAG, "E2E refresh failed on $slug", it) }
+        }.onFailure { Log.w(TAG, "E2E refresh failed on $slug", it) }.also { _changes.update { n -> n + 1 } }
     }
 
     // Consent is the only thing that lets a conversation exist before its first message: remember it
@@ -270,6 +271,10 @@ class E2eRepository(
             is E2eEvent.Received -> e.text()?.let { body ->
                 db.e2eMessageDao().insert(E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false, body = body, at = System.currentTimeMillis()))
             }
+            is E2eEvent.SasNote -> db.e2eMessageDao().insert(
+                E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false,
+                    body = "${e.kind}|${e.byPeer}|${e.reason.orEmpty()}", at = System.currentTimeMillis(), status = "system"),
+            )
             is E2eEvent.KeyAlarm -> _alarms.update { it + (slug to it[slug].orEmpty() + foldNick(e.nick)) }
             is E2eEvent.SendFailed -> e.tags.forEach { tag -> tag.toLongOrNull()?.let { db.e2eMessageDao().setStatus(it, "failed") } }
             else -> Log.d(TAG, "E2E event on $slug: $e")
@@ -278,6 +283,19 @@ class E2eRepository(
 
     private suspend fun absent(slug: String, nick: String) = lock(slug).withLock {
         runCatching { client(slug)?.let { apply(slug, it.absent(nick)) } }.onFailure { Log.w(TAG, "absent failed", it) }
+    }
+
+    private val _changes = MutableStateFlow(0)
+    /** Bumped whenever something a screen may show changed (a refresh finished, a verification moved). */
+    val changes: StateFlow<Int> = _changes.asStateFlow()
+
+    suspend fun sasView(slug: String, nick: String): pm.antani.resentin.e2e.SasView? =
+        runCatching { client(slug)?.sasView(nick) }.getOrNull()
+
+    /** The user's move in a verification with [nick]. */
+    suspend fun sasStep(slug: String, nick: String, step: String): Result<Unit> = guarded(slug) { c ->
+        apply(slug, c.sasStep(nick, step))
+        _changes.update { it + 1 }
     }
 
     /** Asks [peer] to start an encrypted chat (consent, §4i). */

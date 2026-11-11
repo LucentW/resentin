@@ -57,6 +57,7 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
     var draft by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { vm.refresh() }
     val keys by vm.keys.collectAsState()
+    val sas by vm.sas.collectAsState()
     keys?.let { (own, peer) ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = vm::closeKeys,
@@ -74,6 +75,11 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
                 }
             },
             confirmButton = { TextButton(onClick = vm::closeKeys) { Text(stringResource(R.string.e2e_dismiss)) } },
+            dismissButton = {
+                if (peer != null && !peer.verified && sas == null) {
+                    TextButton(onClick = { vm.closeKeys(); vm.sasStep("start") }) { Text(stringResource(R.string.e2e_sas_start)) }
+                }
+            },
         )
     }
     // The window is protected while this screen is up (MainActivity decides, from the opt-out).
@@ -125,8 +131,10 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
                     primary = stringResource(R.string.e2e_ask) to { vm.ask() },
                 )
             }
+            sas?.let { SasCard(it, vm::sasStep) }
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), reverseLayout = true, contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(shown.asReversed(), key = { it.id }) { m ->
+                    if (m.status == "system") { SystemRow(m.body, vm.peer); return@items }
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if (m.outgoing) Alignment.CenterEnd else Alignment.CenterStart) {
                         Column(
                             modifier = Modifier
@@ -169,4 +177,66 @@ private fun Banner(text: String, error: Boolean = false) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = if (error) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer),
     ) { Text(text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
+}
+
+/** The verification in progress: asked, waiting, the 7 emoji to compare, or waiting for the other side. */
+@Composable
+private fun SasCard(v: pm.antani.resentin.e2e.SasView, step: (String) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                v.phase == "asked" -> {
+                    Text(stringResource(R.string.e2e_sas_asked))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = { step("cancel") }) { Text(stringResource(R.string.e2e_refuse)) }
+                        androidx.compose.material3.Button(onClick = { step("accept") }) { Text(stringResource(R.string.e2e_accept)) }
+                    }
+                }
+                v.phase == "compare" && v.confirmed -> {
+                    Text(stringResource(R.string.e2e_sas_waiting_peer))
+                    TextButton(onClick = { step("cancel") }) { Text(stringResource(R.string.e2e_cancel)) }
+                }
+                v.phase == "compare" && v.emoji != null -> {
+                    Text(stringResource(R.string.e2e_sas_compare), fontWeight = FontWeight.SemiBold)
+                    // 7 emoji, two rows: the user reads them out against the other person's screen.
+                    v.emoji.chunked(4).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { i ->
+                                val (glyph, name) = pm.antani.resentin.e2e.SAS_EMOJI[i]
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(glyph, fontSize = androidx.compose.ui.unit.TextUnit(30f, androidx.compose.ui.unit.TextUnitType.Sp))
+                                    Text(name, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = { step("mismatch") }) { Text(stringResource(R.string.e2e_sas_no_match)) }
+                        androidx.compose.material3.Button(onClick = { step("match") }) { Text(stringResource(R.string.e2e_sas_match)) }
+                    }
+                }
+                else -> {
+                    Text(stringResource(R.string.e2e_sas_working))
+                    TextButton(onClick = { step("cancel") }) { Text(stringResource(R.string.e2e_cancel)) }
+                }
+            }
+        }
+    }
+}
+
+/** A line the verification leaves in the chat ("kind|byPeer|reason"). */
+@Composable
+private fun SystemRow(body: String, peer: String) {
+    val (kind, by, reason) = body.split("|").let { Triple(it.getOrElse(0) { "" }, it.getOrElse(1) { "" } == "true", it.getOrElse(2) { "" }) }
+    val text = when (kind) {
+        "asked" -> stringResource(if (by) R.string.e2e_sas_note_asked_peer else R.string.e2e_sas_note_asked_you, peer)
+        "verified" -> stringResource(R.string.e2e_sas_note_verified, peer)
+        else -> stringResource(if (by) R.string.e2e_sas_note_cancelled_peer else R.string.e2e_sas_note_cancelled_you, peer, reason)
+    }
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }

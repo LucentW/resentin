@@ -897,7 +897,7 @@
     <string name="e2e_composer_hint">Encrypted message</string>
     <string name="e2e_status_pending">sending…</string>
     <string name="e2e_status_failed">not sent</string>
-    <string name="e2e_alarm">The encryption key of %1$s changed. Nothing is sent until it is verified (verification is not available in Resentin yet).</string>
+    <string name="e2e_alarm">The encryption key of %1$s changed. Nothing is sent until it is resolved (resolving a key change is not in Resentin yet).</string>
     <string name="e2e_elsewhere">On %1$s your account\'s encryption identity is on another device: its keys are not here, so you cannot accept or write. Pair this device from cicchetto, or start a new identity.</string>
     <string name="e2e_new_identity">New identity</string>
     <string name="e2e_new_identity_confirm">Delete and redo</string>
@@ -918,7 +918,7 @@
     <string name="e2e_peer_no_key">No key yet: it arrives with the first exchange.</string>
     <string name="e2e_verified">Verified</string>
     <string name="e2e_not_verified">Not verified (trust on first use)</string>
-    <string name="e2e_compare_hint">To be sure you are talking to the right person, compare these fingerprints with them by voice or on another channel. Guided verification is not in Resentin yet.</string>
+    <string name="e2e_compare_hint">To be sure you are talking to the right person, compare these fingerprints with them by voice or on another channel. For the emoji verification use the Verify button.</string>
     <string name="e2e_device_here">this device</string>
     <string name="e2e_device_revoke">Revoke</string>
     <string name="e2e_device_revoke_warning">Device %1$s on %2$s will no longer read or write with this identity. Messages already decrypted stay where they are. You can pair it again later.</string>
@@ -951,4 +951,16 @@
     <string name="e2e_pair_end_closed">The other device closed the pairing.</string>
     <string name="e2e_pair_end_replaced">Another offer replaced this one.</string>
     <string name="e2e_pair_end_failed">Pairing failed.</string>
+    <string name="e2e_sas_start">Verify</string>
+    <string name="e2e_sas_asked">They asked to verify your keys with emoji. Accept?</string>
+    <string name="e2e_sas_compare">Compare these 7 emoji with the ones on the other person\'s screen, by voice or on another channel. They must be identical and in the same order.</string>
+    <string name="e2e_sas_match">They match</string>
+    <string name="e2e_sas_no_match">They do not match</string>
+    <string name="e2e_sas_working">Verifying…</string>
+    <string name="e2e_sas_waiting_peer">You confirmed. Waiting for the other person to confirm too.</string>
+    <string name="e2e_sas_note_asked_you">You asked %1$s to verify keys.</string>
+    <string name="e2e_sas_note_asked_peer">%1$s asked to verify keys.</string>
+    <string name="e2e_sas_note_verified">%1$s\'s keys verified.</string>
+    <string name="e2e_sas_note_cancelled_you">Verification with %1$s cancelled (%2$s).</string>
+    <string name="e2e_sas_note_cancelled_peer">%1$s cancelled the verification (%2$s).</string>
 </resources>

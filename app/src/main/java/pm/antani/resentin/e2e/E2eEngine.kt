@@ -93,6 +93,8 @@ data class E2eState(
     val rekeying: MutableSet<String> = mutableSetOf(),
     val sent: MutableList<Sent> = mutableListOf(),
     var nextRef: Int = 1,
+    /** The SAS running with a master (see [E2eVerifier]), by master key. */
+    val sas: MutableMap<String, SasRecord> = mutableMapOf(),
     /** Folded nick -> when a `listreq` last went to it, and for which list versions (`lv`). */
     val listreqAt: MutableMap<String, ListReq> = mutableMapOf(),
     /** `${folded nick} ${did}` -> when our list last went to that device (its `listreq`, or a body for a device our list does not name). */
@@ -116,6 +118,8 @@ sealed interface E2eEvent {
     data class SendQueued(val nick: String, val queued: Int, val tag: String) : E2eEvent
     data class SendFailed(val nick: String, val reason: String, val tags: List<String>) : E2eEvent
     data class Rekeying(val nick: String, val device: String) : E2eEvent
+    /** A line the verification leaves in the chat: kind asked | cancelled | verified. */
+    data class SasNote(val nick: String, val kind: String, val byPeer: Boolean, val reason: String?) : E2eEvent
 }
 
 /** One line for grappa's send door (`POST …/e2e/messages`). [ref] names it until grappa gives the msgid. */
@@ -162,10 +166,41 @@ class E2eEngine(
     // ── sending ──
 
     /** Sends [inner] (a typed JSON object, e.g. `{"t":"text","body":"…"}`) to [nick]'s devices. */
-    fun send(nick: String, inner: JsonObject, tag: String): Result {
+    fun send(nick: String, inner: JsonObject, tag: String, only: String? = null): Result {
         val res = Result()
-        dispatch(nick, inner, tag, res)
+        dispatch(nick, inner, tag, res, only)
         return res
+    }
+
+    /** To every trusted device of [nick] with a working session except [except] (never queued, never asks for keys). */
+    fun sendExcept(nick: String, inner: JsonObject, tag: String, except: String): Result {
+        val res = Result()
+        val master = state.pins[foldNick(nick)] ?: return res
+        val ready = trustedDevices(master).filter { it.ed25519 != except && working(it) }
+        if (ready.isEmpty()) return res
+        val plaintext = JsonObject(inner.filterKeys { it != "lv" && it != "fb" } + ("lv" to JsonPrimitive(own.list.ver))).toString()
+        encrypt(nick, master, ready, Outgoing(state.nextRef++.toString(), plaintext, "text", 1, tag), res)
+        return res
+    }
+
+    // ── what the verifier reads of us and of the pins ──
+    class Pinned(val master: String, val verified: Boolean, val devices: Int)
+
+    fun pinned(nick: String): Pinned? {
+        val master = state.pins[foldNick(nick)] ?: return null
+        val record = state.masters[master] ?: return null
+        return Pinned(master, record.verified, trustedDevices(master).size)
+    }
+
+    fun trusted(master: String, ed25519: String): PeerDevice? = trustedDevices(master).firstOrNull { it.ed25519 == ed25519 }
+    fun curve(): String = account.curve25519Key()
+    fun deviceKey(): String = account.ed25519Key()
+    fun fingerprint(): String = own.master
+
+    /** The user (or a SAS) confirmed [master] is who [nick] claims: pinned and verified. */
+    fun verify(nick: String, master: String) {
+        if (state.pins[foldNick(nick)] != master) return
+        state.masters[master]?.let { state.masters[master] = it.copy(verified = true) }
     }
 
     private fun dispatch(nick: String, inner: JsonObject, tag: String, res: Result, only: String? = null): Boolean {
