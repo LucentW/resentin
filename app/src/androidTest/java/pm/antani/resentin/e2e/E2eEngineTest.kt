@@ -102,4 +102,44 @@ class E2eEngineTest {
         val r = alice.engine.receive("bob", "keys", "*", "k2", impostor.keysPayload())
         assertTrue(r.events.any { it is E2eEvent.KeyAlarm })
     }
+
+    @Test
+    fun aNewerListIsAskedForAnsweredAndTaken() {
+        val alice = Peer("alice")
+        val bob = Peer("bob")
+        // The usual opening: alice holds bob's list v1 and a session to him.
+        alice.engine.send("bob", text("1"), "t1")
+        val pk = alice.engine.receive("bob", "keys", "*", "k1", bob.keysPayload()).outbound.single()
+        bob.engine.receive("alice", "pkmsg", alice.own.did, "m1", pk.payload)
+        assertEquals(1, alice.engine.state.masters[bob.own.master]!!.ver)
+
+        // bob pairs a second device: his list is now v2 and his messages say so (`lv`).
+        val extra = Account()
+        val devices = listOf(bob.device.ed25519Key(), extra.ed25519Key()).sorted()
+        val list2 = SignedList(2, devices, bob.master.sign(listSigText(2, devices)))
+        val bob2 = E2eEngine(bob.device, bob.own.copy(list = list2), { "bob" }, bob.engine.state)
+        val hello = bob2.send("alice", text("ciao"), "t2").outbound.first { it.verb == "msg" || it.verb == "pkmsg" }
+
+        // alice reads it, notices the higher `lv`, and asks bob (on the session, to his device only) for the list.
+        val r = alice.engine.receive("bob", hello.verb, bob.own.did, "m2", hello.payload)
+        assertEquals("ciao", r.events.filterIsInstance<E2eEvent.Received>().single().inner["body"]!!.jsonPrimitive.content)
+        val listreq = r.outbound.single { it.tag == "list" }
+        assertEquals(bob.own.did, listreq.to)
+
+        // bob answers with his signed list; the listreq is never shown to the app.
+        val rb = bob2.receive("alice", listreq.verb, alice.own.did, "m3", listreq.payload)
+        assertTrue(rb.events.none { it is E2eEvent.Received })
+        val answer = rb.outbound.single { it.tag == "list" }
+
+        // alice takes it: the master's stored list moves to v2 with both devices.
+        val ra = alice.engine.receive("bob", answer.verb, bob.own.did, "m4", answer.payload)
+        assertTrue(ra.events.none { it is E2eEvent.Received })
+        val record = alice.engine.state.masters[bob.own.master]!!
+        assertEquals(2, record.ver)
+        assertEquals(devices, record.devices)
+
+        // Asking again within the minute is not done, and the same listreq is answered at most once a minute.
+        val again = bob2.receive("alice", listreq.verb, alice.own.did, "m5", listreq.payload)
+        assertTrue(again.outbound.none { it.tag == "list" })
+    }
 }

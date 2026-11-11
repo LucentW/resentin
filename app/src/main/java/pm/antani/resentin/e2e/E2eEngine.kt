@@ -31,6 +31,8 @@ const val OUTQ_TTL_MS = 90_000L
 const val OUTQ_MAX = 16
 const val REKEY_INTERVAL_MS = 60_000L
 const val MAX_SENDS = 2
+const val LISTREQ_INTERVAL_MS = 60_000L
+const val LIST_TAG = "list"
 const val MAX_SESSIONS_PER_PEER = 5
 const val SEEN_SESSIONS_MAX = 10_000
 const val WIRE_VERSION = 2
@@ -71,6 +73,9 @@ data class Queued(val nick: String, val master: String, val only: String?, val d
 data class SentDevice(val ed25519: String, val sessionId: String)
 
 @Serializable
+data class ListReq(val at: Long, val lv: List<Int> = emptyList())
+
+@Serializable
 data class Sent(val ref: String, val msgid: String?, val nick: String, val master: String, val devices: Map<String, SentDevice>, val msg: Outgoing, val at: Long)
 
 /** Everything the engine remembers, stored with the account in one record. Keys by folded nick. */
@@ -88,6 +93,10 @@ data class E2eState(
     val rekeying: MutableSet<String> = mutableSetOf(),
     val sent: MutableList<Sent> = mutableListOf(),
     var nextRef: Int = 1,
+    /** Folded nick -> when a `listreq` last went to it, and for which list versions (`lv`). */
+    val listreqAt: MutableMap<String, ListReq> = mutableMapOf(),
+    /** `${folded nick} ${did}` -> when our list last went to that device (its `listreq`, or a body for a device our list does not name). */
+    val listAnsweredAt: MutableMap<String, Long> = mutableMapOf(),
     /** The last inbox id processed, stored with what processing it changed. */
     var inbox: Long = 0,
 ) {
@@ -95,6 +104,7 @@ data class E2eState(
     fun startOver() {
         sessions.clear(); seen.clear(); outq.clear(); keyreqSentAt.clear(); keysAwaited.clear()
         rekeyAt.clear(); rekeying.clear(); sent.clear(); nextRef = 1; inbox = 0
+        listreqAt.clear(); listAnsweredAt.clear()
     }
 }
 
@@ -158,7 +168,7 @@ class E2eEngine(
         return res
     }
 
-    private fun dispatch(nick: String, inner: JsonObject, tag: String, res: Result): Boolean {
+    private fun dispatch(nick: String, inner: JsonObject, tag: String, res: Result, only: String? = null): Boolean {
         if (foldNick(nick) == foldNick(ownNick())) return fail(nick, "own-nick", listOf(tag), res)
         val plaintext = JsonObject(inner.filterKeys { it != "lv" && it != "fb" } + ("lv" to JsonPrimitive(own.list.ver))).toString()
         val prio = when (inner["t"]?.jsonPrimitive?.contentOrNull) {
@@ -166,7 +176,7 @@ class E2eEngine(
         }
         val msg = Outgoing(state.nextRef++.toString(), plaintext, prio, 1, tag)
         val master = state.pins[foldNick(nick)]
-        return if (master == null) enqueue(nick, "", null, emptyList(), msg, res) else sendTo(nick, master, null, msg, res)
+        return if (master == null) enqueue(nick, "", only, emptyList(), msg, res) else sendTo(nick, master, only, msg, res)
     }
 
     private fun fail(nick: String, reason: String, tags: List<String>, res: Result): Boolean {
@@ -218,7 +228,7 @@ class E2eEngine(
         val q = liveQueue(nick, res)
         if (q.size >= OUTQ_MAX) { lost(nick, "queue-full", listOf(msg), res); return false }
         state.outq[foldNick(nick)] = q + Queued(nick, master, only, done, msg, now())
-        res.events += E2eEvent.SendQueued(nick, q.size + 1, msg.tag)
+        if (msg.tag != LIST_TAG) res.events += E2eEvent.SendQueued(nick, q.size + 1, msg.tag)
         maybeKeyreq(nick, res)
         return true
     }
@@ -255,7 +265,7 @@ class E2eEngine(
                     for (b in group) state.sessions[b.device.curve25519] = listOf(b.session.pickle()) + sessionsOf(b.device.curve25519).drop(1)
                     val ref = (state.nextRef++).toString()
                     state.sent += Sent(ref, null, nick, master, group.associate { it.device.did to SentDevice(it.device.ed25519, it.session.sessionId()) }, msg, now())
-                    res.outbound += Outbound(nick, if (preKey) "pkmsg" else "msg", own.did, "*", wire(preKey, group.associate { it.device.did to it.body }), msg.priority, ref, msg.tag)
+                    res.outbound += Outbound(nick, if (preKey) "pkmsg" else "msg", own.did, if (group.size == 1) group[0].device.did else "*", wire(preKey, group.associate { it.device.did to it.body }), msg.priority, ref, msg.tag)
                 }
             }
         } finally {
@@ -471,7 +481,7 @@ class E2eEngine(
         if (bound != null && held != null) {
             val plaintext = decryptWith(id.curve25519, held, 0uL, body)
                 ?: return undecryptable(nick, msgid, fromDid, "decryption-failed", res)
-            inner(nick, plaintext, id.ed25519, res)?.let { deliver(nick, master, bound, it, res) }
+            inner(nick, plaintext, id.ed25519, res)?.let { deliver(nick, master, bound, it, bodies.keys, res) }
             return
         }
         if (sessionId in state.seen) return undecryptable(nick, msgid, fromDid, "replayed-session", res)
@@ -484,7 +494,7 @@ class E2eEngine(
             val inner = inner(nick, created.plaintext, id.ed25519, res) ?: return // built for another pair, or unreadable: the session goes
             val device = bindProven(master, id, certVer)
             addSession(id.curve25519, s.pickle())
-            deliver(nick, master, device, inner, res)
+            deliver(nick, master, device, inner, bodies.keys, res)
         }
         flush(nick, master, res)
     }
@@ -505,7 +515,7 @@ class E2eEngine(
             if (plaintext == null) {
                 return undecryptable(nick, msgid, fromDid, if (sessionsOf(curve).isEmpty()) "no-session" else "decryption-failed", res)
             }
-            inner(nick, plaintext, null, res)?.let { deliver(nick, master, device, it, res) }
+            inner(nick, plaintext, null, res)?.let { deliver(nick, master, device, it, bodies.keys, res) }
             return
         }
         if (state.devices.values.any { it.curve25519 == curve }) return drop(nick, "unpinned-key", "msg", res)
@@ -545,11 +555,67 @@ class E2eEngine(
         return JsonObject(o.filterKeys { it != "fb" })
     }
 
-    private fun deliver(nick: String, master: String, device: PeerDevice, inner: JsonObject, res: Result) {
-        // t:list and t:listreq are the list protocol's: not ported yet, never handed to the app.
-        val t = inner["t"]?.jsonPrimitive?.contentOrNull
-        if (t == "list" || t == "listreq") return
-        res.events += E2eEvent.Received(nick, master, device.ed25519, state.masters[master]?.verified == true, JsonObject(inner.filterKeys { it != "lv" }))
+    // A decrypted inner message from [device] of [master] (the master pinned to [nick]), out of a message
+    // holding bodies for [bodies] (dids). t:list and t:listreq are the engine's own and never handed on;
+    // anything else is, without its `lv`. A body for a device our own list does not name means the writer
+    // holds an older list of ours, so it gets the current one; an `lv` above the version of the list we
+    // hold for the master asks that device for its list.
+    private fun deliver(nick: String, master: String, device: PeerDevice, inner: JsonObject, bodies: Set<String>, res: Result) {
+        val lv = (inner["lv"] as? JsonPrimitive)?.intOrNull
+        val rest = JsonObject(inner.filterKeys { it != "lv" })
+        when (rest["t"]?.jsonPrimitive?.contentOrNull) {
+            "list" -> onList(nick, rest, res)
+            "listreq" -> if (!sendList(nick, device, res)) res.events += E2eEvent.Dropped(nick, "listreq-rate-limited", null)
+            else -> res.events += E2eEvent.Received(nick, master, device.ed25519, state.masters[master]?.verified == true, rest)
+        }
+        val ours = own.list.devices.map { didOf(it) }.toSet()
+        if (bodies.any { it !in ours }) sendList(nick, device, res)
+        if (lv != null && lv in 1..Int.MAX_VALUE && lv > (state.masters[master]?.ver ?: 0)) requestList(nick, device.ed25519, lv, res)
+    }
+
+    private fun requestList(nick: String, only: String?, lv: Int?, res: Result): Boolean {
+        val key = foldNick(nick)
+        val master = state.pins[key]
+        val ver = master?.let { state.masters[it]?.ver } ?: 0
+        val last = state.listreqAt[key]
+        val asked = last?.lv.orEmpty().filter { it > ver }
+        if (last != null) state.listreqAt[key] = last.copy(lv = asked)
+        if (lv != null && lv in asked) return false
+        if (last != null && now() - last.at < LISTREQ_INTERVAL_MS) return false
+        if (!dispatch(nick, buildJsonObject { put("t", "listreq") }, LIST_TAG, res, only)) return false
+        state.listreqAt[key] = ListReq(now(), if (lv == null) asked else asked + lv)
+        return true
+    }
+
+    private fun sendList(nick: String, device: PeerDevice, res: Result): Boolean {
+        val t = now()
+        state.listAnsweredAt.entries.removeAll { t - it.value >= LISTREQ_INTERVAL_MS }
+        val asker = "${foldNick(nick)} ${device.did}"
+        if (asker in state.listAnsweredAt) return false
+        state.listAnsweredAt[asker] = t
+        val master = buildJsonObject {
+            put("ed25519", own.master)
+            put("list", buildJsonObject { put("ver", own.list.ver); put("devices", JsonArray(own.list.devices.map(::JsonPrimitive))) })
+            put("sig", own.list.sig)
+        }
+        dispatch(nick, buildJsonObject { put("t", "list"); put("master", master) }, LIST_TAG, res, device.ed25519)
+        return true
+    }
+
+    // A `t:list`: the KEYS steps 3-5. An invalid list is dropped; one of another master than the one pinned to
+    // [nick] is the alarm; else rule 3 (applyList).
+    private fun onList(nick: String, inner: JsonObject, res: Result) {
+        val m = inner["master"] as? JsonObject
+        val l = m?.get("list") as? JsonObject
+        val ver = (l?.get("ver") as? JsonPrimitive)?.intOrNull
+        val devs = (l?.get("devices") as? JsonArray)?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" }
+        val key = (m?.get("ed25519") as? JsonPrimitive)?.takeIf { it.isString }?.content
+        val sig = (m?.get("sig") as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (ver == null || devs == null || key == null || sig == null || !validMasterList(key, ver, devs, sig)) {
+            res.events += E2eEvent.Dropped(nick, "bad-list", null); return
+        }
+        if (!checkMaster(nick, key, res)) return
+        applyList(key, ver, devs)
     }
 
     private fun onNack(nick: String, fromDid: String, p: JsonObject, res: Result) {

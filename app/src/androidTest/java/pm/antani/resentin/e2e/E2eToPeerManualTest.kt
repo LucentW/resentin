@@ -25,7 +25,7 @@ class E2eToPeerManualTest {
         requireVisitor(host!!, token!!)
         val synced = E2eIdentity(store) { api }.sync(slot, slug)
         android.util.Log.i("E2ePeer", "sync: $synced")
-        val c = E2eClient(store, { api }, slot, slug) { a.getString("e2eNick")!! }
+        val c = E2eClient(store, { api }, slot, slug, ownNick = { a.getString("e2eNick")!! })
         val log = { m: String -> android.util.Log.i("E2ePeer", m) }
         // 1. Ask for consent (§4i): this is what shows up in cicchetto for the person to accept.
         log("asked: " + c.askToChat(peer!!))
