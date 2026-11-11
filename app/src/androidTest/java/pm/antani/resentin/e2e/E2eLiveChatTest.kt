@@ -50,8 +50,8 @@ class E2eLiveChatTest {
         try {
             assertEquals(IdentityState.Ready, E2eIdentity(store) { apiA }.sync(slotA, slug))
             assertEquals(IdentityState.Ready, E2eIdentity(store) { apiB }.sync(slotB, slug))
-            val ca = E2eClient(store, { apiA }, slotA, slug) { nickA }
-            val cb = E2eClient(store, { apiB }, slotB, slug) { nickB }
+            val ca = E2eClient(store, { apiA }, slotA, slug, ownNick = { nickA })
+            val cb = E2eClient(store, { apiB }, slotB, slug, ownNick = { nickB })
 
             // A writes to B: KEYREQ, KEYS, PKMSG, all through grappa and the IRC server.
             ca.sendText(nickB, "ciao da Resentin", "t1")
