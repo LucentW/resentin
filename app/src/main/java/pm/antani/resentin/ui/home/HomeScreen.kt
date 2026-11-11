@@ -124,6 +124,8 @@ fun HomeScreen(
     onAppSettingsClick: () -> Unit,
     onBrowseDirectory: (networkSlug: String) -> Unit = {},
     onMentionsClick: (networkSlug: String) -> Unit = {},
+    /** Extra list items above the networks (the encrypted-chats section). */
+    extraItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {},
 ) {
     // "$server" (MOTD + service notices) is reached by tapping the network header
     // itself rather than listed as a channel row — it's network-level, not a channel.
@@ -301,6 +303,7 @@ fun HomeScreen(
                                 )
                             }
                         }
+                        extraItems()
                         if (mentionsBundles.isNotEmpty()) {
                             items(
                                 mentionsBundles.values.toList(),

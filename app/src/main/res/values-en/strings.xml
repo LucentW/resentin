@@ -874,4 +874,32 @@
     <string name="app_lock_subtitle">Unlock with fingerprint, face or your phone PIN/pattern</string>
     <string name="app_lock_unlock">Unlock</string>
     <string name="app_lock_auth_title">Unlock Resentin</string>
-    <string name="app_lock_auth_failed">Authentication failed, try again</string></resources>
+    <string name="app_lock_auth_failed">Authentication failed, try again</string>    <string name="e2e_home_title">Encrypted chats</string>
+    <string name="e2e_new_chat">New encrypted chat</string>
+    <string name="e2e_new_chat_hint">Ask a nick to start an end-to-end encrypted chat. They have to accept.</string>
+    <string name="e2e_nick">Nick</string>
+    <string name="e2e_ask">Ask</string>
+    <string name="e2e_ask_again">Ask again</string>
+    <string name="e2e_cancel">Cancel</string>
+    <string name="e2e_accept">Accept</string>
+    <string name="e2e_refuse">Refuse</string>
+    <string name="e2e_dismiss">OK</string>
+    <string name="e2e_open">Open</string>
+    <string name="e2e_send">Send</string>
+    <string name="e2e_chat_opened">Encrypted chat open</string>
+    <string name="e2e_chat_subtitle">End-to-end encrypted · %1$s</string>
+    <string name="e2e_request_incoming">%1$s would like to start an encrypted chat (%2$s)</string>
+    <string name="e2e_request_refused">%1$s refused the encrypted chat</string>
+    <string name="e2e_request_expired">Your request to %1$s expired unanswered</string>
+    <string name="e2e_request_waiting">Waiting for %1$s to accept the encrypted chat (%2$s)</string>
+    <string name="e2e_waiting_peer">Waiting for %1$s to accept</string>
+    <string name="e2e_not_consented">Writing to %1$s encrypted needs their consent first.</string>
+    <string name="e2e_composer_hint">Encrypted message</string>
+    <string name="e2e_status_pending">sending…</string>
+    <string name="e2e_status_failed">not sent</string>
+    <string name="e2e_alarm">The encryption key of %1$s changed. Nothing is sent until it is verified (verification is not available in Resentin yet).</string>
+    <string name="e2e_elsewhere">On %1$s your account\'s encryption identity is on another device: its keys are not here, so you cannot accept or write. Pair this device from cicchetto, or start a new identity.</string>
+    <string name="e2e_new_identity">New identity</string>
+    <string name="e2e_new_identity_confirm">Delete and redo</string>
+    <string name="e2e_new_identity_warning">Deletes the encryption identity on %1$s and makes a new one. Every contact will see a key-change alert and must verify you again; what was encrypted to the old identity can no longer be read here. This cannot be undone.</string>
+</resources>

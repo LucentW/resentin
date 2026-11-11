@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -69,6 +70,8 @@ class E2eRepository(
     fun messages(slug: String, peer: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observe(slug, foldNick(peer))
     fun conversations(slug: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observeConversations(slug)
 
+    fun allConversations(): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observeAllConversations()
+
     fun startListening(connectionManager: ConnectionManager, scope: CoroutineScope) {
         connectionManager.events.onEach { event ->
             when (event) {
@@ -77,14 +80,16 @@ class E2eRepository(
                 else -> Unit
             }
         }.launchIn(scope)
-        // A push is not replayed: read everything again on every (re)connect.
-        combine(tokenStore.session.filterNotNull(), connectionManager.state) { _, state -> state }
+        // A push is not replayed: read everything again on every (re)connect, and when a network
+        // appears (the list is still empty when the socket first opens).
+        combine(
+            tokenStore.session.filterNotNull(),
+            connectionManager.state,
+            db.networkDao().observeNetworksWithChannels().map { list -> list.map { it.network.slug }.toSet() },
+        ) { _, state, slugs -> if (state == SocketState.OPEN) slugs else emptySet() }
             .distinctUntilChanged()
-            .onEach { state ->
-                if (state != SocketState.OPEN) return@onEach
-                val slugs = db.networkDao().observeNetworksWithChannels().first().map { it.network.slug }
-                slugs.forEach { slug -> scope.launch { refresh(slug) } }
-            }.launchIn(scope)
+            .onEach { slugs -> slugs.forEach { slug -> scope.launch { refresh(slug) } } }
+            .launchIn(scope)
     }
 
     private fun lock(slug: String) = locks.getOrPut(slug) { Mutex() }
@@ -110,8 +115,9 @@ class E2eRepository(
     /** Syncs the identity, reads the inbox and the requests. Never throws: a failure is logged and the next push retries. */
     suspend fun refresh(slug: String) = lock(slug).withLock {
         runCatching {
-            val slot = slot(slug) ?: return@runCatching
+            val slot = slot(slug) ?: return@runCatching Log.i(TAG, "E2E refresh $slug: no slot").let { }
             val state = identity.sync(slot, slug)
+            Log.i(TAG, "E2E refresh $slug: identity $state")
             _identityState.update { it + (slug to state) }
             if (state != IdentityState.Ready) return@runCatching
             val c = client(slug) ?: return@runCatching
@@ -120,10 +126,20 @@ class E2eRepository(
             _requests.update { it + (slug to requests) }
             // The peer accepted what we asked: open the chat's keys, then let the answer go.
             for (r in requests.filter { it.state == "accepted" }) {
+                markOpened(slug, r.peer)
                 apply(slug, c.askKeys(r.peer))
                 c.dismissRequest(r.id)
             }
         }.onFailure { Log.w(TAG, "E2E refresh failed on $slug", it) }
+    }
+
+    // Consent is the only thing that lets a conversation exist before its first message: remember it
+    // as a body-less "opened" row, which the message list leaves out.
+    private suspend fun markOpened(slug: String, peer: String) {
+        val dao = db.e2eMessageDao()
+        if (dao.count(slug, foldNick(peer)) == 0) {
+            dao.insert(E2eMessageEntity(networkSlug = slug, peer = foldNick(peer), peerNick = peer, outgoing = false, body = "", at = System.currentTimeMillis(), status = "opened"))
+        }
     }
 
     private suspend fun apply(slug: String, events: List<E2eEvent>) {
@@ -149,6 +165,7 @@ class E2eRepository(
 
     suspend fun accept(slug: String, request: E2eRequestDto): Result<Unit> = guarded(slug) { c ->
         apply(slug, c.accept(request))
+        markOpened(slug, request.peer)
         _requests.update { it + (slug to c.requests()) }
     }
 

@@ -57,6 +57,10 @@ import pm.antani.resentin.ui.mentions.MentionsScreen
 import pm.antani.resentin.ui.mentions.MentionsViewModel
 import pm.antani.resentin.ui.networksettings.NetworkSettingsScreen
 import pm.antani.resentin.ui.networksettings.NetworkSettingsViewModel
+import pm.antani.resentin.ui.e2e.E2eChatScreen
+import pm.antani.resentin.ui.e2e.E2eChatViewModel
+import pm.antani.resentin.ui.e2e.E2eOverviewViewModel
+import pm.antani.resentin.ui.e2e.e2eHomeItems
 import pm.antani.resentin.ui.sharetarget.ShareTargetScreen
 
 private const val ROUTE_HOME = "home"
@@ -70,6 +74,7 @@ private const val ROUTE_ADMIN = "admin"
 private const val ROUTE_SHARE_TARGET = "share-target"
 private const val ROUTE_DIRECTORY = "directory/{networkSlug}"
 private const val ROUTE_ARCHIVE = "archive/{networkSlug}"
+private const val ROUTE_E2E_CHAT = "e2e/{networkSlug}/{peer}"
 
 private fun encode(value: String) = URLEncoder.encode(value, "UTF-8")
 private fun decode(value: String) = URLDecoder.decode(value, "UTF-8")
@@ -275,6 +280,8 @@ fun AppRoot(
                     appContext,
                 ),
             )
+            val e2eViewModel: E2eOverviewViewModel = viewModel(factory = E2eOverviewViewModel.factory(container.e2eRepository))
+            val e2eOverview by e2eViewModel.overview.collectAsState()
             HomeScreen(
                 viewModel = viewModel,
                 host = currentSession.host,
@@ -287,7 +294,27 @@ fun AppRoot(
                 onAppSettingsClick = { navController.navigate(ROUTE_APP_SETTINGS) },
                 onBrowseDirectory = { networkSlug -> navController.navigate("directory/$networkSlug") },
                 onMentionsClick = { networkSlug -> navController.navigate("mentions/$networkSlug") },
+                extraItems = {
+                    e2eHomeItems(e2eOverview, e2eViewModel) { slug, peer ->
+                        navController.navigate("e2e/${encode(slug)}/${encode(peer)}")
+                    }
+                },
             )
+        }
+        composable(
+            ROUTE_E2E_CHAT,
+            arguments = listOf(
+                navArgument("networkSlug") { type = NavType.StringType },
+                navArgument("peer") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val slug = decode(backStackEntry.arguments?.getString("networkSlug").orEmpty())
+            val peer = decode(backStackEntry.arguments?.getString("peer").orEmpty())
+            val vm: E2eChatViewModel = viewModel(
+                key = "e2e/$slug/$peer",
+                factory = E2eChatViewModel.factory(container.e2eRepository, slug, peer),
+            )
+            E2eChatScreen(vm = vm, onBack = { navController.popBackStack() })
         }
         composable(
             ROUTE_MENTIONS,

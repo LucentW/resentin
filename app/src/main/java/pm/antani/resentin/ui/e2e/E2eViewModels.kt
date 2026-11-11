@@ -1,0 +1,91 @@
+package pm.antani.resentin.ui.e2e
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.CreationExtras
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import pm.antani.resentin.data.db.E2eMessageEntity
+import pm.antani.resentin.domain.repository.E2eRepository
+import pm.antani.resentin.e2e.IdentityState
+import pm.antani.resentin.e2e.foldNick
+import pm.antani.resentin.net.dto.E2eRequestDto
+
+/** What the Home section shows: requests waiting on us or answered, conversations, and identities held elsewhere. */
+data class E2eOverview(
+    val incoming: List<Pair<String, E2eRequestDto>> = emptyList(),
+    val answered: List<Pair<String, E2eRequestDto>> = emptyList(),
+    val waiting: List<Pair<String, E2eRequestDto>> = emptyList(),
+    val conversations: List<E2eMessageEntity> = emptyList(),
+    val elsewhere: List<String> = emptyList(),
+    /** Networks whose server speaks E2E at all (the sync answered): where a new chat can start. */
+    val networks: List<String> = emptyList(),
+) {
+    val visible get() = networks.isNotEmpty()
+}
+
+class E2eOverviewViewModel(private val repo: E2eRepository) : ViewModel() {
+    val overview: StateFlow<E2eOverview> = combine(repo.requests, repo.identityState, repo.allConversations()) { requests, identity, convs ->
+        val all = requests.flatMap { (slug, list) -> list.map { slug to it } }
+        E2eOverview(
+            incoming = all.filter { it.second.state == "incoming" },
+            answered = all.filter { it.second.state == "refused" || it.second.state == "expired" },
+            waiting = all.filter { it.second.state == "outgoing" },
+            conversations = convs,
+            elsewhere = identity.filterValues { it is IdentityState.Elsewhere }.keys.toList(),
+            networks = identity.keys.toList(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eOverview())
+
+    fun accept(slug: String, r: E2eRequestDto, done: (Boolean) -> Unit = {}) = viewModelScope.launch { done(repo.accept(slug, r).isSuccess) }
+    fun refuse(slug: String, r: E2eRequestDto) = viewModelScope.launch { repo.refuse(slug, r) }
+    fun dismiss(slug: String, r: E2eRequestDto) = viewModelScope.launch { repo.dismissRequest(slug, r) }
+    fun ask(slug: String, peer: String, done: (Boolean) -> Unit) = viewModelScope.launch { done(repo.ask(slug, peer).isSuccess) }
+    fun replaceIdentity(slug: String) = viewModelScope.launch { repo.replaceIdentity(slug) }
+
+    companion object {
+        fun factory(repo: E2eRepository) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T = E2eOverviewViewModel(repo) as T
+        }
+    }
+}
+
+/** One encrypted conversation: its messages, the consent state with the peer, and the identity. */
+data class E2eChatState(
+    val identity: IdentityState? = null,
+    val request: E2eRequestDto? = null,
+    val alarm: Boolean = false,
+)
+
+class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val peer: String) : ViewModel() {
+    val messages: StateFlow<List<E2eMessageEntity>> =
+        repo.messages(slug, peer).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val state: StateFlow<E2eChatState> = combine(repo.identityState, repo.requests, repo.alarms) { identity, requests, alarms ->
+        E2eChatState(
+            identity = identity[slug],
+            request = requests[slug].orEmpty().firstOrNull { foldNick(it.peer) == foldNick(peer) },
+            alarm = foldNick(peer) in alarms[slug].orEmpty(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eChatState())
+
+    fun send(body: String) { if (body.isNotBlank()) viewModelScope.launch { repo.sendText(slug, peer, body.trim()) } }
+    fun ask(done: (Boolean) -> Unit = {}) = viewModelScope.launch { done(repo.ask(slug, peer).isSuccess) }
+    fun accept(r: E2eRequestDto) = viewModelScope.launch { repo.accept(slug, r) }
+    fun refuse(r: E2eRequestDto) = viewModelScope.launch { repo.refuse(slug, r) }
+    fun dismiss(r: E2eRequestDto) = viewModelScope.launch { repo.dismissRequest(slug, r) }
+    fun replaceIdentity() = viewModelScope.launch { repo.replaceIdentity(slug) }
+    fun refresh() = viewModelScope.launch { repo.refresh(slug) }
+
+    companion object {
+        fun factory(repo: E2eRepository, slug: String, peer: String) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T = E2eChatViewModel(repo, slug, peer) as T
+        }
+    }
+}

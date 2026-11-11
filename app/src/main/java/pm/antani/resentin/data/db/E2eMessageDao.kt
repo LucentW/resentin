@@ -17,6 +17,13 @@ interface E2eMessageDao {
     )
     fun observeConversations(slug: String): Flow<List<E2eMessageEntity>>
 
+    /** The newest message of each conversation on every network. */
+    @Query("SELECT * FROM e2e_messages WHERE id IN (SELECT MAX(id) FROM e2e_messages GROUP BY networkSlug, peer) ORDER BY at DESC")
+    fun observeAllConversations(): Flow<List<E2eMessageEntity>>
+
+    @Query("SELECT COUNT(*) FROM e2e_messages WHERE networkSlug = :slug AND peer = :peer")
+    suspend fun count(slug: String, peer: String): Int
+
     @Insert
     suspend fun insert(message: E2eMessageEntity): Long
 
