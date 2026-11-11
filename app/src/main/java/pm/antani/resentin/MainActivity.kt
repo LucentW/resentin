@@ -50,8 +50,14 @@ class MainActivity : FragmentActivity() {
             // Nascondi anteprima (Impostazioni → Sicurezza): oscura l'app nello
             // switcher delle app recenti via FLAG_SECURE.
             val hidePreview by container.appPreferences.appLockHidePreview.collectAsState(initial = false)
+            // Chat cifrata aperta: stessa protezione, salvo opt-out (Impostazioni → Chat cifrate).
+            val e2eChatOpen by container.e2eChatOpen.collectAsState()
+            val e2eSecure by container.appPreferences.e2eSecureScreen.collectAsState(initial = true)
+            // Read here, in composition: reads inside SideEffect don't subscribe, so the window
+            // would never follow a chat opening or the opt-out being flipped.
+            val secureWindow = hidePreview || (e2eChatOpen && e2eSecure)
             SideEffect {
-                if (hidePreview) {
+                if (secureWindow) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

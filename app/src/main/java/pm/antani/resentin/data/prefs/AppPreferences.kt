@@ -78,6 +78,7 @@ enum class AppFontFamily {
 class AppPreferences(private val context: Context) {
 
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
+    private val keyE2eSecureScreen = booleanPreferencesKey("e2e_secure_screen")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
     private val keyShowHostmaskInEvents = booleanPreferencesKey("show_hostmask_in_events")
@@ -260,6 +261,13 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setChatFontFamily(fontFamily: AppFontFamily) {
         context.dataStore.edit { it[keyChatFontFamily] = fontFamily.name }
+    }
+
+    /** Window FLAG_SECURE while an encrypted chat is open: no screenshots, blank in recents. On by default. */
+    val e2eSecureScreen: Flow<Boolean> = context.dataStore.data.map { it[keyE2eSecureScreen] ?: true }
+
+    suspend fun setE2eSecureScreen(value: Boolean) {
+        context.dataStore.edit { it[keyE2eSecureScreen] = value }
     }
 
     val stayConnected: Flow<Boolean> = context.dataStore.data.map { it[keyStayConnected] ?: false }

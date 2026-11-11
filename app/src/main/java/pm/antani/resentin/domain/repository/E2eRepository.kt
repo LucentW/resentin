@@ -70,6 +70,26 @@ class E2eRepository(
     fun messages(slug: String, peer: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observe(slug, foldNick(peer))
     fun conversations(slug: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observeConversations(slug)
 
+    /** What the user may compare out of band: the master key is the identity's fingerprint. */
+    data class OwnKeyInfo(val master: String, val did: String, val listVersion: Int, val devices: Int, val holdsMaster: Boolean)
+    data class PeerKeyInfo(val master: String, val verified: Boolean, val devices: Int)
+
+    suspend fun ownKeyInfo(slug: String): OwnKeyInfo? {
+        val slot = slot(slug) ?: return null
+        return store.peek(slot) { s ->
+            s.own?.let { OwnKeyInfo(it.master, it.did, it.list.ver, it.list.devices.size, s.master != null) }
+        }
+    }
+
+    suspend fun peerKeyInfo(slug: String, nick: String): PeerKeyInfo? {
+        val slot = slot(slug) ?: return null
+        return store.peek(slot) { s ->
+            val master = s.state.pins[foldNick(nick)] ?: return@peek null
+            val record = s.state.masters[master] ?: return@peek null
+            PeerKeyInfo(master, record.verified, s.state.devices.values.count { it.master == master })
+        }
+    }
+
     fun allConversations(): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observeAllConversations()
 
     fun startListening(connectionManager: ConnectionManager, scope: CoroutineScope) {

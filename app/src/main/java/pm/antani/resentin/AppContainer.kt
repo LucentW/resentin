@@ -56,6 +56,8 @@ class AppContainer(private val context: Context) {
     val adminRepository = AdminRepository(authRepository)
     val e2eAccountStore = E2eAccountStore(context.applicationContext)
     val e2eRepository = E2eRepository(authRepository, tokenStore, database, e2eAccountStore)
+    /** True while an encrypted chat is on screen; MainActivity turns it into FLAG_SECURE. */
+    val e2eChatOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
     val openChatTracker = OpenChatTracker()
     val pendingShareHolder = PendingShareHolder()
     val notificationRouter =

@@ -902,4 +902,21 @@
     <string name="e2e_new_identity">Nuova identità</string>
     <string name="e2e_new_identity_confirm">Cancella e rifai</string>
     <string name="e2e_new_identity_warning">Cancella l\'identità cifrata su %1$s e ne crea una nuova. Ogni contatto vedrà un avviso di cambio chiave e dovrà verificarti di nuovo; ciò che è stato cifrato per la vecchia identità non sarà più leggibile qui. Non si può annullare.</string>
+    <string name="e2e_settings_desc">Schermo protetto, chiavi e dispositivi</string>
+    <string name="e2e_settings_none">Nessuna rete con chat cifrate al momento.</string>
+    <string name="e2e_secure_screen">Proteggi lo schermo delle chat cifrate</string>
+    <string name="e2e_secure_screen_desc">Blocca screenshot e registrazione dello schermo e nasconde la chat nelle app recenti.</string>
+    <string name="e2e_identity_on">Identità su %1$s</string>
+    <string name="e2e_identity_loading">Caricamento…</string>
+    <string name="e2e_elsewhere_short">Le chiavi di questa identità sono su un altro dispositivo.</string>
+    <string name="e2e_fingerprint_label">Impronta (chiave master)</string>
+    <string name="e2e_device_line">Questo dispositivo: %1$s · %2$d nella lista · versione %3$d</string>
+    <string name="e2e_not_master">Questo dispositivo non tiene la chiave master: non può aggiungerne altri.</string>
+    <string name="e2e_keys">Chiavi</string>
+    <string name="e2e_key_of">Chiave di %1$s</string>
+    <string name="e2e_key_yours">La tua chiave</string>
+    <string name="e2e_peer_no_key">Nessuna chiave ancora: arriva con il primo scambio.</string>
+    <string name="e2e_verified">Verificata</string>
+    <string name="e2e_not_verified">Non verificata (fiducia al primo contatto)</string>
+    <string name="e2e_compare_hint">Per essere sicura di parlare con la persona giusta confronta queste impronte con lei a voce o su un altro canale. La verifica guidata non è ancora in Resentin.</string>
 </resources>

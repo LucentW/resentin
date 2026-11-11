@@ -902,4 +902,21 @@
     <string name="e2e_new_identity">New identity</string>
     <string name="e2e_new_identity_confirm">Delete and redo</string>
     <string name="e2e_new_identity_warning">Deletes the encryption identity on %1$s and makes a new one. Every contact will see a key-change alert and must verify you again; what was encrypted to the old identity can no longer be read here. This cannot be undone.</string>
+    <string name="e2e_settings_desc">Screen protection, keys and devices</string>
+    <string name="e2e_settings_none">No network with encrypted chats right now.</string>
+    <string name="e2e_secure_screen">Protect the encrypted chat screen</string>
+    <string name="e2e_secure_screen_desc">Blocks screenshots and screen recording and hides the chat in recent apps.</string>
+    <string name="e2e_identity_on">Identity on %1$s</string>
+    <string name="e2e_identity_loading">Loading…</string>
+    <string name="e2e_elsewhere_short">This identity\'s keys are on another device.</string>
+    <string name="e2e_fingerprint_label">Fingerprint (master key)</string>
+    <string name="e2e_device_line">This device: %1$s · %2$d in the list · version %3$d</string>
+    <string name="e2e_not_master">This device does not hold the master key: it cannot add others.</string>
+    <string name="e2e_keys">Keys</string>
+    <string name="e2e_key_of">%1$s\'s key</string>
+    <string name="e2e_key_yours">Your key</string>
+    <string name="e2e_peer_no_key">No key yet: it arrives with the first exchange.</string>
+    <string name="e2e_verified">Verified</string>
+    <string name="e2e_not_verified">Not verified (trust on first use)</string>
+    <string name="e2e_compare_hint">To be sure you are talking to the right person, compare these fingerprints with them by voice or on another channel. Guided verification is not in Resentin yet.</string>
 </resources>

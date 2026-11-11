@@ -60,6 +60,8 @@ import pm.antani.resentin.ui.networksettings.NetworkSettingsViewModel
 import pm.antani.resentin.ui.e2e.E2eChatScreen
 import pm.antani.resentin.ui.e2e.E2eChatViewModel
 import pm.antani.resentin.ui.e2e.E2eOverviewViewModel
+import pm.antani.resentin.ui.e2e.E2eSettingsContent
+import pm.antani.resentin.ui.e2e.E2eSettingsViewModel
 import pm.antani.resentin.ui.e2e.e2eHomeItems
 import pm.antani.resentin.ui.sharetarget.ShareTargetScreen
 
@@ -314,7 +316,7 @@ fun AppRoot(
                 key = "e2e/$slug/$peer",
                 factory = E2eChatViewModel.factory(container.e2eRepository, slug, peer),
             )
-            E2eChatScreen(vm = vm, onBack = { navController.popBackStack() })
+            E2eChatScreen(vm = vm, onBack = { navController.popBackStack() }, onOpen = { container.e2eChatOpen.value = it })
         }
         composable(
             ROUTE_MENTIONS,
@@ -368,6 +370,10 @@ fun AppRoot(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onAdminClick = { navController.navigate(ROUTE_ADMIN) },
+                encryptionContent = {
+                    val e2eSettings: E2eSettingsViewModel = viewModel(factory = E2eSettingsViewModel.factory(container.e2eRepository, container.appPreferences))
+                    E2eSettingsContent(e2eSettings)
+                },
             )
         }
         composable(ROUTE_ADMIN) {

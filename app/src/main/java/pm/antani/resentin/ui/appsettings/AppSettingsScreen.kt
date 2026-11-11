@@ -145,6 +145,7 @@ private enum class SettingsSection {
     CHAT,
     NOTIFICATIONS,
     SECURITY,
+    ENCRYPTION,
     PRESENCE,
     IDENTITY,
     COMMANDS,
@@ -157,6 +158,7 @@ private fun SettingsSection.icon(): ImageVector = when (this) {
     SettingsSection.CHAT -> Icons.Outlined.ChatBubbleOutline
     SettingsSection.NOTIFICATIONS -> Icons.Outlined.Notifications
     SettingsSection.SECURITY -> Icons.Outlined.Lock
+    SettingsSection.ENCRYPTION -> Icons.Outlined.Lock
     SettingsSection.PRESENCE -> Icons.Outlined.Schedule
     SettingsSection.IDENTITY -> Icons.Outlined.Person
     SettingsSection.COMMANDS -> Icons.Outlined.Terminal
@@ -169,6 +171,7 @@ private fun SettingsSection.title(): String = when (this) {
     SettingsSection.CHAT -> stringResource(R.string.settings_group_chat)
     SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_group_notifications)
     SettingsSection.SECURITY -> stringResource(R.string.settings_group_security)
+    SettingsSection.ENCRYPTION -> stringResource(R.string.e2e_home_title)
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands)
@@ -181,6 +184,7 @@ private fun SettingsSection.description(): String = when (this) {
     SettingsSection.CHAT -> stringResource(R.string.settings_group_chat_desc)
     SettingsSection.NOTIFICATIONS -> stringResource(R.string.settings_group_notifications_desc)
     SettingsSection.SECURITY -> stringResource(R.string.settings_group_security_desc)
+    SettingsSection.ENCRYPTION -> stringResource(R.string.e2e_settings_desc)
     SettingsSection.PRESENCE -> stringResource(R.string.settings_group_presence_desc)
     SettingsSection.IDENTITY -> stringResource(R.string.settings_group_identity_desc)
     SettingsSection.COMMANDS -> stringResource(R.string.settings_group_commands_desc)
@@ -189,7 +193,13 @@ private fun SettingsSection.description(): String = when (this) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdminClick: () -> Unit = {}) {
+fun AppSettingsScreen(
+    viewModel: AppSettingsViewModel,
+    onBack: () -> Unit,
+    onAdminClick: () -> Unit = {},
+    /** The encrypted-chats section (settings → Chat cifrate), built by the caller. */
+    encryptionContent: @Composable () -> Unit = {},
+) {
     val state by viewModel.uiState.collectAsState()
     val stayConnected by viewModel.stayConnected.collectAsState()
     val autoAwayDebounceSeconds by viewModel.autoAwayDebounceSeconds.collectAsState()
@@ -825,6 +835,9 @@ fun AppSettingsScreen(viewModel: AppSettingsViewModel, onBack: () -> Unit, onAdm
                 )
             }
             }
+            if (section == SettingsSection.ENCRYPTION) {
+                item { encryptionContent() }
+            }
             if (section == SettingsSection.SECURITY) {
             item {
                 SettingsGroupCard(
@@ -1254,6 +1267,7 @@ private fun SettingsHubCard(
                 add(SettingsSection.CHAT)
                 add(SettingsSection.NOTIFICATIONS)
                 add(SettingsSection.SECURITY)
+                add(SettingsSection.ENCRYPTION)
                 add(SettingsSection.PRESENCE)
                 if (showIdentity) add(SettingsSection.IDENTITY)
                 add(SettingsSection.COMMANDS)

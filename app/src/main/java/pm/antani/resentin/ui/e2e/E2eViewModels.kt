@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import pm.antani.resentin.data.db.E2eMessageEntity
@@ -74,6 +75,10 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eChatState())
 
+    val keys = kotlinx.coroutines.flow.MutableStateFlow<Pair<E2eRepository.OwnKeyInfo?, E2eRepository.PeerKeyInfo?>?>(null)
+    fun loadKeys() { viewModelScope.launch { keys.value = repo.ownKeyInfo(slug) to repo.peerKeyInfo(slug, peer) } }
+    fun closeKeys() { keys.value = null }
+
     fun send(body: String) { if (body.isNotBlank()) viewModelScope.launch { repo.sendText(slug, peer, body.trim()) } }
     fun ask(done: (Boolean) -> Unit = {}) = viewModelScope.launch { done(repo.ask(slug, peer).isSuccess) }
     fun accept(r: E2eRequestDto) = viewModelScope.launch { repo.accept(slug, r) }
@@ -89,3 +94,23 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
         }
     }
 }
+
+/** Settings → Chat cifrate: the screen-protection switch and the identity held on each network. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+class E2eSettingsViewModel(private val repo: E2eRepository, private val prefs: pm.antani.resentin.data.prefs.AppPreferences) : ViewModel() {
+    val secureScreen: StateFlow<Boolean> = prefs.e2eSecureScreen.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    fun setSecureScreen(v: Boolean) { viewModelScope.launch { prefs.setE2eSecureScreen(v) } }
+
+    val identities: StateFlow<Map<String, E2eRepository.OwnKeyInfo?>> = repo.identityState
+        .mapLatest { states -> states.keys.associateWith { repo.ownKeyInfo(it) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val states = repo.identityState
+
+    companion object {
+        fun factory(repo: E2eRepository, prefs: pm.antani.resentin.data.prefs.AppPreferences) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T = E2eSettingsViewModel(repo, prefs) as T
+        }
+    }
+}
+

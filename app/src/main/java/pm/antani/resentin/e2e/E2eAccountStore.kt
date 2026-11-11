@@ -91,6 +91,12 @@ class E2eAccountStore(context: Context) {
         check(tmp.renameTo(file(slot))) { "could not store the E2E account" } // atomic on one filesystem
     }
 
+    /** Reads [slot] without storing anything (not even a record for a slot that has none). */
+    suspend fun <T> peek(slot: String, read: (AccountSession) -> T): T = lock(slot).withLock {
+        val rec = load(slot)
+        read(AccountSession(Account.fromPickle(rec.device), rec.master?.let { Account.fromPickle(it) }, rec.own, rec.state) { })
+    }
+
     fun delete(slot: String) {
         file(slot).delete()
     }

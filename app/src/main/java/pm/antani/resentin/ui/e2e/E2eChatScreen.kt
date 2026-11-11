@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,7 +46,7 @@ import pm.antani.resentin.e2e.IdentityState
 /** One encrypted conversation with [vm]'s peer. Messages are our own decrypted copies. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit) {
+fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) -> Unit = {}) {
     val messages by vm.messages.collectAsState()
     val state by vm.state.collectAsState()
     val shown = messages.filter { it.status != "opened" }
@@ -55,11 +56,39 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit) {
     val identityReady = state.identity == IdentityState.Ready
     var draft by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { vm.refresh() }
+    val keys by vm.keys.collectAsState()
+    keys?.let { (own, peer) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = vm::closeKeys,
+            title = { Text(stringResource(R.string.e2e_keys)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(stringResource(R.string.e2e_key_of, vm.peer), fontWeight = FontWeight.SemiBold)
+                    if (peer == null) Text(stringResource(R.string.e2e_peer_no_key)) else {
+                        androidx.compose.foundation.text.selection.SelectionContainer { Text(fingerprint(peer.master), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
+                        Text(stringResource(if (peer.verified) R.string.e2e_verified else R.string.e2e_not_verified), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(stringResource(R.string.e2e_key_yours), fontWeight = FontWeight.SemiBold)
+                    if (own != null) OwnKeyBlock(own)
+                    Text(stringResource(R.string.e2e_compare_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = { TextButton(onClick = vm::closeKeys) { Text(stringResource(R.string.e2e_dismiss)) } },
+        )
+    }
+    // The window is protected while this screen is up (MainActivity decides, from the opt-out).
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onOpen(true)
+        onDispose { onOpen(false) }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = null) } },
+                actions = {
+                    IconButton(onClick = vm::loadKeys) { Icon(Icons.Outlined.Key, contentDescription = stringResource(R.string.e2e_keys)) }
+                },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
