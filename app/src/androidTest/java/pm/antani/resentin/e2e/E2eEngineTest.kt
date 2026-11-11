@@ -5,6 +5,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -141,5 +142,30 @@ class E2eEngineTest {
         // Asking again within the minute is not done, and the same listreq is answered at most once a minute.
         val again = bob2.receive("alice", listreq.verb, alice.own.did, "m5", listreq.payload)
         assertTrue(again.outbound.none { it.tag == "list" })
+    }
+
+    @Test
+    fun takingTheNewKeyResolvesTheAlarmAndItsKeysAreAccepted() {
+        val alice = Peer("alice")
+        val bob = Peer("bob")
+        val newBob = Peer("bob")
+        alice.engine.send("bob", text("1"), "t1")
+        alice.engine.receive("bob", "keys", "*", "k", bob.keysPayload())
+        // another master answers under the same nick: an alarm, remembered, and nothing pinned over it.
+        alice.engine.state.keysAwaited += "bob"
+        val r = alice.engine.receive("bob", "keys", "*", "k2", newBob.keysPayload())
+        assertTrue(r.events.any { it is E2eEvent.KeyAlarm })
+        assertEquals(newBob.own.master, alice.engine.state.alarms["bob"]!!.presented)
+        assertEquals(bob.own.master, alice.engine.state.pins["bob"])
+
+        // the user takes the new key (unverified) and its keys are asked for at once.
+        assertEquals("pinned", alice.engine.pin("bob", newBob.own.master, false))
+        assertTrue(alice.engine.state.alarms.isEmpty())
+        assertEquals(newBob.own.master, alice.engine.state.pins["bob"])
+        assertFalse(alice.engine.pinned("bob")!!.verified)
+        assertEquals(listOf("keyreq"), alice.engine.askKeys("bob").outbound.map { it.verb })
+        val ok = alice.engine.receive("bob", "keys", "*", "k3", newBob.keysPayload())
+        assertTrue(ok.events.none { it is E2eEvent.KeyAlarm })
+        assertEquals("not our own key", "own-key", alice.engine.pin("bob", alice.own.master, false))
     }
 }

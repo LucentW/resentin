@@ -52,6 +52,22 @@ class E2eClient(
         engine.askKeys(req.peer)
     }
 
+    /** The user takes the key an alarm showed: it is pinned (unverified), a SAS that ran against the old one ends, and its keys are asked for. */
+    suspend fun acceptAlarm(nick: String): List<E2eEvent> = run(nick = nick) { engine, _ ->
+        val alarm = engine.state.alarms[foldNick(nick)] ?: return@run Result()
+        if (engine.pin(nick, alarm.presented, false) != "pinned") return@run Result()
+        val verifier = E2eVerifier(engine, engine.state).also { it.repinned(nick) }
+        val res = engine.askKeys(nick)
+        res.events += verifier.take().events; res.outbound += verifier.take().outbound
+        res
+    }
+
+    /** The user keeps the old key. */
+    suspend fun dismissAlarm(nick: String) { run(nick = nick) { engine, _ -> engine.dismissAlarm(nick); Result() } }
+
+    /** The alarms standing on this network. */
+    suspend fun alarms(): Map<String, AlarmRec> = store.peek(slot) { it.state.alarms.toMap() }
+
     /** Starts the key exchange with a peer whose consent [askToChat] got. */
     suspend fun askKeys(peer: String): List<E2eEvent> = run(nick = peer) { engine, _ -> engine.askKeys(peer) }
 

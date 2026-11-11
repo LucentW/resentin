@@ -114,7 +114,7 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).imePadding()) {
             when {
                 state.identity is IdentityState.Elsewhere -> E2eElsewhereCard(vm.slug, onReplace = vm::replaceIdentity)
-                state.alarm -> Banner(stringResource(R.string.e2e_alarm, vm.peer), error = true)
+                state.alarm != null -> KeyAlarmCard(vm.peer, state.alarm!!, onAccept = vm::acceptAlarm, onKeep = vm::dismissAlarm)
                 req?.state == "incoming" -> E2eRequestCard(
                     stringResource(R.string.e2e_request_incoming, req.peer, vm.slug),
                     primary = stringResource(R.string.e2e_accept) to { vm.accept(req) },
@@ -153,7 +153,7 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
                     }
                 }
             }
-            if (consented && identityReady && !state.alarm) {
+            if (consented && identityReady && state.alarm == null) {
                 Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = draft,
@@ -238,5 +238,27 @@ private fun SystemRow(body: String, peer: String) {
     }
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** The contact's master key changed under us: nothing is sent until the user takes the new key or keeps the old one. */
+@Composable
+private fun KeyAlarmCard(peer: String, alarm: pm.antani.resentin.e2e.AlarmRec, onAccept: () -> Unit, onKeep: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.e2e_alarm, peer), fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.e2e_alarm_pinned), style = MaterialTheme.typography.labelMedium)
+            Text(fingerprint(alarm.pinned), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.e2e_alarm_new), style = MaterialTheme.typography.labelMedium)
+            Text(fingerprint(alarm.presented), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.e2e_alarm_hint), style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onKeep) { Text(stringResource(R.string.e2e_alarm_keep)) }
+                androidx.compose.material3.Button(onClick = onAccept) { Text(stringResource(R.string.e2e_alarm_accept)) }
+            }
+        }
     }
 }

@@ -897,7 +897,7 @@
     <string name="e2e_composer_hint">Encrypted message</string>
     <string name="e2e_status_pending">sending…</string>
     <string name="e2e_status_failed">not sent</string>
-    <string name="e2e_alarm">The encryption key of %1$s changed. Nothing is sent until it is resolved (resolving a key change is not in Resentin yet).</string>
+    <string name="e2e_alarm">The encryption key of %1$s changed. Nothing is sent until you decide.</string>
     <string name="e2e_elsewhere">On %1$s your account\'s encryption identity is on another device: its keys are not here, so you cannot accept or write. Pair this device from cicchetto, or start a new identity.</string>
     <string name="e2e_new_identity">New identity</string>
     <string name="e2e_new_identity_confirm">Delete and redo</string>
@@ -963,4 +963,9 @@
     <string name="e2e_sas_note_verified">%1$s\'s keys verified.</string>
     <string name="e2e_sas_note_cancelled_you">Verification with %1$s cancelled (%2$s).</string>
     <string name="e2e_sas_note_cancelled_peer">%1$s cancelled the verification (%2$s).</string>
+    <string name="e2e_alarm_pinned">Key you had pinned</string>
+    <string name="e2e_alarm_new">New key</string>
+    <string name="e2e_alarm_hint">Take the new key only if you are sure it is theirs (they changed device or started over). Then compare it with them.</string>
+    <string name="e2e_alarm_keep">Keep the old one</string>
+    <string name="e2e_alarm_accept">Take the new one</string>
 </resources>

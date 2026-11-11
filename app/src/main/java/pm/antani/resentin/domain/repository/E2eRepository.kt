@@ -69,9 +69,11 @@ class E2eRepository(
     private val _requests = MutableStateFlow<Map<String, List<E2eRequestDto>>>(emptyMap())
     val requests: StateFlow<Map<String, List<E2eRequestDto>>> = _requests.asStateFlow()
 
-    private val _alarms = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
-    /** Per network slug: folded nicks whose master changed under us (a key alarm). Nothing is sent to them. */
-    val alarms: StateFlow<Map<String, Set<String>>> = _alarms.asStateFlow()
+    private val _alarms = MutableStateFlow<Map<String, Map<String, pm.antani.resentin.e2e.AlarmRec>>>(emptyMap())
+    /** Per network slug: folded nick -> the key alarm standing on it (the master changed under us). Nothing is sent meanwhile. */
+    val alarms: StateFlow<Map<String, Map<String, pm.antani.resentin.e2e.AlarmRec>>> = _alarms.asStateFlow()
+
+    private suspend fun loadAlarms(slug: String, c: E2eClient) { _alarms.update { it + (slug to c.alarms()) } }
 
     fun messages(slug: String, peer: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observe(slug, foldNick(peer))
     fun conversations(slug: String): Flow<List<E2eMessageEntity>> = db.e2eMessageDao().observeConversations(slug)
@@ -246,6 +248,7 @@ class E2eRepository(
             val c = client(slug) ?: return@runCatching
             apply(slug, c.drain())
             apply(slug, c.sasTick())
+            loadAlarms(slug, c)
             val requests = c.requests()
             _requests.update { it + (slug to requests) }
             // The peer accepted what we asked: open the chat's keys, then let the answer go.
@@ -275,7 +278,7 @@ class E2eRepository(
                 E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false,
                     body = "${e.kind}|${e.byPeer}|${e.reason.orEmpty()}", at = System.currentTimeMillis(), status = "system"),
             )
-            is E2eEvent.KeyAlarm -> _alarms.update { it + (slug to it[slug].orEmpty() + foldNick(e.nick)) }
+            is E2eEvent.KeyAlarm -> _alarms.update { it + (slug to it[slug].orEmpty() + (foldNick(e.nick) to pm.antani.resentin.e2e.AlarmRec(e.nick, e.pinned, e.presented))) }
             is E2eEvent.SendFailed -> e.tags.forEach { tag -> tag.toLongOrNull()?.let { db.e2eMessageDao().setStatus(it, "failed") } }
             else -> Log.d(TAG, "E2E event on $slug: $e")
         }
@@ -296,6 +299,16 @@ class E2eRepository(
     suspend fun sasStep(slug: String, nick: String, step: String): Result<Unit> = guarded(slug) { c ->
         apply(slug, c.sasStep(nick, step))
         _changes.update { it + 1 }
+    }
+
+    /** The user takes the key the alarm showed: pinned unverified, and its keys are asked for. */
+    suspend fun acceptAlarm(slug: String, nick: String): Result<Unit> = guarded(slug) { c ->
+        apply(slug, c.acceptAlarm(nick)); loadAlarms(slug, c); _changes.update { it + 1 }
+    }
+
+    /** The user keeps the old key. */
+    suspend fun dismissAlarm(slug: String, nick: String): Result<Unit> = guarded(slug) { c ->
+        c.dismissAlarm(nick); loadAlarms(slug, c); _changes.update { it + 1 }
     }
 
     /** Asks [peer] to start an encrypted chat (consent, §4i). */

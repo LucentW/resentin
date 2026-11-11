@@ -61,7 +61,7 @@ class E2eOverviewViewModel(private val repo: E2eRepository) : ViewModel() {
 data class E2eChatState(
     val identity: IdentityState? = null,
     val request: E2eRequestDto? = null,
-    val alarm: Boolean = false,
+    val alarm: pm.antani.resentin.e2e.AlarmRec? = null,
 )
 
 class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val peer: String) : ViewModel() {
@@ -72,7 +72,7 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
         E2eChatState(
             identity = identity[slug],
             request = requests[slug].orEmpty().firstOrNull { foldNick(it.peer) == foldNick(peer) },
-            alarm = foldNick(peer) in alarms[slug].orEmpty(),
+            alarm = alarms[slug].orEmpty()[foldNick(peer)],
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eChatState())
 
@@ -93,6 +93,8 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
     fun dismiss(r: E2eRequestDto) = viewModelScope.launch { repo.dismissRequest(slug, r) }
     fun replaceIdentity() = viewModelScope.launch { repo.replaceIdentity(slug) }
     fun refresh() = viewModelScope.launch { repo.refresh(slug) }
+    fun acceptAlarm() { viewModelScope.launch { repo.acceptAlarm(slug, peer) } }
+    fun dismissAlarm() { viewModelScope.launch { repo.dismissAlarm(slug, peer) } }
 
     companion object {
         fun factory(repo: E2eRepository, slug: String, peer: String) = object : ViewModelProvider.Factory {

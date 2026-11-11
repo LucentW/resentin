@@ -897,7 +897,7 @@
     <string name="e2e_composer_hint">Messaggio cifrato</string>
     <string name="e2e_status_pending">in invio…</string>
     <string name="e2e_status_failed">non inviato</string>
-    <string name="e2e_alarm">La chiave di cifratura di %1$s è cambiata. Non invio nulla finché non è risolto (la risoluzione di un cambio chiave non è ancora in Resentin).</string>
+    <string name="e2e_alarm">La chiave di cifratura di %1$s è cambiata. Non invio nulla finché non decidi.</string>
     <string name="e2e_elsewhere">Su %1$s l\'identità cifrata del tuo account è su un altro dispositivo: qui non ci sono le sue chiavi, quindi non si può né accettare né scrivere. Accoppia questo dispositivo da cicchetto, oppure avvia una nuova identità.</string>
     <string name="e2e_new_identity">Nuova identità</string>
     <string name="e2e_new_identity_confirm">Cancella e rifai</string>
@@ -963,4 +963,9 @@
     <string name="e2e_sas_note_verified">Chiavi di %1$s verificate.</string>
     <string name="e2e_sas_note_cancelled_you">Verifica con %1$s annullata (%2$s).</string>
     <string name="e2e_sas_note_cancelled_peer">%1$s ha annullato la verifica (%2$s).</string>
+    <string name="e2e_alarm_pinned">Chiave che avevi fissato</string>
+    <string name="e2e_alarm_new">Chiave nuova</string>
+    <string name="e2e_alarm_hint">Prendi la chiave nuova solo se sei sicura che sia la sua (ha cambiato dispositivo o ricominciato). Poi confrontala con lei.</string>
+    <string name="e2e_alarm_keep">Tieni la vecchia</string>
+    <string name="e2e_alarm_accept">Prendi la nuova</string>
 </resources>

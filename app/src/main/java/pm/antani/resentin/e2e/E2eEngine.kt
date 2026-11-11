@@ -73,6 +73,9 @@ data class Queued(val nick: String, val master: String, val only: String?, val d
 data class SentDevice(val ed25519: String, val sessionId: String)
 
 @Serializable
+data class AlarmRec(val nick: String, val pinned: String, val presented: String)
+
+@Serializable
 data class ListReq(val at: Long, val lv: List<Int> = emptyList())
 
 @Serializable
@@ -95,6 +98,8 @@ data class E2eState(
     var nextRef: Int = 1,
     /** The SAS running with a master (see [E2eVerifier]), by master key. */
     val sas: MutableMap<String, SasRecord> = mutableMapOf(),
+    /** Folded nick -> a master other than the pinned one that answered: nothing is sent until the user decides. */
+    val alarms: MutableMap<String, AlarmRec> = mutableMapOf(),
     /** Folded nick -> when a `listreq` last went to it, and for which list versions (`lv`). */
     val listreqAt: MutableMap<String, ListReq> = mutableMapOf(),
     /** `${folded nick} ${did}` -> when our list last went to that device (its `listreq`, or a body for a device our list does not name). */
@@ -196,6 +201,29 @@ class E2eEngine(
     fun curve(): String = account.curve25519Key()
     fun deviceKey(): String = account.ed25519Key()
     fun fingerprint(): String = own.master
+
+    /**
+     * Pins [master] to [nick] (the user took the key an alarm showed). The old master's sessions go when no
+     * other nick is pinned to it. Returns "pinned" | "bad-key" | "own-key".
+     */
+    fun pin(nick: String, master: String, verified: Boolean): String {
+        if (runCatching { canonicalEd25519(master) }.getOrNull() != master) return "bad-key"
+        if (master == own.master) return "own-key"
+        val key = foldNick(nick)
+        val before = state.pins[key]
+        val known = state.masters[master]
+        if (known == null) state.masters[master] = PeerMaster(nick, verified) else if (verified && !known.verified) state.masters[master] = known.copy(verified = true)
+        state.pins[key] = master
+        state.alarms.remove(key)
+        state.keyreqSentAt.remove(key) // the user decided: asking for the new key's keys is not a retry
+        if (before != null && before !in state.pins.values) {
+            for (d in state.devices.values.filter { it.master == before }) { state.sessions.remove(d.curve25519); state.rekeying -= d.ed25519 }
+        }
+        return "pinned"
+    }
+
+    /** The user keeps the key already pinned: the alarm is put away (it comes back if the other key answers again). */
+    fun dismissAlarm(nick: String) { state.alarms.remove(foldNick(nick)) }
 
     /** The user (or a SAS) confirmed [master] is who [nick] claims: pinned and verified. */
     fun verify(nick: String, master: String) {
@@ -350,8 +378,12 @@ class E2eEngine(
     private fun checkMaster(nick: String, master: String, res: Result): Boolean {
         if (master == own.master) { drop(nick, "own-identity", "keys", res); return false }
         val pinned = state.pins[foldNick(nick)]
-        if (pinned == master) return true
-        if (pinned != null) { res.events += E2eEvent.KeyAlarm(nick, pinned, master); return false }
+        if (pinned == master) { state.alarms.remove(foldNick(nick)); return true }
+        if (pinned != null) {
+            state.alarms[foldNick(nick)] = AlarmRec(nick, pinned, master)
+            res.events += E2eEvent.KeyAlarm(nick, pinned, master)
+            return false
+        }
         state.masters.getOrPut(master) { PeerMaster(nick) }
         state.pins[foldNick(nick)] = master
         return true
