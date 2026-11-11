@@ -80,7 +80,7 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
     val sas: StateFlow<pm.antani.resentin.e2e.SasView?> = repo.changes
         .flatMapLatest { kotlinx.coroutines.flow.flow { emit(repo.sasView(slug, peer)) } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-    fun sasStep(step: String) { viewModelScope.launch { repo.sasStep(slug, peer, step); loadKeys() } }
+    fun sasStep(step: String) { viewModelScope.launch { repo.sasStep(slug, peer, step); if (keys.value != null) loadKeys() } }
 
     val keys = kotlinx.coroutines.flow.MutableStateFlow<Pair<E2eRepository.OwnKeyInfo?, E2eRepository.PeerKeyInfo?>?>(null)
     fun loadKeys() { viewModelScope.launch { keys.value = repo.ownKeyInfo(slug) to repo.peerKeyInfo(slug, peer) } }
