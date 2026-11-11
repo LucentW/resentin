@@ -1,7 +1,11 @@
 package pm.antani.resentin.net.rest
 
 import okhttp3.ResponseBody
+import pm.antani.resentin.net.dto.E2eAckDto
 import pm.antani.resentin.net.dto.E2eDeviceDto
+import pm.antani.resentin.net.dto.E2eInboxDto
+import pm.antani.resentin.net.dto.E2eSendDto
+import pm.antani.resentin.net.dto.E2eSentDto
 import pm.antani.resentin.net.dto.E2eDevicesDto
 import pm.antani.resentin.net.dto.E2eKeysStatusDto
 import pm.antani.resentin.net.dto.E2eKeysUploadDto
@@ -14,6 +18,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /** Per-device E2E doors (CLIENT_PROTOCOL §4f, protocol >= 49). A `did` is base64url and goes in the path raw. */
 interface E2eApi {
@@ -42,6 +47,24 @@ interface E2eApi {
         @Path("did", encoded = true) did: String,
         @Body body: E2eKeysUploadDto,
     ): E2eKeysStatusDto
+
+    @GET("networks/{slug}/e2e/devices/{did}/inbox")
+    suspend fun inbox(
+        @Path("slug") slug: String,
+        @Path("did", encoded = true) did: String,
+        @Query("after") after: Long,
+    ): E2eInboxDto
+
+    @POST("networks/{slug}/e2e/devices/{did}/inbox/ack")
+    suspend fun ack(
+        @Path("slug") slug: String,
+        @Path("did", encoded = true) did: String,
+        @Body body: E2eAckDto,
+    ): Response<ResponseBody>
+
+    /** 202: accepted, not delivered. grappa frames, paces and names the message. */
+    @POST("networks/{slug}/e2e/messages")
+    suspend fun send(@Path("slug") slug: String, @Body body: E2eSendDto): E2eSentDto
 
     /** Drops the whole identity: every device, its keys and queue, and the list. */
     @DELETE("networks/{slug}/e2e/keys")

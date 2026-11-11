@@ -32,13 +32,15 @@ data class OwnIdentity(
 
 /** What is stored per slot, as vodozemac pickles (JSON), sealed as one blob. */
 @Serializable
-private data class Record(val device: String, val master: String? = null, val own: OwnIdentity? = null)
+private data class Record(val device: String, val master: String? = null, val own: OwnIdentity? = null, val state: E2eState = E2eState())
 
 /** The live view [E2eAccountStore.withAccount] hands out; the block mutates it, success persists it. */
 class AccountSession internal constructor(
     var account: Account,
     var master: Account?,
     var own: OwnIdentity?,
+    /** The engine's memory of peers and sessions, stored with the account in one record. */
+    val state: E2eState,
     private val save: (AccountSession) -> Unit,
 ) {
     /** Stores the session now, before a risky step (keys are stored BEFORE they are uploaded). */
@@ -69,6 +71,7 @@ class E2eAccountStore(context: Context) {
                 account = Account.fromPickle(rec.device),
                 master = rec.master?.let { Account.fromPickle(it) },
                 own = rec.own,
+                state = rec.state,
             ) { s -> store(slot, s) }
             val result = block(session)
             store(slot, session)
@@ -82,7 +85,7 @@ class E2eAccountStore(context: Context) {
     }
 
     private fun store(slot: String, s: AccountSession) {
-        val json = AppJson.encodeToString(Record.serializer(), Record(s.account.pickle(), s.master?.pickle(), s.own))
+        val json = AppJson.encodeToString(Record.serializer(), Record(s.account.pickle(), s.master?.pickle(), s.own, s.state))
         val tmp = File(dir, file(slot).name + ".tmp")
         tmp.writeBytes(seal(json))
         check(tmp.renameTo(file(slot))) { "could not store the E2E account" } // atomic on one filesystem

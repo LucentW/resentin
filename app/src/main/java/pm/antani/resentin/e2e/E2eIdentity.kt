@@ -99,6 +99,7 @@ class E2eIdentity(private val store: E2eAccountStore, private val api: () -> E2e
             session.account = Account()
             session.master = null
             session.own = null
+            session.state.startOver()
             // The old identity is gone from grappa: so is it here, before anything else can fail.
             session.persist()
             bootstrap(session, slug)

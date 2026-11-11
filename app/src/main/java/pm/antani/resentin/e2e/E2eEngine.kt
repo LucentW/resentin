@@ -90,7 +90,13 @@ data class E2eState(
     var nextRef: Int = 1,
     /** The last inbox id processed, stored with what processing it changed. */
     var inbox: Long = 0,
-)
+) {
+    /** A new device account: only the trust placed in others stays (their masters, devices, pins). */
+    fun startOver() {
+        sessions.clear(); seen.clear(); outq.clear(); keyreqSentAt.clear(); keysAwaited.clear()
+        rekeyAt.clear(); rekeying.clear(); sent.clear(); nextRef = 1; inbox = 0
+    }
+}
 
 sealed interface E2eEvent {
     data class Received(val nick: String, val master: String, val device: String, val verified: Boolean, val inner: JsonObject) : E2eEvent

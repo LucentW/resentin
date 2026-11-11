@@ -34,3 +34,38 @@ data class E2eKeysUploadDto(val oneTimeKeys: List<E2eSignedKeyDto>, val fallback
 /** What a device's key bundle still holds on grappa. */
 @Serializable
 data class E2eKeysStatusDto(val oneTimeKeys: Int = 0, val fallback: Boolean = false)
+
+/** One whole message grappa holds for a device (the `e2e_message` wire shape). `payload` is the peer's compact JSON text. */
+@Serializable
+data class E2eMessageDto(
+    val id: Long,
+    val from: String,
+    val fromDid: String,
+    val toDid: String,
+    val verb: String,
+    val msgid: String,
+    val payload: String,
+    /** v50+: a copy of a message one of OUR other devices sent. */
+    val own: Boolean = false,
+    /** v63+: the folded channel a channel message was sent to; null for a direct message. */
+    val channel: String? = null,
+)
+
+@Serializable
+data class E2eInboxDto(val messages: List<E2eMessageDto> = emptyList())
+
+@Serializable
+data class E2eAckDto(val ids: List<Long>)
+
+@Serializable
+data class E2eSendDto(
+    val target: String,
+    val verb: String,
+    val from: String,
+    val to: String,
+    val payload: String,
+    val priority: String = "text",
+)
+
+@Serializable
+data class E2eSentDto(val msgid: String)
