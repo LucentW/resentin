@@ -61,6 +61,7 @@ class E2eEngineTest {
         // bob's grappa answers with KEYS; alice flushes her queue as a PKMSG.
         r = alice.engine.receive("bob", "keys", "*", "k1", bob.keysPayload())
         assertEquals(listOf("pkmsg"), r.outbound.map { it.verb })
+        assertTrue("a message that went out is no failure: ${r.events}", r.events.none { it is E2eEvent.SendFailed })
         val pk = r.outbound.single()
         assertEquals(bob.own.did, pk.payload.let { kotlinx.serialization.json.Json.parseToJsonElement(it) }
             .let { (it as kotlinx.serialization.json.JsonObject)["bodies"] as kotlinx.serialization.json.JsonObject }.keys.single())

@@ -421,7 +421,9 @@ class E2eEngine(
             if (ready.isNotEmpty()) encrypt(nick, master, ready, q.msg, res)
             val done = q.done + ready.map { it.ed25519 }
             if (lacking.isNotEmpty()) waiting += q.copy(master = master, done = done)
-            else lost(nick, "unpinned-key", listOf(q.msg), res)
+            // Gone to every device it was for is no loss; only a message that reached none was for
+            // a device this master's list does not name (cicchetto judges this at the end of the step).
+            else if (done.isEmpty()) lost(nick, "unpinned-key", listOf(q.msg), res)
         }
         if (waiting.isNotEmpty()) state.outq[foldNick(nick)] = waiting
     }
