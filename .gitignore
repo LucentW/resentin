@@ -28,3 +28,7 @@ keystore.properties
 
 # Local Claude Code session state
 /.claude/
+
+# Rust crypto crate
+/rust/**/target/
+/app/src/main/jniLibs/

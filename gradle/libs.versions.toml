@@ -21,6 +21,7 @@ unifiedpushConnector = "3.3.5"
 zxingEmbedded = "4.3.0"
 
 [libraries]
+jna = { group = "net.java.dev.jna", name = "jna", version = "5.17.0" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }

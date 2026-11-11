@@ -66,6 +66,8 @@ ksp {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // UniFFI's generated Kotlin loads the Rust crypto library through JNA.
+    implementation("${libs.jna.get()}@aar")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
