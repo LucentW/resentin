@@ -194,6 +194,14 @@ object WsEventDecoder {
                 )
                 "e2e_message", "e2e_request", "e2e_request_gone" ->
                     WsEvent.E2eActivity(raw.getValue("network").jsonPrimitive.content)
+                "e2e_pairing_offered", "e2e_pairing_message", "e2e_pairing_closed" -> WsEvent.E2ePairing(
+                    kind = kind,
+                    rendezvousId = raw.getValue("rendezvous_id").jsonPrimitive.content,
+                    from = raw["from"]?.jsonPrimitive?.contentOrNull,
+                    reason = raw["reason"]?.jsonPrimitive?.contentOrNull,
+                    curve = raw["curve"]?.jsonPrimitive?.contentOrNull,
+                    expiresAt = raw["expires_at"]?.jsonPrimitive?.contentOrNull,
+                )
                 "no_such_nick" -> WsEvent.NoSuchNick(
                     raw.getValue("network").jsonPrimitive.content,
                     raw.getValue("nick").jsonPrimitive.content,

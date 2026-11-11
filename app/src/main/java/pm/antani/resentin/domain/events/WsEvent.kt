@@ -170,6 +170,16 @@ sealed interface WsEvent {
      * network's E2E state. The payloads are not read here: the repository re-reads the doors. */
     data class E2eActivity(val network: String) : WsEvent
 
+    /** `e2e_pairing_offered|message|closed` (§4g): a pairing rendezvous of the account moved. [kind] is the wire kind. */
+    data class E2ePairing(
+        val kind: String,
+        val rendezvousId: String,
+        val from: String? = null,
+        val reason: String? = null,
+        val curve: String? = null,
+        val expiresAt: String? = null,
+    ) : WsEvent
+
     /** `no_such_nick` (§4j, v54): a 401 for a nick nobody holds, ends what waits for its keys. */
     data class NoSuchNick(val network: String, val nick: String) : WsEvent
 

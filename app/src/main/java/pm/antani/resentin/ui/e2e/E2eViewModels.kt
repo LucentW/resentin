@@ -106,6 +106,23 @@ class E2eSettingsViewModel(private val repo: E2eRepository, private val prefs: p
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
     val states = repo.identityState
 
+    val offer = repo.pairingOffer
+    val holder = repo.holder
+    val joiner = repo.joiner
+    fun startHolder() { viewModelScope.launch { repo.startHolder() } }
+    fun startJoiner() { repo.pairingOffer.value?.let { code -> viewModelScope.launch { repo.startJoiner(code) } } }
+    fun endPairing() { viewModelScope.launch { repo.endPairing() } }
+
+    private val _devices = kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<pm.antani.resentin.e2e.E2eIdentity.OwnDevice>?>>(emptyMap())
+    val devices: StateFlow<Map<String, List<pm.antani.resentin.e2e.E2eIdentity.OwnDevice>?>> = _devices
+    /** Re-reads each network's device list (grappa's registry filtered by our signed list). */
+    fun refreshDevices() {
+        viewModelScope.launch { _devices.value = repo.identityState.value.keys.associateWith { repo.ownDevices(it) } }
+    }
+    fun revoke(slug: String, ed25519: String) {
+        viewModelScope.launch { repo.revokeDevice(slug, ed25519); refreshDevices() }
+    }
+
     companion object {
         fun factory(repo: E2eRepository, prefs: pm.antani.resentin.data.prefs.AppPreferences) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

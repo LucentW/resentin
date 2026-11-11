@@ -185,6 +185,153 @@ class E2eIdentity(private val store: E2eAccountStore, private val api: () -> E2e
         session.account.markKeysAsPublished()
     }
 
+    // ── Other devices of the account (CLIENT_PROTOCOL §4f/§4g) ──
+
+    class OwnDevice(val did: String, val ed25519: String, val addedAt: String?, val here: Boolean)
+
+    /** The devices this identity's list names, as grappa registered them; null when this device holds no identity. */
+    suspend fun ownDevices(slot: String, slug: String): List<OwnDevice>? {
+        if (store.peek(slot) { it.own } == null) return null
+        if (sync(slot, slug) != IdentityState.Ready) return null
+        val placed = store.peek(slot) { s -> s.own?.let { it.list.devices to s.account.ed25519Key() } } ?: return null
+        return api().listDevices(slug).devices
+            .filter { it.ed25519 in placed.first }
+            .map { OwnDevice(didOf(it.ed25519), it.ed25519, it.insertedAt, it.ed25519 == placed.second) }
+    }
+
+    /** "revoked" | "failed" | "unlisted" | "list-changed". Needs the master: only the device that made the identity can. */
+    suspend fun revokeDevice(slot: String, slug: String, ed25519: String): String =
+        onceMoreIfStale { unlistDevice(slot, slug, ed25519) } ?: "list-changed"
+
+    private suspend fun unlistDevice(slot: String, slug: String, ed25519: String): String? {
+        if (sync(slot, slug) != IdentityState.Ready) return "failed"
+        return store.withAccount(slot) { session ->
+            val master = session.master
+            val own = session.own
+            if (master == null || own == null) return@withAccount "failed"
+            if (ed25519 == session.account.ed25519Key()) return@withAccount "failed"
+            if (ed25519 !in own.list.devices) return@withAccount "unlisted"
+            val devices = own.list.devices.filter { it != ed25519 }
+            val list = try {
+                putList(master, slug, own.list.ver + 1, devices)
+            } catch (e: HttpException) {
+                if (apiErrorCode(e) == "stale_list") return@withAccount null else throw e
+            }
+            session.own = own.copy(list = list)
+            "revoked"
+        }
+    }
+
+    // Runs [attempt] again, once, when grappa refused its list as stale (null): the retry's sync takes the
+    // list that landed first, so a retry never puts a list that drops a device another put listed.
+    private suspend fun <T : Any> onceMoreIfStale(attempt: suspend () -> T?): T? = attempt() ?: attempt()
+
+    private suspend fun putList(master: Account, slug: String, ver: Int, devices: List<String>): SignedList {
+        val sorted = devices.sorted()
+        val list = SignedList(ver, sorted, master.sign(listSigText(ver, sorted)))
+        api().putList(slug, E2eListDto(master.ed25519Key(), list.ver, list.devices, list.sig))
+        return list
+    }
+
+    sealed interface Offerable {
+        data object NotMaster : Offerable
+        data object Full : Offerable
+        data class Master(val key: String) : Offerable
+    }
+
+    /** The holder: whether the network can be offered to a joiner, judged on grappa's latest list. */
+    suspend fun offerable(slot: String, slug: String): Offerable {
+        if (store.peek(slot) { it.master } == null) return Offerable.NotMaster
+        if (sync(slot, slug) != IdentityState.Ready) return Offerable.NotMaster
+        return store.peek(slot) { s ->
+            val own = s.own; val master = s.master
+            when {
+                master == null || own == null -> Offerable.NotMaster
+                own.list.devices.size >= DEVICE_CAP -> Offerable.Full
+                else -> Offerable.Master(master.ed25519Key())
+            }
+        }
+    }
+
+    sealed interface AddResult {
+        data class Added(val cert: String, val list: SignedList) : AddResult
+        data class Refused(val reason: String) : AddResult
+        data object Stale : AddResult
+    }
+
+    /** The holder: lists the joiner's device [id] and certifies it. A list that moved twice is "list-changed". */
+    suspend fun addDevice(slot: String, slug: String, id: IdBlock): AddResult {
+        val first = listDevice(slot, slug, id)
+        if (first != AddResult.Stale) return first
+        val second = listDevice(slot, slug, id)
+        return if (second == AddResult.Stale) AddResult.Refused(PairRefusal.LIST_CHANGED) else second
+    }
+
+    private suspend fun listDevice(slot: String, slug: String, id: IdBlock): AddResult {
+        if (sync(slot, slug) != IdentityState.Ready) return AddResult.Refused(PairRefusal.FAILED)
+        return store.withAccount(slot) { session ->
+            val master = session.master; val own = session.own
+            if (master == null || own == null) return@withAccount AddResult.Refused(PairRefusal.FAILED)
+            val (issued, refusal) = issueDeviceOrRefusal(master, own, id)
+            if (issued == null) return@withAccount AddResult.Refused(refusal ?: PairRefusal.FAILED)
+            try {
+                api().putList(slug, E2eListDto(master.ed25519Key(), issued.first.ver, issued.first.devices, issued.first.sig))
+            } catch (e: HttpException) {
+                when (apiErrorCode(e)) {
+                    "stale_list" -> return@withAccount AddResult.Stale
+                    "unknown_device" -> return@withAccount AddResult.Refused(PairRefusal.FAILED)
+                    else -> throw e
+                }
+            }
+            session.own = own.copy(list = issued.first)
+            AddResult.Added(issued.second, issued.first)
+        }
+    }
+
+    sealed interface PrepareResult {
+        data class Prepared(val id: IdBlock, val did: String) : PrepareResult
+        data class Refused(val reason: String) : PrepareResult
+    }
+
+    /** The joiner: registers this device under the offered [master]. */
+    suspend fun prepareJoin(slot: String, slug: String, master: String): PrepareResult =
+        store.withAccount(slot) { session ->
+            val held = getList(slug)
+            if (held != null && held.master != master) return@withAccount PrepareResult.Refused(PairRefusal.FAILED)
+            val listed = held?.devices?.contains(session.account.ed25519Key()) ?: false
+            if (listed && session.own?.master == master) return@withAccount PrepareResult.Refused(PairRefusal.PAIRED)
+            if (listed || session.own != null) {
+                session.account = Account(); session.master = null; session.own = null; session.state.startOver()
+            }
+            val id = idBlock(session.account, master)
+            session.persist()
+            try {
+                PrepareResult.Prepared(id, api().registerDevice(slug, E2eRegisterDeviceDto(id.ed25519, id.curve25519, id.sig)).did)
+            } catch (e: HttpException) {
+                PrepareResult.Refused(if (apiErrorCode(e) == "too_many_devices") PairRefusal.FULL else PairRefusal.FAILED)
+            }
+        }
+
+    /** The joiner: keeps what the holder signed once it verifies, then syncs so the keys go up. */
+    suspend fun completeJoin(slot: String, slug: String, master: String, cert: String, list: SignedList): Boolean {
+        val placed = store.withAccount(slot) { session ->
+            val device = session.account.ed25519Key()
+            val accepted = acceptSigned(master, device, cert, list) ?: return@withAccount false
+            session.own = OwnIdentity(master, accepted.first, accepted.second, accepted.third, didOf(device))
+            true
+        }
+        if (!placed) return false
+        runCatching { sync(slot, slug) }.onFailure { Log.w(TAG, "the sync after pairing $slug failed; its keys go up at the next sync", it) }
+        return true
+    }
+
+    /** The joiner gave up: drop the device it registered (never one the list names). */
+    suspend fun abandonJoin(slug: String, did: String) {
+        try { api().removeDevice(slug, did) } catch (e: HttpException) {
+            if (apiErrorCode(e) != "not_found" && apiErrorCode(e) != "listed_device") Log.w(TAG, "could not drop the unpaired device $did on $slug", e)
+        }
+    }
+
     private companion object {
         const val TAG = "E2eIdentity"
     }
