@@ -21,8 +21,10 @@ fun groupMentionsByChannel(messages: List<MentionsMessageDto>): List<MentionGrou
     val order = mutableListOf<String>()
     val byChannel = mutableMapOf<String, MutableList<MentionsMessageDto>>()
     for (row in messages) {
-        val bucket = byChannel.getOrPut(row.channel) {
-            order += row.channel
+        // An inbound DM is stored at channel == our own nick; its window is the peer (v35 dm_with).
+        val key = row.dmWith ?: row.channel
+        val bucket = byChannel.getOrPut(key) {
+            order += key
             mutableListOf()
         }
         bucket += row

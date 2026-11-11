@@ -393,7 +393,7 @@ class NotificationRouter(
         // A DM's bucket IS the partner's nick (queryBucket), which doubles as the key
         // NetworksRepository caches their avatar under; a channel message's bucket is
         // the channel name, which was never avatar-tracked, so this simply misses.
-        val isDm = canonicalTarget(message.channel) == canonicalTarget(myNick)
+        val isDm = message.dmWith != null || canonicalTarget(message.channel) == canonicalTarget(myNick)
         val senderIcon = if (isDm) senderIcon(message.network, bucket) else null
         val sender = Person.Builder().setName(message.sender).apply { senderIcon?.let(::setIcon) }.build()
         style.addMessage(message.body, message.serverTime, sender)

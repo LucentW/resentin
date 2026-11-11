@@ -13,6 +13,8 @@ data class ScrollbackMessageDto(
     val sender: String,
     val body: String? = null,
     val meta: JsonObject = JsonObject(emptyMap()),
+    /** DM peer's nick (raw) on every row of a DM, in and out; null elsewhere. Absent on servers < v36. */
+    val dmWith: String? = null,
 )
 
 @Serializable

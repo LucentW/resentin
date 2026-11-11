@@ -824,6 +824,7 @@
     <string name="home_update_dismiss">Ignora</string>
     <string name="mentions_title">Mention su %1$s</string>
     <string name="mentions_summary">%1$d messaggi in %2$d canali</string>
+    <string name="mentions_truncated">Away molto lungo: le mention più vecchie non sono state scansionate, controlla la cronologia dei canali</string>
     <string name="mentions_empty">Nessuna mention mentre eri away</string>
     <string name="chat_multiline_title">Incolla come %1$d messaggi?</string>
     <string name="chat_multiline_body">Il testo verrà inviato a %1$s come %2$d messaggi separati (uno per riga).</string>

@@ -157,6 +157,9 @@ class ChatRepository(
      * nick when the *other* party sent it, the partner's nick when we sent it — so the
      * two directions land under different keys unless normalized to the partner's nick. */
     private suspend fun queryBucket(message: ScrollbackMessageDto): String {
+        // v36+: the server names the DM peer outright; a nick change rewrites nothing, so
+        // "channel == my nick" no longer recognises DMs received under an older nick.
+        message.dmWith?.let { return canonicalTarget(it) }
         val messageChannel = canonicalTarget(message.channel)
         val ownNick = db.networkDao().nickForSlug(message.network)?.let(::canonicalTarget)
             ?: return messageChannel

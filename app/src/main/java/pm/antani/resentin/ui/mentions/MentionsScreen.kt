@@ -129,6 +129,13 @@ private fun MentionsBody(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
+            if (bundle.truncated) {
+                Text(
+                    text = stringResource(R.string.mentions_truncated),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             val interval = remember(bundle) {
                 listOfNotNull(
                     bundle.awayStartedAt?.takeIf { it.isNotBlank() },

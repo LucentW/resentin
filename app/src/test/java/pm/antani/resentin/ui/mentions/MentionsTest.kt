@@ -21,6 +21,23 @@ class MentionsTest {
     }
 
     @Test
+    fun inboundDmGroupsUnderPeerNotOwnNick() {
+        val rows = listOf(MentionsMessageDto(1L, "me", "alice", "psst", dmWith = "alice"))
+        assertEquals(listOf("alice"), groupMentionsByChannel(rows).map { it.channel })
+    }
+
+    @Test
+    fun bundleDecodesV35AndV41Fields() {
+        val dto = AppJson.decodeFromString(
+            MentionsBundleDto.serializer(),
+            """{"network":"n","truncated":true,"messages":[{"id":9,"server_time":1,"channel":"me","sender":"a","dm_with":"a"}]}""",
+        )
+        assertEquals(true, dto.truncated)
+        assertEquals(9L, dto.messages[0].id)
+        assertEquals("a", dto.messages[0].dmWith)
+    }
+
+    @Test
     fun bundleDecodesSnakeCaseWireShape() {
         val dto = AppJson.decodeFromString(
             MentionsBundleDto.serializer(),

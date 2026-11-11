@@ -141,6 +141,10 @@ data class MentionsMessageDto(
     val sender: String,
     val body: String? = null,
     val kind: String = "privmsg",
+    /** Scrollback id (v35+); usable as a `?around=` cursor. Absent on older servers. */
+    val id: Long? = null,
+    /** Peer's nick on an inbound DM (v35+): the window is this, not `channel`. */
+    val dmWith: String? = null,
 )
 
 /** Mentions-while-away digest — mirrors cicchetto's `mentions_bundle`
@@ -154,6 +158,8 @@ data class MentionsBundleDto(
     val awayEndedAt: String? = null,
     val awayReason: String? = null,
     val messages: List<MentionsMessageDto> = emptyList(),
+    /** v41+: server scanned only the newest rows of a long away window; older mentions may be missing. */
+    val truncated: Boolean = false,
 )
 
 /** `phx_reply` response of the `watchlist` verb (`add`/`del`/`list`) — mirrors
