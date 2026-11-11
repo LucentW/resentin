@@ -583,6 +583,13 @@ class E2eEngine(
         sendTo(nick, sent.master, device.ed25519, sent.msg.copy(sends = sent.msg.sends + 1), res)
     }
 
+    /** Fetches [nick]'s keys (a KEYREQ, under the retry budget): what follows an accepted request. */
+    fun askKeys(nick: String): Result {
+        val res = Result()
+        if (foldNick(nick) != foldNick(ownNick())) maybeKeyreq(nick, res)
+        return res
+    }
+
     /** The user dropped the conversation's queue: nick gone. Mirrors `absent`. */
     fun absent(nick: String): Result {
         val res = Result()

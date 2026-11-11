@@ -192,6 +192,12 @@ object WsEventDecoder {
                 "directory_failed" -> WsEvent.DirectoryFailed(
                     AppJson.decodeFromJsonElement(DirectoryFailedDto.serializer(), raw),
                 )
+                "e2e_message", "e2e_request", "e2e_request_gone" ->
+                    WsEvent.E2eActivity(raw.getValue("network").jsonPrimitive.content)
+                "no_such_nick" -> WsEvent.NoSuchNick(
+                    raw.getValue("network").jsonPrimitive.content,
+                    raw.getValue("nick").jsonPrimitive.content,
+                )
                 "session_identity_changed" -> WsEvent.SessionIdentityChanged(
                     networkId = raw.getValue("network_id").jsonPrimitive.content.toInt(),
                     identified = raw.getValue("identified").jsonPrimitive.boolean,

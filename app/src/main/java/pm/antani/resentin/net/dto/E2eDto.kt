@@ -89,3 +89,6 @@ data class E2eAskDto(val target: String, val from: String, val payload: String)
 
 @Serializable
 data class E2eAskedDto(val request: E2eRequestDto)
+
+@Serializable
+data class E2eAcceptDto(val from: String, val payload: String)

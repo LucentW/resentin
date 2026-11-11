@@ -2,6 +2,7 @@ package pm.antani.resentin.e2e
 
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import pm.antani.resentin.net.dto.E2eAcceptDto
 import pm.antani.resentin.net.dto.E2eAckDto
 import pm.antani.resentin.net.dto.E2eAskDto
 import pm.antani.resentin.net.dto.E2eRequestDto
@@ -26,10 +27,12 @@ class E2eClient(
     private val slot: String,
     private val slug: String,
     private val ownNick: () -> String,
+    /** Called with a message's tag once grappa took every line of it (not before: it may wait for keys). */
+    private val onSent: (String) -> Unit = {},
 ) {
     /** Sends [body] as an encrypted text to [nick]; the events say what happened (queued, failed…). */
     suspend fun sendText(nick: String, body: String, tag: String): List<E2eEvent> =
-        run(nick = nick) { engine ->
+        run(nick = nick) { engine, _ ->
             engine.send(nick, buildJsonObject { put("t", "text"); put("body", body) }, tag)
         }
 
@@ -42,6 +45,18 @@ class E2eClient(
         val hint = buildJsonObject { put("v", WIRE_VERSION); put("master", own.master) }.toString()
         api().ask(slug, E2eAskDto(peer, own.did, hint)).request
     }
+
+    /** Accepts [req] (§4i) and starts the key exchange: ACCEPT goes out, then a KEYREQ for the peer. */
+    suspend fun accept(req: E2eRequestDto): List<E2eEvent> = run(nick = req.peer) { engine, own ->
+        api().acceptRequest(slug, req.id, E2eAcceptDto(own.did, buildJsonObject { put("v", WIRE_VERSION); put("master", own.master) }.toString()))
+        engine.askKeys(req.peer)
+    }
+
+    /** Starts the key exchange with a peer whose consent [askToChat] got. */
+    suspend fun askKeys(peer: String): List<E2eEvent> = run(nick = peer) { engine, _ -> engine.askKeys(peer) }
+
+    /** A 401 for [nick] (§4j): nothing will answer its KEYREQ, so what waits for its keys fails now. */
+    suspend fun absent(nick: String): List<E2eEvent> = run(nick = nick) { engine, _ -> engine.absent(nick) }
 
     /** The consent requests grappa holds for this network; a GET on every (re)connect. */
     suspend fun requests(): List<E2eRequestDto> = api().requests(slug).requests
@@ -82,11 +97,11 @@ class E2eClient(
         }
     }
 
-    private suspend fun run(nick: String, step: (E2eEngine) -> Result): List<E2eEvent> =
+    private suspend fun run(nick: String, step: suspend (E2eEngine, OwnIdentity) -> Result): List<E2eEvent> =
         store.withAccount(slot) { session ->
             val own = session.own ?: return@withAccount emptyList()
             val engine = E2eEngine(session.account, own, ownNick, session.state)
-            val res = step(engine)
+            val res = step(engine, own)
             session.persist()
             transmit(own, engine, res, session)
             res.events
@@ -98,6 +113,7 @@ class E2eClient(
         for (o in res.outbound) {
             val sent = api().send(slug, E2eSendDto(o.target, o.verb, o.from, o.to, o.payload, o.priority))
             o.ref?.let { engine.sent(it, sent.msgid) }
+            o.tag?.let(onSent)
         }
         session.persist()
     }

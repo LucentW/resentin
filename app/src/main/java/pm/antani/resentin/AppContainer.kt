@@ -20,12 +20,11 @@ import pm.antani.resentin.data.db.AppDatabase
 import pm.antani.resentin.data.db.NetworkWithChannels
 import pm.antani.resentin.data.prefs.AppPreferences
 import pm.antani.resentin.e2e.E2eAccountStore
-import pm.antani.resentin.e2e.E2eIdentity
-import pm.antani.resentin.net.rest.E2eApi
 import pm.antani.resentin.domain.events.WsEvent
 import pm.antani.resentin.domain.repository.AdminRepository
 import pm.antani.resentin.domain.repository.AuthRepository
 import pm.antani.resentin.domain.repository.ChatRepository
+import pm.antani.resentin.domain.repository.E2eRepository
 import pm.antani.resentin.domain.repository.IgnoresRepository
 import pm.antani.resentin.domain.repository.MembersRepository
 import pm.antani.resentin.domain.repository.NetworksRepository
@@ -55,10 +54,8 @@ class AppContainer(private val context: Context) {
     val userSettingsRepository = UserSettingsRepository(authRepository, connectionManager)
     val pushRepository = PushRepository(authRepository, appPreferences)
     val adminRepository = AdminRepository(authRepository)
-    // E2E: the identity sync is NOT started yet. Registering a device before the inbox reader
-    // exists would make peers queue messages nobody acks (see E2E-b).
     val e2eAccountStore = E2eAccountStore(context.applicationContext)
-    val e2eIdentity = E2eIdentity(e2eAccountStore) { authRepository.api(E2eApi::class.java) }
+    val e2eRepository = E2eRepository(authRepository, tokenStore, database, e2eAccountStore)
     val openChatTracker = OpenChatTracker()
     val pendingShareHolder = PendingShareHolder()
     val notificationRouter =
@@ -83,6 +80,7 @@ class AppContainer(private val context: Context) {
         networksRepository.startListening(connectionManager, appScope)
         userSettingsRepository.startListening(appScope)
         notificationRouter.startListening(appScope)
+        e2eRepository.startListening(connectionManager, appScope)
 
         appScope.launch { chatRepository.pruneOldMessages() }
 

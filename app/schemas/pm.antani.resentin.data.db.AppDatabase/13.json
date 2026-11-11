@@ -1,0 +1,400 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 13,
+    "identityHash": "07aba3e5577055f5a08bebb01f85c9b9",
+    "entities": [
+      {
+        "tableName": "networks",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`slug` TEXT NOT NULL, `id` INTEGER NOT NULL, `nick` TEXT NOT NULL, `ident` TEXT, `realname` TEXT, `connectionState` TEXT NOT NULL, `connectionStateReason` TEXT, `connectionStateChangedAt` TEXT, `server` TEXT, `port` INTEGER, `tls` INTEGER, `profileAge` TEXT, `profileGender` TEXT, `profileLocation` TEXT, `profileLanguages` TEXT, `profileCustom` TEXT, `avatarUrl` TEXT, `servicesFlavor` TEXT, PRIMARY KEY(`slug`))",
+        "fields": [
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nick",
+            "columnName": "nick",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ident",
+            "columnName": "ident",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "realname",
+            "columnName": "realname",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "connectionState",
+            "columnName": "connectionState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "connectionStateReason",
+            "columnName": "connectionStateReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "connectionStateChangedAt",
+            "columnName": "connectionStateChangedAt",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "server",
+            "columnName": "server",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "port",
+            "columnName": "port",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "tls",
+            "columnName": "tls",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "profileAge",
+            "columnName": "profileAge",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileGender",
+            "columnName": "profileGender",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileLocation",
+            "columnName": "profileLocation",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileLanguages",
+            "columnName": "profileLanguages",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileCustom",
+            "columnName": "profileCustom",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "avatarUrl",
+            "columnName": "avatarUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "servicesFlavor",
+            "columnName": "servicesFlavor",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "slug"
+          ]
+        }
+      },
+      {
+        "tableName": "channels",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`networkSlug` TEXT NOT NULL, `name` TEXT NOT NULL, `source` TEXT NOT NULL, `joined` INTEGER NOT NULL, `topic` TEXT, `modes` TEXT, `modesRawJson` TEXT, `lastReadMessageId` INTEGER, `unreadMessages` INTEGER NOT NULL, `unreadMentions` INTEGER NOT NULL, `severity` TEXT NOT NULL, `avatarUrl` TEXT, PRIMARY KEY(`networkSlug`, `name`))",
+        "fields": [
+          {
+            "fieldPath": "networkSlug",
+            "columnName": "networkSlug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "joined",
+            "columnName": "joined",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "topic",
+            "columnName": "topic",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modes",
+            "columnName": "modes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "modesRawJson",
+            "columnName": "modesRawJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastReadMessageId",
+            "columnName": "lastReadMessageId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "unreadMessages",
+            "columnName": "unreadMessages",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unreadMentions",
+            "columnName": "unreadMentions",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "severity",
+            "columnName": "severity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "avatarUrl",
+            "columnName": "avatarUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "networkSlug",
+            "name"
+          ]
+        }
+      },
+      {
+        "tableName": "messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`networkSlug` TEXT NOT NULL, `channelName` TEXT NOT NULL, `id` INTEGER NOT NULL, `serverTime` INTEGER NOT NULL, `kind` TEXT NOT NULL, `sender` TEXT NOT NULL, `body` TEXT, `metaJson` TEXT NOT NULL, PRIMARY KEY(`networkSlug`, `channelName`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "networkSlug",
+            "columnName": "networkSlug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelName",
+            "columnName": "channelName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverTime",
+            "columnName": "serverTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sender",
+            "columnName": "sender",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metaJson",
+            "columnName": "metaJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "networkSlug",
+            "channelName",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "isupport",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`networkSlug` TEXT NOT NULL, `prefixJson` TEXT NOT NULL, `listModesQueryableJson` TEXT NOT NULL, PRIMARY KEY(`networkSlug`))",
+        "fields": [
+          {
+            "fieldPath": "networkSlug",
+            "columnName": "networkSlug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "prefixJson",
+            "columnName": "prefixJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listModesQueryableJson",
+            "columnName": "listModesQueryableJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "networkSlug"
+          ]
+        }
+      },
+      {
+        "tableName": "members",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`networkSlug` TEXT NOT NULL, `channelName` TEXT NOT NULL, `nick` TEXT NOT NULL, `modesJson` TEXT NOT NULL, PRIMARY KEY(`networkSlug`, `channelName`, `nick`))",
+        "fields": [
+          {
+            "fieldPath": "networkSlug",
+            "columnName": "networkSlug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelName",
+            "columnName": "channelName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nick",
+            "columnName": "nick",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modesJson",
+            "columnName": "modesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "networkSlug",
+            "channelName",
+            "nick"
+          ]
+        }
+      },
+      {
+        "tableName": "e2e_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `networkSlug` TEXT NOT NULL, `peer` TEXT NOT NULL, `peerNick` TEXT NOT NULL, `outgoing` INTEGER NOT NULL, `body` TEXT NOT NULL, `at` INTEGER NOT NULL, `status` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "networkSlug",
+            "columnName": "networkSlug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peer",
+            "columnName": "peer",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "peerNick",
+            "columnName": "peerNick",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "outgoing",
+            "columnName": "outgoing",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_e2e_messages_networkSlug_peer",
+            "unique": false,
+            "columnNames": [
+              "networkSlug",
+              "peer"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_e2e_messages_networkSlug_peer` ON `${TABLE_NAME}` (`networkSlug`, `peer`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '07aba3e5577055f5a08bebb01f85c9b9')"
+    ]
+  }
+}

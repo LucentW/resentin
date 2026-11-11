@@ -166,5 +166,12 @@ sealed interface WsEvent {
     data class DirectoryComplete(val complete: DirectoryCompleteDto) : WsEvent
     data class DirectoryFailed(val failed: DirectoryFailedDto) : WsEvent
 
+    /** `e2e_message` / `e2e_request` / `e2e_request_gone` (§4f, §4i): something changed in the
+     * network's E2E state. The payloads are not read here: the repository re-reads the doors. */
+    data class E2eActivity(val network: String) : WsEvent
+
+    /** `no_such_nick` (§4j, v54): a 401 for a nick nobody holds, ends what waits for its keys. */
+    data class NoSuchNick(val network: String, val nick: String) : WsEvent
+
     data class Unknown(val kind: String?, val raw: JsonObject) : WsEvent
 }

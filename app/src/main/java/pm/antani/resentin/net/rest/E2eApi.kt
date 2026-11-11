@@ -1,6 +1,7 @@
 package pm.antani.resentin.net.rest
 
 import okhttp3.ResponseBody
+import pm.antani.resentin.net.dto.E2eAcceptDto
 import pm.antani.resentin.net.dto.E2eAckDto
 import pm.antani.resentin.net.dto.E2eAskDto
 import pm.antani.resentin.net.dto.E2eAskedDto
@@ -75,6 +76,14 @@ interface E2eApi {
     /** 202. REQUEST goes to the peer; when theirs is waiting, ACCEPT goes instead (a crossing). */
     @POST("networks/{slug}/e2e/requests")
     suspend fun ask(@Path("slug") slug: String, @Body body: E2eAskDto): E2eAskedDto
+
+    /** 202. ACCEPT goes to the peer and the request goes. Needs a listed device. */
+    @POST("networks/{slug}/e2e/requests/{id}/accept")
+    suspend fun acceptRequest(@Path("slug") slug: String, @Path("id") id: Long, @Body body: E2eAcceptDto): E2eSentDto
+
+    /** 202. Without a body grappa sends REFUSE itself: saying no needs no encryption identity. */
+    @POST("networks/{slug}/e2e/requests/{id}/refuse")
+    suspend fun refuseRequest(@Path("slug") slug: String, @Path("id") id: Long): E2eSentDto
 
     /** Dismisses an answer, or an expired request (no body needed for those). */
     @DELETE("networks/{slug}/e2e/requests/{id}")
