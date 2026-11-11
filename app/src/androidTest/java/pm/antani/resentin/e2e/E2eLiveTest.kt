@@ -23,7 +23,8 @@ class E2eLiveTest {
         val host = args.getString("e2eHost")
         val token = args.getString("e2eToken")
         assumeTrue(host != null && token != null)
-        val api = HttpClients.retrofit(host!!, HttpClients.okHttpClient({ token })).create(E2eApi::class.java)
+        requireVisitor(host!!, token!!)
+        val api = HttpClients.retrofit(host, HttpClients.okHttpClient({ token })).create(E2eApi::class.java)
         val store = E2eAccountStore(InstrumentationRegistry.getInstrumentation().targetContext)
         val identity = E2eIdentity(store) { api }
         val slot = "visitor:live:1"

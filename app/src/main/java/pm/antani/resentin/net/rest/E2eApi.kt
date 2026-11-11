@@ -2,6 +2,9 @@ package pm.antani.resentin.net.rest
 
 import okhttp3.ResponseBody
 import pm.antani.resentin.net.dto.E2eAckDto
+import pm.antani.resentin.net.dto.E2eAskDto
+import pm.antani.resentin.net.dto.E2eAskedDto
+import pm.antani.resentin.net.dto.E2eRequestsDto
 import pm.antani.resentin.net.dto.E2eDeviceDto
 import pm.antani.resentin.net.dto.E2eInboxDto
 import pm.antani.resentin.net.dto.E2eSendDto
@@ -65,6 +68,17 @@ interface E2eApi {
     /** 202: accepted, not delivered. grappa frames, paces and names the message. */
     @POST("networks/{slug}/e2e/messages")
     suspend fun send(@Path("slug") slug: String, @Body body: E2eSendDto): E2eSentDto
+
+    @GET("networks/{slug}/e2e/requests")
+    suspend fun requests(@Path("slug") slug: String): E2eRequestsDto
+
+    /** 202. REQUEST goes to the peer; when theirs is waiting, ACCEPT goes instead (a crossing). */
+    @POST("networks/{slug}/e2e/requests")
+    suspend fun ask(@Path("slug") slug: String, @Body body: E2eAskDto): E2eAskedDto
+
+    /** Dismisses an answer, or an expired request (no body needed for those). */
+    @DELETE("networks/{slug}/e2e/requests/{id}")
+    suspend fun dismissRequest(@Path("slug") slug: String, @Path("id") id: Long): Response<ResponseBody>
 
     /** Drops the whole identity: every device, its keys and queue, and the list. */
     @DELETE("networks/{slug}/e2e/keys")

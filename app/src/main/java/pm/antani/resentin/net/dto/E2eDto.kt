@@ -69,3 +69,23 @@ data class E2eSendDto(
 
 @Serializable
 data class E2eSentDto(val msgid: String)
+
+/** A consent request to talk encrypted (CLIENT_PROTOCOL §4i, v53). state: incoming | outgoing | accepted | refused | expired. */
+@Serializable
+data class E2eRequestDto(
+    val id: Long,
+    val peer: String,
+    val state: String,
+    val payload: String? = null,
+    val at: String? = null,
+    val expiresAt: String? = null,
+)
+
+@Serializable
+data class E2eRequestsDto(val requests: List<E2eRequestDto> = emptyList())
+
+@Serializable
+data class E2eAskDto(val target: String, val from: String, val payload: String)
+
+@Serializable
+data class E2eAskedDto(val request: E2eRequestDto)

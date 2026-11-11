@@ -3,6 +3,8 @@ package pm.antani.resentin.e2e
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import pm.antani.resentin.net.dto.E2eAckDto
+import pm.antani.resentin.net.dto.E2eAskDto
+import pm.antani.resentin.net.dto.E2eRequestDto
 import pm.antani.resentin.net.dto.E2eSendDto
 import pm.antani.resentin.net.rest.E2eApi
 
@@ -30,6 +32,24 @@ class E2eClient(
         run(nick = nick) { engine ->
             engine.send(nick, buildJsonObject { put("t", "text"); put("body", body) }, tag)
         }
+
+    /**
+     * Asks [peer] to start an encrypted chat (§4i). Consent, not trust: the peer sees a request and
+     * accepts or refuses; only after `accepted` does the key exchange start ([sendText]).
+     */
+    suspend fun askToChat(peer: String): E2eRequestDto? = store.withAccount(slot) { session ->
+        val own = session.own ?: return@withAccount null
+        val hint = buildJsonObject { put("v", WIRE_VERSION); put("master", own.master) }.toString()
+        api().ask(slug, E2eAskDto(peer, own.did, hint)).request
+    }
+
+    /** The consent requests grappa holds for this network; a GET on every (re)connect. */
+    suspend fun requests(): List<E2eRequestDto> = api().requests(slug).requests
+
+    /** Removes an answer once shown, or an expired request. */
+    suspend fun dismissRequest(id: Long) {
+        api().dismissRequest(slug, id)
+    }
 
     /** Reads everything waiting in this device's inbox, in order. The events are the app's to show. */
     suspend fun drain(): List<E2eEvent> {

@@ -32,6 +32,8 @@ class E2eLiveChatTest {
         val a = InstrumentationRegistry.getArguments()
         val host = a.getString("e2eHost")
         assumeTrue(host != null && a.getString("e2eToken") != null && a.getString("e2eToken2") != null)
+        requireVisitor(host!!, a.getString("e2eToken")!!)
+        requireVisitor(host, a.getString("e2eToken2")!!)
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val store = E2eAccountStore(ctx)
         fun api(token: String) = HttpClients.retrofit(host!!, HttpClients.okHttpClient({ token })).create(E2eApi::class.java)
