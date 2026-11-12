@@ -29,6 +29,25 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # The E2E crypto is a Rust library (rust/vodozemac-android) that ships as .so files per ABI.
+      # They are not in the repository: without this the APK builds fine and then every
+      # encrypted-chat call dies with UnsatisfiedLinkError at runtime.
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust/vodozemac-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build the Rust crypto library
+        run: ./scripts/build-rust.sh
+
       - name: Generate /credits contributor roll
         run: ./scripts/credits.sh
 
@@ -60,6 +79,25 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      # The E2E crypto is a Rust library (rust/vodozemac-android) that ships as .so files per ABI.
+      # They are not in the repository: without this the APK builds fine and then every
+      # encrypted-chat call dies with UnsatisfiedLinkError at runtime.
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust/vodozemac-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build the Rust crypto library
+        run: ./scripts/build-rust.sh
 
       - name: Generate /credits contributor roll
         run: ./scripts/credits.sh
