@@ -62,6 +62,7 @@ import pm.antani.resentin.ui.e2e.E2eChatViewModel
 import pm.antani.resentin.ui.e2e.E2eOverviewViewModel
 import pm.antani.resentin.ui.e2e.E2eSettingsContent
 import pm.antani.resentin.ui.e2e.E2eSettingsViewModel
+import pm.antani.resentin.ui.e2e.E2eNetworkSection
 import pm.antani.resentin.ui.e2e.e2eHomeItems
 import pm.antani.resentin.ui.sharetarget.ShareTargetScreen
 
@@ -298,9 +299,10 @@ fun AppRoot(
                 onAppSettingsClick = { navController.navigate(ROUTE_APP_SETTINGS) },
                 onBrowseDirectory = { networkSlug -> navController.navigate("directory/$networkSlug") },
                 onMentionsClick = { networkSlug -> navController.navigate("mentions/$networkSlug") },
-                extraItems = {
-                    e2eHomeItems(e2eOverview, e2eViewModel) { slug, peer ->
-                        navController.navigate("e2e/${encode(slug)}/${encode(peer)}")
+                extraItems = { e2eHomeItems(e2eOverview, e2eViewModel) },
+                networkExtra = { slug ->
+                    E2eNetworkSection(slug, e2eOverview, e2eViewModel) { s, peer ->
+                        navController.navigate("e2e/${encode(s)}/${encode(peer)}")
                     }
                 },
             )

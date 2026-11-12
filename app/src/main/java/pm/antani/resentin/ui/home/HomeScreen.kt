@@ -124,8 +124,10 @@ fun HomeScreen(
     onAppSettingsClick: () -> Unit,
     onBrowseDirectory: (networkSlug: String) -> Unit = {},
     onMentionsClick: (networkSlug: String) -> Unit = {},
-    /** Extra list items above the networks (the encrypted-chats section). */
+    /** Extra list items above the networks (account-level: a pairing offer). */
     extraItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {},
+    /** Content at the end of a network's card: that network's encrypted chats. */
+    networkExtra: @Composable (networkSlug: String) -> Unit = {},
 ) {
     // "$server" (MOTD + service notices) is reached by tapping the network header
     // itself rather than listed as a channel row — it's network-level, not a channel.
@@ -384,6 +386,7 @@ fun HomeScreen(
                                     onDismissFeaturedChannel = { name ->
                                         viewModel.dismissFeaturedChannel(networkWithChannels.network.slug, name)
                                     },
+                                    extra = { networkExtra(networkWithChannels.network.slug) },
                                 )
                             }
                         }
@@ -966,6 +969,8 @@ private fun NetworkGroupCard(
     onChannelLongClick: (ChannelEntity) -> Unit,
     onFeaturedChannelClick: (String) -> Unit,
     onDismissFeaturedChannel: (String) -> Unit,
+    /** Extra content at the end of this network's card (the network's encrypted chats). */
+    extra: @Composable () -> Unit = {},
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1057,6 +1062,7 @@ private fun NetworkGroupCard(
                 }
                 }
             }
+            extra()
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,78 +36,74 @@ import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.E2eRequestDto
 
 /**
- * The Home section for encrypted chats: a header with "new", requests waiting on us (accept or
- * refuse), requests we sent, answers to show once, identities held elsewhere, and the
- * conversations. Built as list items so Home needs only one hook.
+ * Account-level items at the top of Home: another device offering to pair, and the pairing dialog while one runs.
+ * Everything else about encrypted chats is per network and lives inside that network's card ([E2eNetworkSection]).
  */
-fun LazyListScope.e2eHomeItems(
-    o: E2eOverview,
-    vm: E2eOverviewViewModel,
-    onOpenChat: (slug: String, peer: String) -> Unit,
-) {
-    if (!o.visible) return
-    item(key = "e2e-header") {
-        var showNew by remember { mutableStateOf(false) }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-            Text(stringResource(R.string.e2e_home_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            IconButton(onClick = { showNew = true }) {
-                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.e2e_new_chat))
-            }
-        }
-        if (showNew) {
-            NewE2eChatDialog(
-                networks = o.networks,
-                onDismiss = { showNew = false },
-                onStart = { slug, nick ->
-                    showNew = false
-                    vm.ask(slug, nick) { ok -> if (ok) onOpenChat(slug, nick) }
-                },
-            )
-        }
-    }
-    items(o.elsewhere.size, key = { "e2e-elsewhere-${o.elsewhere[it]}" }) { i ->
-        E2eElsewhereCard(o.elsewhere[i], onReplace = { vm.replaceIdentity(o.elsewhere[i]) })
-    }
+fun LazyListScope.e2eHomeItems(o: E2eOverview, vm: E2eOverviewViewModel) {
     // Another device of the account offers to pair: shown only where it is of use (an identity held elsewhere).
     if (pairingOfferUseful(o.offer, o.elsewhere)) {
         item(key = "e2e-pair-offer") { PairingOfferCard(onJoin = vm::startJoiner) }
     }
     o.joiner?.let { j -> item(key = "e2e-pair-joiner") { JoinerPairingDialog(j, onClose = vm::endPairing) } }
-    items(o.incoming.size, key = { "e2e-incoming-${o.incoming[it].first}-${o.incoming[it].second.id}" }) { i ->
-        val (slug, r) = o.incoming[i]
+}
+
+/**
+ * The encrypted chats of ONE network, inside its card: a header with "new", the identity held elsewhere, requests
+ * waiting on us (accept or refuse), requests we sent and their answers, and the conversations. Nothing when the
+ * server does not speak E2E for this network (the identity sync never answered).
+ */
+@Composable
+fun E2eNetworkSection(slug: String, o: E2eOverview, vm: E2eOverviewViewModel, onOpenChat: (slug: String, peer: String) -> Unit) {
+    if (slug !in o.networks) return
+    var showNew by remember { mutableStateOf(false) }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+        Text(stringResource(R.string.e2e_home_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        IconButton(onClick = { showNew = true }) {
+            Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.e2e_new_chat))
+        }
+    }
+    if (showNew) {
+        NewE2eChatDialog(
+            onDismiss = { showNew = false },
+            onStart = { nick ->
+                showNew = false
+                vm.ask(slug, nick) { ok -> if (ok) onOpenChat(slug, nick) }
+            },
+        )
+    }
+    if (slug in o.elsewhere) E2eElsewhereCard(slug, onReplace = { vm.replaceIdentity(slug) })
+    o.incoming.filter { it.first == slug }.forEach { (_, r) ->
         E2eRequestCard(
             text = stringResource(R.string.e2e_request_incoming, r.peer, slug),
             primary = stringResource(R.string.e2e_accept) to { vm.accept(slug, r) { ok -> if (ok) onOpenChat(slug, r.peer) } },
             secondary = stringResource(R.string.e2e_refuse) to { vm.refuse(slug, r) },
         )
     }
-    items(o.answered.size, key = { "e2e-answered-${o.answered[it].first}-${o.answered[it].second.id}" }) { i ->
-        val (slug, r) = o.answered[i]
+    o.answered.filter { it.first == slug }.forEach { (_, r) ->
         E2eRequestCard(
             text = stringResource(if (r.state == "refused") R.string.e2e_request_refused else R.string.e2e_request_expired, r.peer),
             primary = stringResource(R.string.e2e_dismiss) to { vm.dismiss(slug, r) },
         )
     }
-    items(o.waiting.size, key = { "e2e-waiting-${o.waiting[it].first}-${o.waiting[it].second.id}" }) { i ->
-        val (slug, r) = o.waiting[i]
+    o.waiting.filter { it.first == slug }.forEach { (_, r) ->
         E2eRequestCard(
             text = stringResource(R.string.e2e_request_waiting, r.peer, slug),
             primary = stringResource(R.string.e2e_open) to { onOpenChat(slug, r.peer) },
         )
     }
-    items(o.conversations.size, key = { "e2e-conv-${o.conversations[it].networkSlug}-${o.conversations[it].peer}" }) { i ->
-        val c = o.conversations[i]
+    o.conversations.filter { it.networkSlug == slug }.forEach { c ->
         Row(
             modifier = Modifier.fillMaxWidth().clickable { onOpenChat(c.networkSlug, c.peerNick) }.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("${c.peerNick} · ${c.networkSlug}", fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(c.peerNick, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     c.body.ifBlank { stringResource(R.string.e2e_chat_opened) },
                     style = MaterialTheme.typography.bodySmall,
@@ -162,9 +159,8 @@ fun E2eElsewhereCard(slug: String, onReplace: () -> Unit) {
 }
 
 @Composable
-fun NewE2eChatDialog(networks: List<String>, onDismiss: () -> Unit, onStart: (slug: String, nick: String) -> Unit) {
+fun NewE2eChatDialog(onDismiss: () -> Unit, onStart: (nick: String) -> Unit) {
     var nick by remember { mutableStateOf("") }
-    var slug by remember { mutableStateOf(networks.firstOrNull().orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.e2e_new_chat)) },
@@ -172,16 +168,9 @@ fun NewE2eChatDialog(networks: List<String>, onDismiss: () -> Unit, onStart: (sl
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.e2e_new_chat_hint), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(value = nick, onValueChange = { nick = it.trim() }, singleLine = true, label = { Text(stringResource(R.string.e2e_nick)) })
-                if (networks.size > 1) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        networks.forEach { n ->
-                            TextButton(onClick = { slug = n }) { Text(n, fontWeight = if (n == slug) FontWeight.Bold else FontWeight.Normal) }
-                        }
-                    }
-                }
             }
         },
-        confirmButton = { TextButton(enabled = nick.isNotBlank() && slug.isNotBlank(), onClick = { onStart(slug, nick) }) { Text(stringResource(R.string.e2e_ask)) } },
+        confirmButton = { TextButton(enabled = nick.isNotBlank(), onClick = { onStart(nick) }) { Text(stringResource(R.string.e2e_ask)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.e2e_cancel)) } },
     )
 }
