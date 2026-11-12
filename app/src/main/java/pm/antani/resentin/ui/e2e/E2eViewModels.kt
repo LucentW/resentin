@@ -108,6 +108,12 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
 /** Settings → Chat cifrate: the screen-protection switch and the identity held on each network. */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class E2eSettingsViewModel(private val repo: E2eRepository, private val prefs: pm.antani.resentin.data.prefs.AppPreferences) : ViewModel() {
+    val enabled: StateFlow<Boolean> = prefs.e2eEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+    /** Turning it on syncs at once; turning it off clears what is shown (nothing is deleted on grappa). */
+    fun setEnabled(v: Boolean) {
+        viewModelScope.launch { prefs.setE2eEnabled(v); repo.knownNetworks().forEach { repo.refresh(it) } }
+    }
+
     val secureScreen: StateFlow<Boolean> = prefs.e2eSecureScreen.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
     fun setSecureScreen(v: Boolean) { viewModelScope.launch { prefs.setE2eSecureScreen(v) } }
 

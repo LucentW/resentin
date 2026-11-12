@@ -79,6 +79,7 @@ class AppPreferences(private val context: Context) {
 
     private val keyStayConnected = booleanPreferencesKey("stay_connected")
     private val keyE2eSecureScreen = booleanPreferencesKey("e2e_secure_screen")
+    private val keyE2eEnabled = booleanPreferencesKey("e2e_enabled")
     private val keyChatDisplayMode = stringPreferencesKey("chat_display_mode")
     private val keyShowSeconds = booleanPreferencesKey("show_seconds")
     private val keyShowHostmaskInEvents = booleanPreferencesKey("show_hostmask_in_events")
@@ -261,6 +262,13 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setChatFontFamily(fontFamily: AppFontFamily) {
         context.dataStore.edit { it[keyChatFontFamily] = fontFamily.name }
+    }
+
+    /** End-to-end encrypted chats on: Resentin syncs an identity on each network (registers a device and uploads keys). On by default, as in cicchetto. */
+    val e2eEnabled: Flow<Boolean> = context.dataStore.data.map { it[keyE2eEnabled] ?: true }
+
+    suspend fun setE2eEnabled(value: Boolean) {
+        context.dataStore.edit { it[keyE2eEnabled] = value }
     }
 
     /** Window FLAG_SECURE while an encrypted chat is open: no screenshots, blank in recents. On by default. */

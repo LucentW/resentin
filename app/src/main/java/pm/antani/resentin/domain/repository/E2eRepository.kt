@@ -57,6 +57,8 @@ class E2eRepository(
     private val tokenStore: TokenStore,
     private val db: AppDatabase,
     private val store: E2eAccountStore,
+    /** False when the user switched encrypted chats off: nothing is synced, registered or uploaded. */
+    private val enabled: suspend () -> Boolean = { true },
 ) {
     private val api = { authRepository.api(E2eApi::class.java) }
     private val identity = E2eIdentity(store, api)
@@ -217,6 +219,9 @@ class E2eRepository(
         return runCatching { identity.revokeDevice(slot, slug, ed25519) }.getOrDefault("failed")
     }
 
+    /** Slugs of the session's networks, as the DB holds them right now. */
+    suspend fun knownNetworks(): Collection<String> = db.networkDao().observeNetworksWithChannels().first().map { it.network.slug }
+
     private fun lock(slug: String) = locks.getOrPut(slug) { Mutex() }
 
     private suspend fun slot(slug: String): String? {
@@ -248,6 +253,11 @@ class E2eRepository(
 
     /** Syncs the identity, reads the inbox and the requests. Never throws: a failure is logged and the next push retries. */
     suspend fun refresh(slug: String) = lock(slug).withLock {
+        if (!enabled()) {
+            // Off: show nothing and touch nothing (a device already registered stays on grappa, unread).
+            _identityState.update { it - slug }
+            return@withLock
+        }
         runCatching {
             val slot = slot(slug) ?: return@runCatching Log.i(TAG, "E2E refresh $slug: no slot").let { }
             val state = identity.sync(slot, slug)

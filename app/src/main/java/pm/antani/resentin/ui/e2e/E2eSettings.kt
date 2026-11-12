@@ -35,6 +35,7 @@ fun fingerprint(key: String): String = key.chunked(4).joinToString(" ")
 @Composable
 fun E2eSettingsContent(vm: E2eSettingsViewModel) {
     val secure by vm.secureScreen.collectAsState()
+    val enabled by vm.enabled.collectAsState()
     val identities by vm.identities.collectAsState()
     val states by vm.states.collectAsState()
     val offer by vm.offer.collectAsState()
@@ -61,6 +62,18 @@ fun E2eSettingsContent(vm: E2eSettingsViewModel) {
                     Text(stringResource(R.string.e2e_pair_offer_banner))
                     androidx.compose.material3.Button(onClick = vm::startJoiner) { Text(stringResource(R.string.e2e_pair_join_button)) }
                 }
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        ) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.e2e_enabled), fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.e2e_enabled_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = enabled, onCheckedChange = vm::setEnabled)
             }
         }
         Card(

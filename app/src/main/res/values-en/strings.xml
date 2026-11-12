@@ -970,4 +970,6 @@
     <string name="e2e_alarm_accept">Take the new one</string>
     <string name="e2e_notification_text">New encrypted message</string>
     <string name="e2e_mark_verified">I compared the fingerprints: mark verified</string>
+    <string name="e2e_enabled">Encrypted chats</string>
+    <string name="e2e_enabled_desc">When off, Resentin registers no device and uploads no keys on grappa. A device already registered stays there and keeps receiving queued messages that will not be read.</string>
 </resources>
