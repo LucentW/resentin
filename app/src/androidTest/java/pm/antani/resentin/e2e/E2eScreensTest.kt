@@ -39,14 +39,14 @@ class E2eScreensTest {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Column(Modifier.fillMaxWidth()) {
                     KeyAlarmCard(
-                        "Lucy",
-                        AlarmRec("Lucy", "XlVIu5xpbSpfKRC5jJdT8kdMAZ5SeuQpknrMk/ZOUas", "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/ABCDE"),
+                        "Alice",
+                        AlarmRec("Alice", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefg", "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789+/ABCDE"),
                         onAccept = {}, onKeep = {},
                     )
                     SasCard(SasView("a", "compare", false, true, listOf(0, 23, 35, 30, 59, 5, 30)), {})
                     SasCard(SasView("b", "asked", false, false, null), {})
-                    SystemRow("verified|false|", "Lucy")
-                    SystemRow("cancelled|true|mac-mismatch", "Lucy")
+                    SystemRow("verified|false|", "Alice")
+                    SystemRow("cancelled|true|mac-mismatch", "Alice")
                 }
             }
         }

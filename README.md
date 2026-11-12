@@ -172,12 +172,18 @@ dispositivo, Resentin non può usarla finché non la accoppi da lì
   altri tuoi dispositivi valgono dall'accoppiamento in poi, senza backfill
   (è così per protocollo, non è un limite di Resentin).
 - Niente chat cifrate di canale (protocollo v63), niente file cifrati
-  (§4k), niente ordini/sfide dei bot.
+  (§4k) e niente ordini/sfide dei bot. Non sono una dimenticanza: cicchetto
+  non li implementa ancora lato client e `CLIENT_PROTOCOL.md` ne definisce
+  il trasporto ma non la crittografia di gruppo né il formato del messaggio
+  che porta chiave e URL di un file. Senza un riferimento con cui
+  interoperare, inventarli sarebbe scrivere crittografia propria.
 - Una verifica SAS in corso non sopravvive al riavvio dell'app (il segreto
   non è serializzabile): finisce come "page-gone", come in cicchetto con una
   scheda chiusa.
 - La sync dell'identità parte da sola a ogni connessione, su ogni rete,
-  come in cicchetto; per ora non c'è un interruttore per disattivarla.
+  come in cicchetto; si disattiva da Impostazioni → Chat cifrate (un
+  dispositivo già registrato resta su grappa e continua a ricevere in coda
+  messaggi che non verranno letti).
 
 ## Licenza
 

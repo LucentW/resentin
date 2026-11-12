@@ -88,8 +88,8 @@ class E2ePairingLiveTest {
             val dao = container.database.e2eMessageDao()
             val nick = "CopyTestNick"
             val slotApp = container.tokenStore.session.value!!.let { "${it.wsSubject}:${container.database.networkDao().idForSlug(slug)}" }
-            val appClient = E2eClient(container.e2eAccountStore, { container.authRepository.api(E2eApi::class.java) }, slotApp, slug, ownNick = { "RsnTest3" })
-            val joinerClient = E2eClient(paired.storeJ, { paired.api2 }, paired.slotJ, slug, ownNick = { "RsnTest3" })
+            val appClient = E2eClient(container.e2eAccountStore, { container.authRepository.api(E2eApi::class.java) }, slotApp, slug, ownNick = { "visitor" })
+            val joinerClient = E2eClient(paired.storeJ, { paired.api2 }, paired.slotJ, slug, ownNick = { "visitor" })
 
             // The app sent a text to someone: the sibling is told through grappa (claim, copy), never IRC.
             appClient.copyToSiblings(nick, "mandato dall'app")
