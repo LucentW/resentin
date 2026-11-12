@@ -71,6 +71,11 @@ fun LazyListScope.e2eHomeItems(
     items(o.elsewhere.size, key = { "e2e-elsewhere-${o.elsewhere[it]}" }) { i ->
         E2eElsewhereCard(o.elsewhere[i], onReplace = { vm.replaceIdentity(o.elsewhere[i]) })
     }
+    // Another device of the account offers to pair: shown only where it is of use (an identity held elsewhere).
+    if (pairingOfferUseful(o.offer, o.elsewhere)) {
+        item(key = "e2e-pair-offer") { PairingOfferCard(onJoin = vm::startJoiner) }
+    }
+    o.joiner?.let { j -> item(key = "e2e-pair-joiner") { JoinerPairingDialog(j, onClose = vm::endPairing) } }
     items(o.incoming.size, key = { "e2e-incoming-${o.incoming[it].first}-${o.incoming[it].second.id}" }) { i ->
         val (slug, r) = o.incoming[i]
         E2eRequestCard(
@@ -178,5 +183,17 @@ fun NewE2eChatDialog(networks: List<String>, onDismiss: () -> Unit, onStart: (sl
         },
         confirmButton = { TextButton(enabled = nick.isNotBlank() && slug.isNotBlank(), onClick = { onStart(slug, nick) }) { Text(stringResource(R.string.e2e_ask)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.e2e_cancel)) } },
+    )
+}
+
+/** An offer is of use only to a device that holds no identity the account has: one that is "elsewhere" on some network. */
+fun pairingOfferUseful(offer: pm.antani.resentin.e2e.PairCode?, elsewhere: List<String>): Boolean = offer != null && elsewhere.isNotEmpty()
+
+/** Another of the user's devices offers to pair with this one. */
+@Composable
+internal fun PairingOfferCard(onJoin: () -> Unit) {
+    E2eRequestCard(
+        text = stringResource(R.string.e2e_pair_offer_banner),
+        primary = stringResource(R.string.e2e_pair_join_button) to onJoin,
     )
 }

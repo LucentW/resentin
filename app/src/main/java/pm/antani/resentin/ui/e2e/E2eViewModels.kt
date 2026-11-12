@@ -26,12 +26,16 @@ data class E2eOverview(
     val elsewhere: List<String> = emptyList(),
     /** Networks whose server speaks E2E at all (the sync answered): where a new chat can start. */
     val networks: List<String> = emptyList(),
+    /** A rendezvous another device of the account offers (CLIENT_PROTOCOL §4g): this device may pair with it. */
+    val offer: pm.antani.resentin.e2e.PairCode? = null,
+    /** The pairing running here as the new device, if any (its dialog is on screen). */
+    val joiner: pm.antani.resentin.e2e.JoinerPairing? = null,
 ) {
     val visible get() = networks.isNotEmpty()
 }
 
 class E2eOverviewViewModel(private val repo: E2eRepository) : ViewModel() {
-    val overview: StateFlow<E2eOverview> = combine(repo.requests, repo.identityState, repo.allConversations()) { requests, identity, convs ->
+    val overview: StateFlow<E2eOverview> = combine(repo.requests, repo.identityState, repo.allConversations(), repo.pairingOffer, repo.joiner) { requests, identity, convs, offer, joiner ->
         val all = requests.flatMap { (slug, list) -> list.map { slug to it } }
         E2eOverview(
             incoming = all.filter { it.second.state == "incoming" },
@@ -40,6 +44,8 @@ class E2eOverviewViewModel(private val repo: E2eRepository) : ViewModel() {
             conversations = convs,
             elsewhere = identity.filterValues { it is IdentityState.Elsewhere }.keys.toList(),
             networks = identity.keys.toList(),
+            offer = offer,
+            joiner = joiner,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), E2eOverview())
 
@@ -48,6 +54,8 @@ class E2eOverviewViewModel(private val repo: E2eRepository) : ViewModel() {
     fun dismiss(slug: String, r: E2eRequestDto) = viewModelScope.launch { repo.dismissRequest(slug, r) }
     fun ask(slug: String, peer: String, done: (Boolean) -> Unit) = viewModelScope.launch { done(repo.ask(slug, peer).isSuccess) }
     fun replaceIdentity(slug: String) = viewModelScope.launch { repo.replaceIdentity(slug) }
+    fun startJoiner() { repo.pairingOffer.value?.let { code -> viewModelScope.launch { repo.startJoiner(code) } } }
+    fun endPairing() { viewModelScope.launch { repo.endPairing() } }
 
     companion object {
         fun factory(repo: E2eRepository) = object : ViewModelProvider.Factory {
