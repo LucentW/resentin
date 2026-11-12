@@ -969,4 +969,5 @@
     <string name="e2e_alarm_keep">Tieni la vecchia</string>
     <string name="e2e_alarm_accept">Prendi la nuova</string>
     <string name="e2e_notification_text">Nuovo messaggio cifrato</string>
+    <string name="e2e_mark_verified">Ho confrontato le impronte: segna verificata</string>
 </resources>

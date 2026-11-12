@@ -68,6 +68,7 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
                     if (peer == null) Text(stringResource(R.string.e2e_peer_no_key)) else {
                         androidx.compose.foundation.text.selection.SelectionContainer { Text(fingerprint(peer.master), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace) }
                         Text(stringResource(if (peer.verified) R.string.e2e_verified else R.string.e2e_not_verified), style = MaterialTheme.typography.bodySmall)
+                        if (!peer.verified) TextButton(onClick = vm::markVerified) { Text(stringResource(R.string.e2e_mark_verified)) }
                     }
                     Text(stringResource(R.string.e2e_key_yours), fontWeight = FontWeight.SemiBold)
                     if (own != null) OwnKeyBlock(own)

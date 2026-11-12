@@ -94,6 +94,7 @@ class E2eChatViewModel(private val repo: E2eRepository, val slug: String, val pe
     fun replaceIdentity() = viewModelScope.launch { repo.replaceIdentity(slug) }
     fun refresh() = viewModelScope.launch { repo.refresh(slug) }
     fun acceptAlarm() { viewModelScope.launch { repo.acceptAlarm(slug, peer) } }
+    fun markVerified() { viewModelScope.launch { repo.markVerified(slug, peer); loadKeys() } }
     fun dismissAlarm() { viewModelScope.launch { repo.dismissAlarm(slug, peer) } }
 
     companion object {

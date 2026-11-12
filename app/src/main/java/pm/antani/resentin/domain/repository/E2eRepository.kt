@@ -310,6 +310,9 @@ class E2eRepository(
         apply(slug, c.acceptAlarm(nick)); loadAlarms(slug, c); _changes.update { it + 1 }
     }
 
+    /** The user compared the fingerprints out of band and says so. */
+    suspend fun markVerified(slug: String, nick: String): Result<Unit> = guarded(slug) { c -> c.markVerified(nick); _changes.update { it + 1 } }
+
     /** The user keeps the old key. */
     suspend fun dismissAlarm(slug: String, nick: String): Result<Unit> = guarded(slug) { c ->
         c.dismissAlarm(nick); loadAlarms(slug, c); _changes.update { it + 1 }

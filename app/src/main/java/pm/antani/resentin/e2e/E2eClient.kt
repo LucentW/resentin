@@ -62,6 +62,9 @@ class E2eClient(
         res
     }
 
+    /** The user compared the fingerprints out of band: [nick]'s pinned key is marked verified. */
+    suspend fun markVerified(nick: String) { run(nick = nick) { engine, _ -> engine.pinned(nick)?.let { engine.verify(nick, it.master) }; Result() } }
+
     /** The user keeps the old key. */
     suspend fun dismissAlarm(nick: String) { run(nick = nick) { engine, _ -> engine.dismissAlarm(nick); Result() } }
 

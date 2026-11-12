@@ -66,6 +66,14 @@ Azzurra; le ultime due dal proprio account su un bouncer personale.)*
 - Upload di file/foto in chat (pulsante allegato) e integrazione come
   **Share Target** Android — puoi condividere foto/file da altre app
   direttamente su una chat di Resentin.
+- **Chat cifrate end-to-end** (Olm via `vodozemac`, compatibili con cicchetto):
+  richieste di consenso, scambio di chiavi con fiducia al primo contatto,
+  verifica con le 7 emoji (SAS) o manuale, risoluzione di un cambio chiave,
+  elenco dei dispositivi dell'account con revoca, accoppiamento di un nuovo
+  dispositivo (codice a due cifre) e schermo protetto da screenshot
+  (`FLAG_SECURE`, disattivabile). Le notifiche dei messaggi cifrati dicono
+  solo "Nuovo messaggio cifrato", senza nick né testo. Vedi
+  [Chat cifrate](#chat-cifrate-end-to-end).
 - Notifiche push per messaggi privati e menzioni: di default la
   connessione resta aperta solo ad app in primo piano (risparmio batteria),
   con due modalità opzionali per riceverle anche ad app chiusa — vedi
@@ -123,11 +131,52 @@ accettano login "visitor" anonimi senza bisogno di un account.
 
 ## Build
 
+La crittografia sta in una libreria Rust (`rust/vodozemac-android`, binding
+UniFFI su `vodozemac`). Le `.so` per le quattro ABI **non sono nel
+repository**: vanno compilate prima dell'APK, una volta (e a ogni modifica
+del crate).
+
 ```sh
+# una volta sola
+rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
+cargo install cargo-ndk
+# NDK (es. via sdkmanager): sdkmanager "ndk;27.2.12479018"
+
+./scripts/build-rust.sh      # produce app/src/main/jniLibs e rigenera il Kotlin UniFFI
 ./gradlew assembleDebug
 ```
 
-L'APK di debug viene generato in `app/build/outputs/apk/debug/`.
+L'APK di debug viene generato in `app/build/outputs/apk/debug/`. I test
+strumentati (`./gradlew connectedDebugAndroidTest`) servono un
+emulatore o un dispositivo; quelli "live" si saltano da soli se non gli si
+passa un host e un token (e usano solo account visitor usa e getta). Nota:
+`connectedAndroidTest` **disinstalla l'app a fine corsa**, portandosi via
+chiavi e sessione; per tenerle usa `installDebug installDebugAndroidTest`
+e poi `adb shell am instrument`.
+
+## Chat cifrate (end-to-end)
+
+Resentin parla il protocollo E2E di grappa-irc (v63, `CLIENT_PROTOCOL.md`
+§4f–§4k). grappa fa solo da relay cieco: le chiavi private e i messaggi in
+chiaro restano su questo dispositivo, sigillati con una chiave del Keystore
+Android, e **grappa non conserva i messaggi cifrati**, quindi la cronologia
+è solo la copia locale (cancellare i dati dell'app la perde). L'identità
+cifrata è una per rete: se l'identità del tuo account vive su un altro
+dispositivo, Resentin non può usarla finché non la accoppi da lì
+(Impostazioni → Chat cifrate) o ne avvii una nuova.
+
+**Limiti noti**
+
+- Nessuna copia dei messaggi inviati ai tuoi altri dispositivi
+  ("copy" del protocollo): quello che scrivi da un dispositivo non compare
+  sugli altri.
+- Niente chat cifrate di canale (protocollo v63), niente file cifrati
+  (§4k), niente ordini/sfide dei bot.
+- Una verifica SAS in corso non sopravvive al riavvio dell'app (il segreto
+  non è serializzabile): finisce come "page-gone", come in cicchetto con una
+  scheda chiusa.
+- La sync dell'identità parte da sola a ogni connessione, su ogni rete,
+  come in cicchetto; per ora non c'è un interruttore per disattivarla.
 
 ## Licenza
 
