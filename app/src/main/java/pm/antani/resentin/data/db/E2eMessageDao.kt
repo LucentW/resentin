@@ -27,6 +27,9 @@ interface E2eMessageDao {
     @Insert
     suspend fun insert(message: E2eMessageEntity): Long
 
+    @Query("SELECT * FROM e2e_messages WHERE id = :id")
+    suspend fun get(id: Long): E2eMessageEntity?
+
     @Query("UPDATE e2e_messages SET status = :status WHERE id = :id")
     suspend fun setStatus(id: Long, status: String)
 

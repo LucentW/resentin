@@ -229,7 +229,16 @@ class E2eRepository(
         val slot = slot(slug) ?: return null
         val nick = db.networkDao().nickForSlug(slug) ?: return null
         return E2eClient(store, api, slot, slug, { nick }) { tag ->
-            tag.toLongOrNull()?.let { id -> scope.launch { db.e2eMessageDao().setStatus(id, "sent") } }
+            tag.toLongOrNull()?.let { id ->
+                scope.launch {
+                    // First line grappa took of this text: it is sent, and our other devices get a copy of it (once).
+                    val row = db.e2eMessageDao().get(id)
+                    if (row != null && row.status == "pending") {
+                        db.e2eMessageDao().setStatus(id, "sent")
+                        copyToSiblings(slug, row.peerNick, row.body)
+                    }
+                }
+            }
         }
     }
 
@@ -275,6 +284,10 @@ class E2eRepository(
                 db.e2eMessageDao().insert(E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false, body = body, at = System.currentTimeMillis()))
                 onIncomingEncrypted?.invoke(slug, e.nick)
             }
+            // A text one of our other devices sent [peer]: it shows as sent from here too.
+            is E2eEvent.Copied -> db.e2eMessageDao().insert(
+                E2eMessageEntity(networkSlug = slug, peer = foldNick(e.peer), peerNick = e.peer, outgoing = true, body = e.body, at = System.currentTimeMillis(), status = "sent"),
+            )
             is E2eEvent.SasNote -> db.e2eMessageDao().insert(
                 E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false,
                     body = "${e.kind}|${e.byPeer}|${e.reason.orEmpty()}", at = System.currentTimeMillis(), status = "system"),
@@ -316,6 +329,10 @@ class E2eRepository(
     /** The user keeps the old key. */
     suspend fun dismissAlarm(slug: String, nick: String): Result<Unit> = guarded(slug) { c ->
         c.dismissAlarm(nick); loadAlarms(slug, c); _changes.update { it + 1 }
+    }
+
+    private suspend fun copyToSiblings(slug: String, peer: String, body: String) = lock(slug).withLock {
+        runCatching { client(slug)?.let { apply(slug, it.copyToSiblings(peer, body)) } }.onFailure { Log.w(TAG, "copy to siblings failed", it) }
     }
 
     /** Asks [peer] to start an encrypted chat (consent, §4i). */

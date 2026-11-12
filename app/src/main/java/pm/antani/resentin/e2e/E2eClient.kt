@@ -4,6 +4,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import pm.antani.resentin.net.dto.E2eAcceptDto
 import pm.antani.resentin.net.dto.E2eAckDto
+import pm.antani.resentin.net.dto.E2eClaimDto
+import pm.antani.resentin.net.dto.E2eCopyDto
 import pm.antani.resentin.net.dto.E2eAskDto
 import pm.antani.resentin.net.dto.E2eRequestDto
 import pm.antani.resentin.net.dto.E2eSendDto
@@ -90,16 +92,20 @@ class E2eClient(
         val events = mutableListOf<E2eEvent>()
         while (true) {
             val more = store.withAccount(slot) { session ->
-                val own = session.own ?: return@withAccount false
+                var own = session.own ?: return@withAccount false
                 val page = api().inbox(slug, own.did, session.state.inbox).messages
                 if (page.isEmpty()) return@withAccount false
+                // A copy from a device paired since we read our list names a list version we do not hold yet:
+                // take grappa's newer list first (it must verify under our master), or its first copies are lost.
+                if (page.any { it.own }) own = adoptNewerList(session, own)
                 val engine = E2eEngine(session.account, own, ownNick, session.state)
                 val done = mutableListOf<Long>()
                 for (m in page) {
                     if (m.toDid != own.did) continue // the push goes to every client of the account
-                    if (m.id > session.state.inbox && !m.own && m.channel == null) {
-                        val res = engine.receive(m.from, m.verb, m.fromDid, m.msgid, m.payload)
-                        routeSas(engine, res)
+                    if (m.id > session.state.inbox && m.channel == null) {
+                        // `own`: a text one of our other devices sent (S1), read on the copy path, never the peer one.
+                        val res = if (m.own) engine.receiveCopy(m.fromDid, m.verb, m.payload)
+                        else engine.receive(m.from, m.verb, m.fromDid, m.msgid, m.payload).also { routeSas(engine, it) }
                         events += res.events
                         session.state.inbox = m.id
                         session.persist()
@@ -115,6 +121,37 @@ class E2eClient(
             }
             if (!more) return events
         }
+    }
+
+    // grappa's list when it is above ours, still ours (its master) and naming this device and verifying: ours moves up.
+    private suspend fun adoptNewerList(session: AccountSession, own: OwnIdentity): OwnIdentity {
+        val held = runCatching { api().getList(slug) }.getOrNull()?.takeIf { it.isSuccessful }?.body() ?: return own
+        val list = SignedList(held.ver, held.devices, held.sig)
+        if (held.master != own.master || held.ver <= own.list.ver || !validMasterListShape(own.master, list)) return own
+        if (session.account.ed25519Key() !in held.devices) return own
+        return own.copy(list = list).also { session.own = it; session.persist() }
+    }
+
+    /**
+     * A text we sent [peer], for our other devices (S1): each listed sibling gets a copy encrypted to it, on the
+     * session we hold (a claim of one of its keys opens the first). Never on IRC. A copy grappa refuses
+     * (a full queue) is simply missing there: nobody retries.
+     */
+    suspend fun copyToSiblings(peer: String, body: String): List<E2eEvent> = run(nick = peer) { engine, own ->
+        if (own.list.devices.size <= 1) return@run Result()
+        val results = mutableListOf<CopyResult>()
+        val first = engine.setSiblings(api().listDevices(slug).devices)
+        val c = engine.copy(peer, body)
+        results += c
+        for (e in c.result.events.filterIsInstance<E2eEvent.SiblingKeysNeeded>()) {
+            val keys = runCatching { api().claim(slug, e.did, E2eClaimDto(own.did)).keys }.getOrNull()
+            results += engine.siblingKeys(e.did, keys)
+        }
+        for (copy in results.flatMap { it.copies }) {
+            runCatching { api().copy(slug, copy.to, E2eCopyDto(own.did, copy.verb, copy.payload)) }
+                .onFailure { android.util.Log.w("E2eClient", "a copy for ${copy.to} was refused: $it") }
+        }
+        Result(events = (first.events + results.flatMap { it.result.events }).toMutableList())
     }
 
     // t:sas.* inner messages are the verifier's, not the chat's: hand them over and merge what it says back.

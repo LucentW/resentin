@@ -3,6 +3,10 @@ package pm.antani.resentin.net.rest
 import okhttp3.ResponseBody
 import pm.antani.resentin.net.dto.E2eAcceptDto
 import pm.antani.resentin.net.dto.E2eAckDto
+import pm.antani.resentin.net.dto.E2eClaimDto
+import pm.antani.resentin.net.dto.E2eClaimedDto
+import pm.antani.resentin.net.dto.E2eCopiedDto
+import pm.antani.resentin.net.dto.E2eCopyDto
 import pm.antani.resentin.net.dto.E2eAskDto
 import pm.antani.resentin.net.dto.E2eAskedDto
 import pm.antani.resentin.net.dto.E2eRequestsDto
@@ -88,6 +92,14 @@ interface E2eApi {
     /** Dismisses an answer, or an expired request (no body needed for those). */
     @DELETE("networks/{slug}/e2e/requests/{id}")
     suspend fun dismissRequest(@Path("slug") slug: String, @Path("id") id: Long): Response<ResponseBody>
+
+    /** One key of our sibling [did], for our device `from_did`: the KEYS text, restricted to that device. The key is consumed. */
+    @POST("networks/{slug}/e2e/devices/{did}/claim")
+    suspend fun claim(@Path("slug") slug: String, @Path("did", encoded = true) did: String, @Body body: E2eClaimDto): E2eClaimedDto
+
+    /** Queues a copy of what our device sent in the inbox of our sibling [did]. Never on IRC. */
+    @POST("networks/{slug}/e2e/devices/{did}/copies")
+    suspend fun copy(@Path("slug") slug: String, @Path("did", encoded = true) did: String, @Body body: E2eCopyDto): E2eCopiedDto
 
     /** Drops the whole identity: every device, its keys and queue, and the list. */
     @DELETE("networks/{slug}/e2e/keys")

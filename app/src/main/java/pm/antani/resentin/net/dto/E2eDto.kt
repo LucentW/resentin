@@ -92,3 +92,17 @@ data class E2eAskedDto(val request: E2eRequestDto)
 
 @Serializable
 data class E2eAcceptDto(val from: String, val payload: String)
+
+/** Claim one key of a sibling (§4f, v50): `from_did` is our device asking. */
+@Serializable
+data class E2eClaimDto(val fromDid: String)
+
+@Serializable
+data class E2eClaimedDto(val keys: String)
+
+/** A copy of a message our device sent, encrypted to a sibling, queued in its inbox flagged `own`. */
+@Serializable
+data class E2eCopyDto(val fromDid: String, val verb: String, val payload: String)
+
+@Serializable
+data class E2eCopiedDto(val id: Long, val msgid: String)

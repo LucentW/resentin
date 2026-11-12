@@ -72,6 +72,19 @@ data class Queued(val nick: String, val master: String, val only: String?, val d
 @Serializable
 data class SentDevice(val ed25519: String, val sessionId: String)
 
+/** Another device of our own account (a sibling): its did and the curve key its id block claims. */
+@Serializable
+data class Sibling(val did: String, val curve25519: String)
+
+/** A text we sent, waiting for a sibling's key before it can be copied there. */
+@Serializable
+data class WaitingCopy(val peer: String, val body: String, val at: Long)
+
+/** One copy for grappa's copy door: [to] the sibling's did, [verb] pkmsg|msg. */
+data class SiblingCopy(val to: String, val verb: String, val payload: String)
+
+class CopyResult(val result: Result = Result(), val copies: MutableList<SiblingCopy> = mutableListOf())
+
 @Serializable
 data class AlarmRec(val nick: String, val pinned: String, val presented: String)
 
@@ -100,6 +113,10 @@ data class E2eState(
     val sas: MutableMap<String, SasRecord> = mutableMapOf(),
     /** Folded nick -> a master other than the pinned one that answered: nothing is sent until the user decides. */
     val alarms: MutableMap<String, AlarmRec> = mutableMapOf(),
+    /** Device Ed25519 key -> our sibling of that key. Its sessions are in [sessions]; a sibling is never in [devices]. */
+    val siblings: MutableMap<String, Sibling> = mutableMapOf(),
+    /** Sibling Ed25519 key -> the copies waiting for its keys, oldest first. */
+    val copyq: MutableMap<String, List<WaitingCopy>> = mutableMapOf(),
     /** Folded nick -> when a `listreq` last went to it, and for which list versions (`lv`). */
     val listreqAt: MutableMap<String, ListReq> = mutableMapOf(),
     /** `${folded nick} ${did}` -> when our list last went to that device (its `listreq`, or a body for a device our list does not name). */
@@ -111,7 +128,7 @@ data class E2eState(
     fun startOver() {
         sessions.clear(); seen.clear(); outq.clear(); keyreqSentAt.clear(); keysAwaited.clear()
         rekeyAt.clear(); rekeying.clear(); sent.clear(); nextRef = 1; inbox = 0
-        listreqAt.clear(); listAnsweredAt.clear()
+        listreqAt.clear(); listAnsweredAt.clear(); siblings.clear(); copyq.clear()
     }
 }
 
@@ -124,6 +141,10 @@ sealed interface E2eEvent {
     data class SendFailed(val nick: String, val reason: String, val tags: List<String>) : E2eEvent
     data class Rekeying(val nick: String, val device: String) : E2eEvent
     /** A line the verification leaves in the chat: kind asked | cancelled | verified. */
+    /** A text one of our other devices sent [peer]: show it as sent. */
+    data class Copied(val peer: String, val body: String, val device: String) : E2eEvent
+    /** A sibling has no session to us yet: claim one of its keys (grappa's claim door) and call [E2eEngine.siblingKeys]. */
+    data class SiblingKeysNeeded(val did: String) : E2eEvent
     data class SasNote(val nick: String, val kind: String, val byPeer: Boolean, val reason: String?) : E2eEvent
 }
 
@@ -721,6 +742,191 @@ class E2eEngine(
         val res = Result()
         if (foldNick(nick) != foldNick(ownNick())) maybeKeyreq(nick, res)
         return res
+    }
+
+    // ── Siblings: our other devices (S1). What one of them sends a peer, the others show too. ──
+
+    private fun ourListNames(ed25519: String) = ed25519 in own.list.devices
+
+    /** From grappa's registry of our devices; none is taken on its word: it must be on OUR signed list and vouch for our master. */
+    fun setSiblings(blocks: List<pm.antani.resentin.net.dto.E2eDeviceDto>): Result {
+        val res = Result()
+        val found = LinkedHashMap<String, Sibling>()
+        for (b in blocks) {
+            if (!ourListNames(b.ed25519)) continue
+            val sd = didOf(b.ed25519)
+            if (sd == own.did) continue
+            if (!idSigned(IdBlock(b.curve25519, b.ed25519, b.sig), own.master)) { res.events += E2eEvent.Dropped(ownNick(), "sibling-bad-signature", null); continue }
+            found[b.ed25519] = admit(b.ed25519, b.curve25519, sd)
+        }
+        for ((ed, known) in state.siblings.toMap()) if (found[ed]?.curve25519 != known.curve25519) forgetSibling(ed, known, res)
+        state.siblings.clear(); state.siblings.putAll(found)
+        return res
+    }
+
+    // A sibling is never also a peer's device: unbind a claimant of its curve.
+    private fun admit(ed25519: String, curve25519: String, did: String): Sibling {
+        state.devices.values.filter { it.curve25519 == curve25519 && it.ed25519 != ed25519 }.forEach { state.devices.remove(it.ed25519); state.rekeying -= it.ed25519 }
+        return Sibling(did, curve25519)
+    }
+
+    private fun listedSiblings(res: Result): List<Pair<String, Sibling>> =
+        state.siblings.toMap().entries.mapNotNull { (ed, s) -> if (ourListNames(ed)) ed to s else { forgetSibling(ed, s, res); null } }
+
+    private fun forgetSibling(ed25519: String, sibling: Sibling, res: Result) {
+        state.siblings.remove(ed25519); state.sessions.remove(sibling.curve25519)
+        dropCopies(ed25519, "sibling-gone", res)
+    }
+
+    private fun liveCopies(ed25519: String, res: Result): List<WaitingCopy> {
+        val waiting = state.copyq[ed25519].orEmpty()
+        val live = waiting.filter { it.at > now() - OUTQ_TTL_MS }
+        waiting.filter { it !in live }.forEach { res.events += E2eEvent.Dropped(it.peer, "sibling-no-keys", null) }
+        if (live.isNotEmpty()) state.copyq[ed25519] = live else state.copyq.remove(ed25519)
+        return live
+    }
+
+    private fun dropCopies(ed25519: String, reason: String, res: Result) {
+        state.copyq[ed25519].orEmpty().forEach { res.events += E2eEvent.Dropped(it.peer, reason, null) }
+        state.copyq.remove(ed25519)
+    }
+
+    /** A text a device of ours sent [peer], for the others: a copy per sibling holding a session; for the rest it waits for keys. */
+    fun copy(peer: String, body: String): CopyResult {
+        val out = CopyResult()
+        for ((ed, sibling) in listedSiblings(out.result)) {
+            val pending = liveCopies(ed, out.result) + WaitingCopy(peer, body, now())
+            if (sessionsOf(sibling.curve25519).isNotEmpty()) { sendCopies(ed, sibling, pending, out); continue }
+            if (pending.size == 1) out.result.events += E2eEvent.SiblingKeysNeeded(sibling.did)
+            state.copyq[ed] = pending
+        }
+        return out
+    }
+
+    /** What the claim door answered for [siblingDid] (its KEYS text), or null when grappa refused. */
+    fun siblingKeys(siblingDid: String, keys: String?): CopyResult {
+        val out = CopyResult()
+        val found = listedSiblings(out.result).firstOrNull { it.second.did == siblingDid }
+        if (found == null) {
+            if (keys != null) out.result.events += E2eEvent.Dropped(ownNick(), "sibling-unknown", "keys")
+            return out
+        }
+        val (ed, sibling) = found
+        val pending = liveCopies(ed, out.result)
+        if (keys != null) openToSibling(ed, sibling, keys, out.result)
+        if (sessionsOf(sibling.curve25519).isNotEmpty()) sendCopies(ed, sibling, pending, out) else dropCopies(ed, "sibling-no-keys", out.result)
+        return out
+    }
+
+    private fun openToSibling(ed25519: String, sibling: Sibling, keys: String, res: Result) {
+        val entry = try { siblingEntry(ed25519, sibling, Json.parseToJsonElement(keys) as JsonObject) } catch (e: Exception) {
+            if (e !is PayloadError && e !is IllegalArgumentException && e !is kotlinx.serialization.SerializationException) throw e
+            res.events += E2eEvent.Dropped(ownNick(), "bad-payload", "keys"); return
+        }
+        if (entry is String) { res.events += E2eEvent.Dropped(ownNick(), entry, "keys"); return }
+        val (id, otk) = entry as Pair<*, *>
+        if (sessionsOf(sibling.curve25519).isEmpty()) {
+            val s = try { account.createOutboundSession((id as IdBlock).curve25519, otk as String) } catch (e: uniffi.vodozemac_android.CryptoException) {
+                res.events += E2eEvent.Dropped(ownNick(), "bad-payload", "keys"); return
+            }
+            s.use { addSession(id.curve25519, it.pickle()) }
+        }
+    }
+
+    // The entry of this sibling in a KEYS text, as (id block, one-time key), or the reason it is refused.
+    private fun siblingEntry(ed25519: String, sibling: Sibling, p: JsonObject): Any {
+        if (p["v"]?.jsonPrimitive?.intOrNull != WIRE_VERSION) throw PayloadError("unsupported version")
+        val m = p.obj("master")
+        val l = m.obj("list")
+        val ver = l["ver"]?.jsonPrimitive?.intOrNull ?: throw PayloadError("missing ver")
+        val devs = (l["devices"] as? JsonArray ?: throw PayloadError("missing devices")).map { it.jsonPrimitive.content }
+        if (m.str("ed25519") != own.master) return "sibling-not-ours"
+        if (!validMasterList(own.master, ver, devs, m.str("sig"))) return "sibling-bad-signature"
+        val entry = (p["devices"] as? JsonArray ?: throw PayloadError("missing devices")).map { it.jsonObject }.firstOrNull { idOf(it.obj("id")).ed25519 == ed25519 } ?: return "sibling-unknown"
+        val id = idOf(entry.obj("id"))
+        if (id.curve25519 != sibling.curve25519 || ed25519 !in devs) return "sibling-unknown"
+        val otk = entry.obj("otk")
+        if (!idSigned(id, own.master) || !verifyEd25519(id.ed25519, "$OTK_SIG_PREFIX${otk.str("key")}", otk.str("sig"))) return "sibling-bad-signature"
+        return id to otk.str("key")
+    }
+
+    private fun sendCopies(ed25519: String, sibling: Sibling, pending: List<WaitingCopy>, out: CopyResult) {
+        state.copyq.remove(ed25519)
+        val target = PeerDevice(ed25519, sibling.curve25519, own.master, sibling.did)
+        for ((peer, body) in pending) {
+            val inner = buildJsonObject { put("t", "copy"); put("peer", peer); put("body", body) }.toString()
+            val b = encryptOn(target, inner)
+            try {
+                state.sessions[sibling.curve25519] = listOf(b.session.pickle()) + sessionsOf(sibling.curve25519).drop(1)
+            } finally { b.session.close() }
+            out.copies += SiblingCopy(sibling.did, if (b.preKey) "pkmsg" else "msg", wire(b.preKey, mapOf(sibling.did to b.body)))
+        }
+    }
+
+    /** One message the inbox flags `own`: a copy a sibling sent. Drops what is not from a device on our list, or does not verify. */
+    fun receiveCopy(fromDid: String, verb: String, payload: String): Result {
+        val res = Result()
+        val siblings = listedSiblings(res)
+        fun drop(reason: String) { res.events += E2eEvent.Dropped(ownNick(), reason, verb) }
+        try {
+            val p = Json.parseToJsonElement(payload) as? JsonObject ?: throw PayloadError("payload is not a JSON object")
+            if (verb == "pkmsg") onCopyPkmsg(fromDid, p, ::drop, res) else onCopyMsg(fromDid, p, siblings, ::drop, res)
+        } catch (e: Exception) {
+            if (e !is PayloadError && e !is IllegalArgumentException && e !is kotlinx.serialization.SerializationException) throw e
+            drop("bad-payload")
+        }
+        return res
+    }
+
+    private fun onCopyPkmsg(fromDid: String, p: JsonObject, drop: (String) -> Unit, res: Result) {
+        if (p["v"]?.jsonPrimitive?.intOrNull != WIRE_VERSION) throw PayloadError("unsupported version")
+        val id = idOf(p.obj("id"))
+        val mb = p.obj("master")
+        val master = mb.str("ed25519")
+        val certVer = mb["ver"]?.jsonPrimitive?.intOrNull?.takeIf { it in 1..Int.MAX_VALUE } ?: throw PayloadError("bad ver")
+        val bodies = bodiesOf(p)
+        if (master != own.master) return drop("sibling-not-ours")
+        if (!canonical(id)) return drop("non-canonical-key")
+        if (didOf(id.ed25519) != fromDid) return drop("bad-from")
+        val body = bodyFor(bodies) ?: return drop("not-for-us")
+        if (!verifyEd25519(master, certSigText(certVer, id.ed25519), mb.str("cert")) || !idSigned(id, master)) return drop("sibling-bad-signature")
+        if (!ourListNames(id.ed25519)) return drop(if (certVer > own.list.ver) "sibling-list-behind" else "sibling-unknown")
+        val sessionId = try { preKeySessionId(body) } catch (e: uniffi.vodozemac_android.CryptoException) { return drop("bad-payload") }
+        val held = sessionsOf(id.curve25519).firstOrNull { sessionIdOf(it) == sessionId }
+        if (held != null) {
+            val plain = decryptWith(id.curve25519, held, 0uL, body) ?: return drop("sibling-undecryptable")
+            readCopy(id.ed25519, plain, true, res)
+            return
+        }
+        if (sessionId in state.seen) return drop("sibling-undecryptable")
+        val created = try { account.createInboundSession(id.curve25519, body) } catch (e: uniffi.vodozemac_android.CryptoException) { return drop("sibling-undecryptable") }
+        state.seen += sessionId
+        created.session.use { s ->
+            if (!readCopy(id.ed25519, created.plaintext, true, res)) return
+            state.siblings[id.ed25519] = admit(id.ed25519, id.curve25519, fromDid)
+            addSession(id.curve25519, s.pickle())
+        }
+    }
+
+    private fun onCopyMsg(fromDid: String, p: JsonObject, siblings: List<Pair<String, Sibling>>, drop: (String) -> Unit, res: Result) {
+        if (p["v"]?.jsonPrimitive?.intOrNull != WIRE_VERSION) throw PayloadError("unsupported version")
+        val curve = runCatching { canonicalCurve25519(p.str("ck")) }.getOrElse { throw PayloadError("bad ck") }
+        val bodies = bodiesOf(p)
+        val (ed, sibling) = siblings.firstOrNull { it.second.curve25519 == curve } ?: return drop("sibling-unknown")
+        if (sibling.did != fromDid) return drop("bad-from")
+        val body = bodyFor(bodies) ?: return drop("not-for-us")
+        val plain = sessionsOf(curve).toList().firstNotNullOfOrNull { decryptWith(curve, it, 1uL, body) } ?: return drop("sibling-undecryptable")
+        readCopy(ed, plain, false, res)
+    }
+
+    private fun readCopy(device: String, plaintext: ByteArray, preKey: Boolean, res: Result): Boolean {
+        val inner = inner(ownNick(), plaintext, if (preKey) device else null, res) ?: return false
+        val t = inner["t"]?.jsonPrimitive?.contentOrNull
+        val peer = (inner["peer"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotEmpty() }
+        val body = (inner["body"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (t != "copy" || peer == null || body == null) { res.events += E2eEvent.Dropped(ownNick(), "sibling-not-a-copy", null); return false }
+        res.events += E2eEvent.Copied(peer, body, device)
+        return true
     }
 
     /** The user dropped the conversation's queue: nick gone. Mirrors `absent`. */

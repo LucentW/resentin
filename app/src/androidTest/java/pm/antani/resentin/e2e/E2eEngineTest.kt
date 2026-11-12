@@ -1,6 +1,8 @@
 package pm.antani.resentin.e2e
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -167,5 +169,70 @@ class E2eEngineTest {
         val ok = alice.engine.receive("bob", "keys", "*", "k3", newBob.keysPayload())
         assertTrue(ok.events.none { it is E2eEvent.KeyAlarm })
         assertEquals("not our own key", "own-key", alice.engine.pin("bob", alice.own.master, false))
+    }
+
+    // Two devices of ONE account (same master), each knowing the other from grappa's registry.
+    private class Twin(val master: Account, val devs: List<Account>, val i: Int) {
+        val device = devs[i]
+        val sorted = devs.map { it.ed25519Key() }.sorted()
+        val list = SignedList(1, sorted, master.sign(listSigText(1, sorted)))
+        val own = OwnIdentity(master.ed25519Key(), master.sign(certSigText(1, device.ed25519Key())), 1, list, didOf(device.ed25519Key()))
+        val engine = E2eEngine(device, own, { "me" }, E2eState())
+        fun block(): pm.antani.resentin.net.dto.E2eDeviceDto {
+            val id = idBlock(device, master.ed25519Key())
+            return pm.antani.resentin.net.dto.E2eDeviceDto(own.did, id.ed25519, id.curve25519, id.sig)
+        }
+        /** The KEYS text the claim door hands out for this device only. */
+        fun claimText(): String {
+            device.generateOneTimeKeys(1uL)
+            val otk = signedKey(device, device.oneTimeKeys().first())
+            val id = idBlock(device, master.ed25519Key())
+            return buildJsonObject {
+                put("v", 2)
+                put("master", buildJsonObject {
+                    put("ed25519", master.ed25519Key())
+                    put("list", buildJsonObject { put("ver", list.ver); put("devices", JsonArray(list.devices.map { JsonPrimitive(it) })) })
+                    put("sig", list.sig)
+                })
+                put("devices", JsonArray(listOf(buildJsonObject {
+                    put("id", buildJsonObject { put("curve25519", id.curve25519); put("ed25519", id.ed25519); put("sig", id.sig) })
+                    put("otk", buildJsonObject { put("key", otk.key); put("fallback", false); put("sig", otk.sig) })
+                })))
+            }.toString()
+        }
+    }
+
+    @Test
+    fun aTextSentOnOneDeviceIsCopiedToTheOtherAndBack() {
+        val master = Account(); val devs = listOf(Account(), Account())
+        val a = Twin(master, devs, 0); val b = Twin(master, devs, 1)
+        a.engine.setSiblings(listOf(b.block())); b.engine.setSiblings(listOf(a.block()))
+
+        // a sent "ciao" to bob: it needs one of b's keys first (the claim door), then the copy goes.
+        val c = a.engine.copy("bob", "ciao")
+        assertEquals(b.own.did, (c.result.events.single { it is E2eEvent.SiblingKeysNeeded } as E2eEvent.SiblingKeysNeeded).did)
+        assertTrue(c.copies.isEmpty())
+        val sent = a.engine.siblingKeys(b.own.did, b.claimText())
+        val copy = sent.copies.single()
+        assertEquals("pkmsg", copy.verb)
+        assertEquals(b.own.did, copy.to)
+
+        // b reads it as something its own account sent to bob, and now knows a as a sibling with a session.
+        val got = b.engine.receiveCopy(a.own.did, copy.verb, copy.payload).events.filterIsInstance<E2eEvent.Copied>().single()
+        assertEquals("bob", got.peer); assertEquals("ciao", got.body)
+
+        // b answers on that session: no claim needed, and a normal message (not a pre-key one).
+        val back = b.engine.copy("bob", "rispondo")
+        assertTrue(back.result.events.none { it is E2eEvent.SiblingKeysNeeded })
+        assertEquals("msg", back.copies.single().verb)
+        val got2 = a.engine.receiveCopy(b.own.did, "msg", back.copies.single().payload).events.filterIsInstance<E2eEvent.Copied>().single()
+        assertEquals("rispondo", got2.body)
+
+        // a device that is not on our list cannot copy: its message is dropped, nothing shown.
+        val stranger = Twin(master, listOf(Account(), Account()), 0)
+        val fake = stranger.engine.copy("bob", "x")
+        assertTrue(fake.copies.isEmpty())
+        val dropped = a.engine.receiveCopy(stranger.own.did, "msg", """{"v":2,"ck":"${stranger.device.curve25519Key()}","bodies":{"${a.own.did}":"AAAA"}}""")
+        assertTrue(dropped.events.none { it is E2eEvent.Copied })
     }
 }

@@ -36,6 +36,77 @@ class E2ePairingLiveTest {
         error("timed out waiting for: $what")
     }
 
+    /** Everything the second device needs, once it is paired to the app's identity. */
+    private class Paired(val api2: E2eApi, val storeJ: E2eAccountStore, val slotJ: String, val joinerEd: String, val pairing2: E2ePairingApi, val rendezvous: String)
+
+    /** Pairs a second device (its own store, a second session of the account) to the identity the app holds. */
+    private suspend fun pairSecondDevice(host: String, token: String, slug: String, repo: pm.antani.resentin.domain.repository.E2eRepository): Paired {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val http = OkHttpClient()
+        val json = "application/json".toMediaType()
+        val minted = http.newCall(Request.Builder().url("https://$host/me/share-token").header("Authorization", "Bearer $token").post("".toRequestBody(json)).build()).execute().use { it.body!!.string() }
+        val shareToken = (AppJson.parseToJsonElement(minted) as kotlinx.serialization.json.JsonObject)["token"]!!.toString().trim('"')
+        val consumed = http.newCall(Request.Builder().url("https://$host/auth/share/consume").post("""{"token":"$shareToken"}""".toRequestBody(json)).build()).execute().use { it.body!!.string() }
+        val bearer2 = (AppJson.parseToJsonElement(consumed) as kotlinx.serialization.json.JsonObject)["token"]!!.toString().trim('"')
+        val retrofit2 = HttpClients.retrofit(host, HttpClients.okHttpClient({ bearer2 }))
+        val api2 = retrofit2.create(E2eApi::class.java)
+        val pairing2 = retrofit2.create(E2ePairingApi::class.java)
+        val storeJ = E2eAccountStore(ctx)
+        val slotJ = "pairtest:joiner:1"
+        storeJ.delete(slotJ)
+        val identityJ = E2eIdentity(storeJ) { api2 }
+        val scope = CoroutineScope(Dispatchers.IO)
+        val holder = repo.startHolder().getOrThrow()
+        val offer = until("the offer") { pairing2.offer().offer }
+        val joiner = JoinerPairing(identityJ, { listOf(slug to slotJ) }, PairCode(offer.rendezvousId, offer.curve), scope)
+        val r = pairing2.join(offer.rendezvousId).rendezvous
+        val ch = PairingChannel(pairing2, r, { joiner.onPayload(it) }, { joiner.onClosed(it) })
+        joiner.attach(ch)
+        val poller = scope.launch { while (true) { runCatching { ch.catchUp() }; repo.catchUpPairings(); delay(700) } }
+        val code = until("the joiner's check code") { joiner.state.value.checkCode }
+        until("the holder to hear the hello") { holder.state.value.stage.takeIf { it == HolderStage.CODE } }
+        holder.submitCode(code)
+        until("the joiner to see the offer") { joiner.state.value.stage.takeIf { it == JoinerStage.CONFIRM } }
+        joiner.confirm()
+        until("the joiner to finish") { joiner.state.value.stage.takeIf { it == JoinerStage.DONE } }
+        until("the holder to finish") { holder.state.value.stage.takeIf { it == HolderStage.DONE } }
+        poller.cancel()
+        return Paired(api2, storeJ, slotJ, storeJ.peek(slotJ) { it.account.ed25519Key() }, pairing2, offer.rendezvousId)
+    }
+
+    @Test
+    fun aTextCopiedToTheSiblingShowsThereAndBack() = runBlocking<Unit> {
+        val a = InstrumentationRegistry.getArguments()
+        val host = a.getString("e2eHost"); val token = a.getString("e2eToken")
+        assumeTrue(host != null && token != null)
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val container = (ctx.applicationContext as AppApplication).container
+        val repo = container.e2eRepository
+        val slug = "azzurra"
+        val paired = pairSecondDevice(host!!, token!!, slug, repo)
+        try {
+            val dao = container.database.e2eMessageDao()
+            val nick = "CopyTestNick"
+            val slotApp = container.tokenStore.session.value!!.let { "${it.wsSubject}:${container.database.networkDao().idForSlug(slug)}" }
+            val appClient = E2eClient(container.e2eAccountStore, { container.authRepository.api(E2eApi::class.java) }, slotApp, slug, ownNick = { "RsnTest3" })
+            val joinerClient = E2eClient(paired.storeJ, { paired.api2 }, paired.slotJ, slug, ownNick = { "RsnTest3" })
+
+            // The app sent a text to someone: the sibling is told through grappa (claim, copy), never IRC.
+            appClient.copyToSiblings(nick, "mandato dall'app")
+            val got = until("the joiner to read the copy") { joinerClient.drain().filterIsInstance<E2eEvent.Copied>().firstOrNull() }
+            assertEquals(nick, got.peer); assertEquals("mandato dall'app", got.body)
+
+            // And back, on the session the first copy opened: nothing to claim this time.
+            joinerClient.copyToSiblings(nick, "mandato dall'altro device")
+            val back = until("the app to read the copy") { appClient.drain().filterIsInstance<E2eEvent.Copied>().firstOrNull() }
+            assertEquals("mandato dall'altro device", back.body)
+        } finally {
+            repo.revokeDevice(slug, paired.joinerEd)
+            paired.storeJ.delete(paired.slotJ)
+            runCatching { paired.pairing2.close(paired.rendezvous) }
+        }
+    }
+
     @Test
     fun appHoldsAndASecondDeviceJoins() = runBlocking<Unit> {
         val a = InstrumentationRegistry.getArguments()
