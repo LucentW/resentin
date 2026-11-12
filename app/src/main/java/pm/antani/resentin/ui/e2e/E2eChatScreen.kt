@@ -182,7 +182,7 @@ private fun Banner(text: String, error: Boolean = false) {
 
 /** The verification in progress: asked, waiting, the 7 emoji to compare, or waiting for the other side. */
 @Composable
-private fun SasCard(v: pm.antani.resentin.e2e.SasView, step: (String) -> Unit) {
+internal fun SasCard(v: pm.antani.resentin.e2e.SasView, step: (String) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
@@ -230,7 +230,7 @@ private fun SasCard(v: pm.antani.resentin.e2e.SasView, step: (String) -> Unit) {
 
 /** A line the verification leaves in the chat ("kind|byPeer|reason"). */
 @Composable
-private fun SystemRow(body: String, peer: String) {
+internal fun SystemRow(body: String, peer: String) {
     val (kind, by, reason) = body.split("|").let { Triple(it.getOrElse(0) { "" }, it.getOrElse(1) { "" } == "true", it.getOrElse(2) { "" }) }
     val text = when (kind) {
         "asked" -> stringResource(if (by) R.string.e2e_sas_note_asked_peer else R.string.e2e_sas_note_asked_you, peer)
@@ -244,7 +244,7 @@ private fun SystemRow(body: String, peer: String) {
 
 /** The contact's master key changed under us: nothing is sent until the user takes the new key or keeps the old one. */
 @Composable
-private fun KeyAlarmCard(peer: String, alarm: pm.antani.resentin.e2e.AlarmRec, onAccept: () -> Unit, onKeep: () -> Unit) {
+internal fun KeyAlarmCard(peer: String, alarm: pm.antani.resentin.e2e.AlarmRec, onAccept: () -> Unit, onKeep: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
