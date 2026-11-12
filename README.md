@@ -70,7 +70,8 @@ Azzurra; le ultime due dal proprio account su un bouncer personale.)*
   richieste di consenso, scambio di chiavi con fiducia al primo contatto,
   verifica con le 7 emoji (SAS) o manuale, risoluzione di un cambio chiave,
   elenco dei dispositivi dell'account con revoca, accoppiamento di un nuovo
-  dispositivo (codice a due cifre) e schermo protetto da screenshot
+  dispositivo (codice a due cifre), copia dei messaggi inviati sugli altri
+  tuoi dispositivi e schermo protetto da screenshot
   (`FLAG_SECURE`, disattivabile). Le notifiche dei messaggi cifrati dicono
   solo "Nuovo messaggio cifrato", senza nick né testo. Vedi
   [Chat cifrate](#chat-cifrate-end-to-end).
@@ -167,9 +168,9 @@ dispositivo, Resentin non può usarla finché non la accoppi da lì
 
 **Limiti noti**
 
-- Nessuna copia dei messaggi inviati ai tuoi altri dispositivi
-  ("copy" del protocollo): quello che scrivi da un dispositivo non compare
-  sugli altri.
+- Un nuovo dispositivo parte vuoto: le copie dei messaggi inviati dagli
+  altri tuoi dispositivi valgono dall'accoppiamento in poi, senza backfill
+  (è così per protocollo, non è un limite di Resentin).
 - Niente chat cifrate di canale (protocollo v63), niente file cifrati
   (§4k), niente ordini/sfide dei bot.
 - Una verifica SAS in corso non sopravvive al riavvio dell'app (il segreto
