@@ -83,6 +83,11 @@ class AppContainer(private val context: Context) {
         userSettingsRepository.startListening(appScope)
         notificationRouter.startListening(appScope)
         e2eRepository.startListening(connectionManager, appScope)
+        // A message from an encrypted chat while the app is not on screen: a generic notification, no nick, no text.
+        e2eRepository.onIncomingEncrypted = { slug, nick ->
+            val foreground = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            if (!foreground) notificationRouter.notifyEncrypted(slug, nick)
+        }
 
         appScope.launch { chatRepository.pruneOldMessages() }
 

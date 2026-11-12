@@ -564,6 +564,42 @@ class NotificationRouter(
     private suspend fun isMuted(networkSlug: String, bucket: String): Boolean =
         userSettingsRepository.isMutedNow(networkSlug, bucket)
 
+    /**
+     * A new end-to-end encrypted message arrived while the app is not on screen: a notification that says
+     * only that. No nick and no text, on the lock screen or off it (CLIENT_PROTOCOL §4f: an E2E line is never
+     * in a push payload either). The peer travels in the intent only, so a tap opens the right chat. One per
+     * network, replaced rather than grown, so the count of messages does not show either.
+     */
+    fun notifyEncrypted(networkSlug: String, peer: String) {
+        ensureChannel()
+        val intent = Intent(context, MainActivity::class.java).apply {
+            setClass(context, MainActivity::class.java)
+            action = Intent.ACTION_VIEW
+            putExtra(EXTRA_NETWORK_SLUG, networkSlug)
+            putExtra(EXTRA_CHANNEL_NAME, peer)
+            putExtra(EXTRA_E2E, true)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val id = ("e2e:" + networkSlug).hashCode()
+        val pending = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(R.string.e2e_notification_text))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle(context.getString(R.string.app_name))
+                    .setContentText(context.getString(R.string.e2e_notification_text))
+                    .build(),
+            )
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+    }
+
     private fun ensureChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -589,6 +625,7 @@ class NotificationRouter(
         const val INVITE_CHANNEL_ID = "invites"
         const val EXTRA_NETWORK_SLUG = "network_slug"
         const val EXTRA_CHANNEL_NAME = "channel_name"
+        const val EXTRA_E2E = "e2e"
         private const val NOTIF_EXTRA_SLUG = "resentin.notif.slug"
         private const val NOTIF_EXTRA_BUCKET = "resentin.notif.bucket"
         private const val NOTIF_EXTRA_MESSAGE_ID = "resentin.notif.message_id"

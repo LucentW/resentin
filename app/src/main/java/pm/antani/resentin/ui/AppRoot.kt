@@ -113,7 +113,8 @@ internal fun NavHostController.navigateToChat(
     }
 }
 
-data class DeepLinkChat(val networkSlug: String, val channelName: String)
+/** [e2e]: the tap came from an encrypted-message notification: open the encrypted chat, not the plaintext one. */
+data class DeepLinkChat(val networkSlug: String, val channelName: String, val e2e: Boolean = false)
 
 @Composable
 fun AppRoot(
@@ -191,7 +192,8 @@ fun AppRoot(
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
-            navController.navigateToChat(deepLink.networkSlug, deepLink.channelName)
+            if (deepLink.e2e) navController.navigate("e2e/${encode(deepLink.networkSlug)}/${encode(deepLink.channelName)}")
+            else navController.navigateToChat(deepLink.networkSlug, deepLink.channelName)
             onDeepLinkConsumed()
         }
     }

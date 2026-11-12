@@ -273,6 +273,7 @@ class E2eRepository(
         for (e in events) when (e) {
             is E2eEvent.Received -> e.text()?.let { body ->
                 db.e2eMessageDao().insert(E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false, body = body, at = System.currentTimeMillis()))
+                onIncomingEncrypted?.invoke(slug, e.nick)
             }
             is E2eEvent.SasNote -> db.e2eMessageDao().insert(
                 E2eMessageEntity(networkSlug = slug, peer = foldNick(e.nick), peerNick = e.nick, outgoing = false,
@@ -287,6 +288,9 @@ class E2eRepository(
     private suspend fun absent(slug: String, nick: String) = lock(slug).withLock {
         runCatching { client(slug)?.let { apply(slug, it.absent(nick)) } }.onFailure { Log.w(TAG, "absent failed", it) }
     }
+
+    /** Set by the container: an incoming encrypted message while the app is not on screen. (network slug, peer nick) */
+    var onIncomingEncrypted: ((String, String) -> Unit)? = null
 
     private val _changes = MutableStateFlow(0)
     /** Bumped whenever something a screen may show changed (a refresh finished, a verification moved). */

@@ -113,7 +113,7 @@ class MainActivity : FragmentActivity() {
     private fun deepLinkFrom(intent: Intent?): DeepLinkChat? {
         val networkSlug = intent?.getStringExtra(NotificationRouter.EXTRA_NETWORK_SLUG) ?: return null
         val channelName = intent.getStringExtra(NotificationRouter.EXTRA_CHANNEL_NAME) ?: return null
-        return DeepLinkChat(networkSlug, channelName)
+        return DeepLinkChat(networkSlug, channelName, intent.getBooleanExtra(NotificationRouter.EXTRA_E2E, false))
     }
 
     /** `grappa://<host>/<token>` magic-link login — a QR code / shared link from

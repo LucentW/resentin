@@ -66,6 +66,11 @@ class UnifiedPushService : PushService() {
             Log.w(TAG, "push payload url missing network/channel: ${payload.url}")
             return
         }
+        // An encrypted message (`&e2e=1`): read the inbox; the repository posts the generic notification itself.
+        if (uri.getQueryParameter("e2e") == "1") {
+            scope.launch { runCatching { container.e2eRepository.refresh(network) }.onFailure { Log.w(TAG, "e2e push refresh failed for $network", it) } }
+            return
+        }
         scope.launch {
             runCatching { container.notificationRouter.notifyFromPush(network, channel) }
                 .onFailure { Log.w(TAG, "failed to handle push wake-up for $network/$channel", it) }
