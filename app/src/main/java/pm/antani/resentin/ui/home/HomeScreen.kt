@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Done
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -128,6 +129,11 @@ fun HomeScreen(
     extraItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {},
     /** Content at the end of a network's card: that network's encrypted chats. */
     networkExtra: @Composable (networkSlug: String) -> Unit = {},
+    /** How many conversations [networkExtra] shows for a network: a network with only those is not "empty". */
+    networkExtraCount: (networkSlug: String) -> Int = { 0 },
+    /** Whether the network can start an encrypted chat (it speaks E2E here): the dialog then offers it. */
+    canStartEncryptedChat: (networkSlug: String) -> Boolean = { false },
+    onStartEncryptedChat: (networkSlug: String, nick: String) -> Unit = { _, _ -> },
 ) {
     // "$server" (MOTD + service notices) is reached by tapping the network header
     // itself rather than listed as a channel row — it's network-level, not a channel.
@@ -386,6 +392,7 @@ fun HomeScreen(
                                     onDismissFeaturedChannel = { name ->
                                         viewModel.dismissFeaturedChannel(networkWithChannels.network.slug, name)
                                     },
+                                    extraCount = networkExtraCount(networkWithChannels.network.slug),
                                     extra = { networkExtra(networkWithChannels.network.slug) },
                                 )
                             }
@@ -535,6 +542,10 @@ fun HomeScreen(
                 newChatNetwork = null
                 onBrowseDirectory(networkSlug)
             },
+            onEncrypted = if (canStartEncryptedChat(networkSlug)) { nick ->
+                onStartEncryptedChat(networkSlug, nick)
+                newChatNetwork = null
+            } else null,
         )
     }
 }
@@ -545,6 +556,8 @@ private fun NewChatDialog(
     onJoin: (String) -> Unit,
     onMessage: (String) -> Unit,
     onBrowseDirectory: () -> Unit,
+    /** Ask the nick for an end-to-end encrypted chat; null when this network cannot (it does not speak E2E). */
+    onEncrypted: ((String) -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf("") }
     AlertDialog(
@@ -582,6 +595,19 @@ private fun NewChatDialog(
                     )
                     Spacer(Modifier.width(ResentinSpacing.small))
                     Text(stringResource(R.string.home_new_chat_browse))
+                }
+                if (onEncrypted != null) {
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { onEncrypted(text.trim()) },
+                        enabled = text.isNotBlank(),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(ResentinSpacing.small))
+                        Text(stringResource(R.string.e2e_new_chat_here))
+                    }
                 }
             }
         },
@@ -969,6 +995,8 @@ private fun NetworkGroupCard(
     onChannelLongClick: (ChannelEntity) -> Unit,
     onFeaturedChannelClick: (String) -> Unit,
     onDismissFeaturedChannel: (String) -> Unit,
+    /** Conversations [extra] shows: with any, the network is not empty. */
+    extraCount: Int = 0,
     /** Extra content at the end of this network's card (the network's encrypted chats). */
     extra: @Composable () -> Unit = {},
 ) {
@@ -1027,7 +1055,7 @@ private fun NetworkGroupCard(
                 )
             }
             if (channels.isEmpty()) {
-                ResentinEmptyState(
+                if (extraCount == 0) ResentinEmptyState(
                     icon = Icons.Outlined.Tag,
                     title = stringResource(R.string.home_network_empty_title),
                     description = stringResource(R.string.home_network_empty_description),

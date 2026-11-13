@@ -55,6 +55,11 @@ Azzurra; le ultime due dal proprio account su un bouncer personale.)*
   con prefisso di ruolo sul nick (`~&@%+`), nick colorati (opzionale) e
   timestamp opzionali coi secondi.
 - Parsing colori mIRC (nei messaggi e nei topic) e link cliccabili in chat.
+- Autocompletamento delle emoji nel composer scrivendo `:` seguito da almeno
+  due lettere (`:thum` → 👍), con i nomi CLDR come cicchetto
+  ([issue upstream](https://github.com/vjt/grappa-irc/issues/2663)): si
+  cerca per ogni parola del nome, non solo per l'inizio, e `:)`, `12:30` e
+  `http://` non lo attivano. Funziona anche nelle chat cifrate.
 - Popup con il topic completo del canale al tap sull'header.
 - Elenco membri del canale con whois, messaggio privato, kick/ban e
   gestione dei privilegi (op/voice/halfop/...) al tap su un nick.
@@ -184,6 +189,13 @@ dispositivo, Resentin non può usarla finché non la accoppi da lì
   come in cicchetto; si disattiva da Impostazioni → Chat cifrate (un
   dispositivo già registrato resta su grappa e continua a ricevere in coda
   messaggi che non verranno letti).
+
+## Dati di terze parti
+
+- **Emoji** (`app/src/main/assets/emoji/cldr.tsv`): nomi CLDR dei caratteri
+  emoji, generati da [`unicode-emoji-json`](https://github.com/muan/unicode-emoji-json)
+  (MIT, © Mu-An Chiou), a sua volta tratto dai dati Unicode. Si rigenerano
+  con `scripts/gen-emoji.py`.
 
 ## Licenza
 

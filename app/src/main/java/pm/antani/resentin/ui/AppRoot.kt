@@ -300,6 +300,11 @@ fun AppRoot(
                 onBrowseDirectory = { networkSlug -> navController.navigate("directory/$networkSlug") },
                 onMentionsClick = { networkSlug -> navController.navigate("mentions/$networkSlug") },
                 extraItems = { e2eHomeItems(e2eOverview, e2eViewModel) },
+                canStartEncryptedChat = { slug -> slug in e2eOverview.networks },
+                networkExtraCount = { slug -> e2eOverview.conversations.count { it.networkSlug == slug } },
+                onStartEncryptedChat = { slug, nick ->
+                    e2eViewModel.ask(slug, nick) { ok -> if (ok) navController.navigate("e2e/${encode(slug)}/${encode(nick)}") }
+                },
                 networkExtra = { slug ->
                     E2eNetworkSection(slug, e2eOverview, e2eViewModel) { s, peer ->
                         navController.navigate("e2e/${encode(s)}/${encode(peer)}")

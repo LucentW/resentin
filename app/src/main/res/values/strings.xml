@@ -972,4 +972,6 @@
     <string name="e2e_mark_verified">Ho confrontato le impronte: segna verificata</string>
     <string name="e2e_enabled">Chat cifrate</string>
     <string name="e2e_enabled_desc">Se spento, Resentin non registra dispositivi né carica chiavi su grappa. Un dispositivo già registrato resta lì e continua a ricevere in coda messaggi che non verranno letti.</string>
+    <string name="e2e_new_chat_here">Chat cifrata end-to-end</string>
+    <string name="e2e_chat_subtitle_short">Chat cifrata</string>
 </resources>

@@ -32,6 +32,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Surface
+import pm.antani.resentin.ui.common.LocalDensityScale
+import pm.antani.resentin.ui.theme.ResentinSpacing
 import pm.antani.resentin.R
 import pm.antani.resentin.net.dto.E2eRequestDto
 
@@ -48,34 +56,15 @@ fun LazyListScope.e2eHomeItems(o: E2eOverview, vm: E2eOverviewViewModel) {
 }
 
 /**
- * The encrypted chats of ONE network, inside its card: a header with "new", the identity held elsewhere, requests
- * waiting on us (accept or refuse), requests we sent and their answers, and the conversations. Nothing when the
- * server does not speak E2E for this network (the identity sync never answered).
+ * The encrypted chats of ONE network, inside its card, with the rest of its conversations: the states that need the
+ * user first (an identity held elsewhere, requests waiting on us, requests we sent and their answers), then one row per
+ * conversation, drawn like a channel's or a private chat's but with a lock where the initial would be. Nothing when
+ * the server does not speak E2E for this network (the identity sync never answered). Starting one is in the network's
+ * "New conversation" dialog.
  */
 @Composable
 fun E2eNetworkSection(slug: String, o: E2eOverview, vm: E2eOverviewViewModel, onOpenChat: (slug: String, peer: String) -> Unit) {
     if (slug !in o.networks) return
-    var showNew by remember { mutableStateOf(false) }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-        Text(stringResource(R.string.e2e_home_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = { showNew = true }) {
-            Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.e2e_new_chat))
-        }
-    }
-    if (showNew) {
-        NewE2eChatDialog(
-            onDismiss = { showNew = false },
-            onStart = { nick ->
-                showNew = false
-                vm.ask(slug, nick) { ok -> if (ok) onOpenChat(slug, nick) }
-            },
-        )
-    }
     if (slug in o.elsewhere) E2eElsewhereCard(slug, onReplace = { vm.replaceIdentity(slug) })
     o.incoming.filter { it.first == slug }.forEach { (_, r) ->
         E2eRequestCard(
@@ -97,21 +86,45 @@ fun E2eNetworkSection(slug: String, o: E2eOverview, vm: E2eOverviewViewModel, on
         )
     }
     o.conversations.filter { it.networkSlug == slug }.forEach { c ->
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable { onOpenChat(c.networkSlug, c.peerNick) }.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.padding(end = 12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(c.peerNick, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    c.body.ifBlank { stringResource(R.string.e2e_chat_opened) },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        HorizontalDivider(modifier = Modifier.padding(start = 62.dp, end = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        E2eConversationRow(c.peerNick, c.body, c.at, onClick = { onOpenChat(c.networkSlug, c.peerNick) })
+    }
+}
+
+/** A row like a channel's or a private chat's (same box, same spacing), with a lock in the box instead of an initial. */
+@Composable
+internal fun E2eConversationRow(peer: String, lastBody: String, at: Long, onClick: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val time = remember(context, at) { android.text.format.DateFormat.getTimeFormat(context).format(java.util.Date(at)) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                start = ResentinSpacing.medium, end = ResentinSpacing.medium,
+                top = ResentinSpacing.small * LocalDensityScale.current, bottom = ResentinSpacing.small * LocalDensityScale.current,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(modifier = Modifier.size(40.dp), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.tertiaryContainer) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(Icons.Outlined.Lock, contentDescription = stringResource(R.string.e2e_chat_subtitle_short), tint = MaterialTheme.colorScheme.onTertiaryContainer)
             }
+        }
+        Spacer(Modifier.width(ResentinSpacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(peer, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(ResentinSpacing.small))
+                Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+            Text(
+                lastBody.ifBlank { stringResource(R.string.e2e_chat_opened) },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -156,23 +169,6 @@ fun E2eElsewhereCard(slug: String, onReplace: () -> Unit) {
             dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.e2e_cancel)) } },
         )
     }
-}
-
-@Composable
-fun NewE2eChatDialog(onDismiss: () -> Unit, onStart: (nick: String) -> Unit) {
-    var nick by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.e2e_new_chat)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.e2e_new_chat_hint), style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(value = nick, onValueChange = { nick = it.trim() }, singleLine = true, label = { Text(stringResource(R.string.e2e_nick)) })
-            }
-        },
-        confirmButton = { TextButton(enabled = nick.isNotBlank(), onClick = { onStart(nick) }) { Text(stringResource(R.string.e2e_ask)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.e2e_cancel)) } },
-    )
 }
 
 /** An offer is of use only to a device that holds no identity the account has: one that is "elsewhere" on some network. */
