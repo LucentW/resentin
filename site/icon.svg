@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+  <!-- The launcher icon: app/src/main/res/drawable/ic_launcher_background.xml and _foreground.xml, as one SVG. -->
+  <rect width="108" height="108" fill="#4E342E"/>
+  <g transform="translate(24 24) scale(2.5)">
+    <path fill="#FFF3E0" d="M2,21h18v-2H2V21z M20,8h-2V5h2V3H4v2h2v3H4C2.9,8,2,8.9,2,10v5c0,2.21,1.79,4,4,4h8c2.21,0,4-1.79,4-4v-1h2c1.1,0,2-0.9,2-2V10 C22,8.9,21.1,8,20,8z M16,15c0,1.1-0.9,2-2,2H8c-1.1,0-2-0.9-2-2v-5h10V15z M20,13h-2v-3h2V13z"/>
+  </g>
+</svg>

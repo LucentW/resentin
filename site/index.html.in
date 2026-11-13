@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resentin</title>
+<meta name="description" content="Resentin: client Android nativo per il bouncer IRC grappa-irc. Repository F-Droid non ufficiale.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: light dark; --bg:#fbf7f3; --fg:#2b1d19; --muted:#6d5d57; --card:#fff; --line:#e5d9d2; --accent:#4e342e; --accent-fg:#fff3e0; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#17110f; --fg:#f1e7e1; --muted:#b3a199; --card:#221916; --line:#3a2c27; --accent:#fff3e0; --accent-fg:#4e342e; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  header { display:flex; gap:1rem; align-items:center; margin-bottom:.5rem; }
+  header img { width:72px; height:72px; border-radius:18px; flex:none; }
+  h1 { margin:0; font-size:2rem; line-height:1.1; }
+  header p { margin:.2rem 0 0; color:var(--muted); }
+  h2 { margin:2rem 0 .5rem; font-size:1.25rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:1rem 1.1rem; }
+  .qr { display:flex; gap:1.2rem; align-items:center; flex-wrap:wrap; }
+  .qr img { width:200px; height:200px; border-radius:8px; background:#fff; flex:none; }
+  .qr > div { flex:1 1 14rem; min-width:0; }
+  code { display:block; word-break:break-all; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:.45rem .6rem; font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; margin:.25rem 0 .7rem; user-select:all; }
+  .btn { display:inline-block; background:var(--accent); color:var(--accent-fg); text-decoration:none; padding:.6rem 1rem; border-radius:10px; font-weight:600; margin:.2rem .4rem .2rem 0; }
+  .btn.alt { background:transparent; color:var(--fg); border:1px solid var(--line); }
+  ol { padding-left:1.3rem; } li { margin:.35rem 0; }
+  .shots { display:flex; gap:.7rem; overflow-x:auto; padding:.3rem 0 .8rem; scroll-snap-type:x mandatory; }
+  .shots img { height:420px; width:auto; border-radius:12px; border:1px solid var(--line); scroll-snap-align:start; flex:none; }
+  .lang-switch { margin:0 0 1rem; color:var(--muted); } .lang-switch a { color:inherit; }
+  section.lang { display:none; }
+  section#it { display:block; }
+  body:has(#en:target) section#it { display:none; }
+  section.lang:target { display:block; }
+  small, .note { color:var(--muted); }
+  footer { margin-top:2.5rem; color:var(--muted); font-size:.9rem; }
+  a { color:inherit; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <img src="icon.svg" alt="">
+  <div><h1>Resentin</h1><p>Client Android nativo per <a href="https://github.com/vjt/grappa-irc">grappa-irc</a> · versione @VERSION@</p></div>
+</header>
+<p class="lang-switch"><a href="#it">Italiano</a> · <a href="#en">English</a></p>
+
+<section class="lang" id="it" lang="it">
+  <p>Resentin è un client Android scritto in Kotlin e Jetpack Compose per <strong>grappa-irc</strong>, il bouncer IRC self-hosted con API REST e Phoenix Channels. Chat in tempo reale con storico, due viste (a bolle o monoriga IRC), directory dei canali, gestione di membri e modalità, upload di file e foto, notifiche (anche push con UnifiedPush) e <strong>chat cifrate end-to-end</strong> compatibili con cicchetto. Serve un server grappa-irc; molti ne offrono uno di prova con login "visitor", senza account.</p>
+
+  <h2>Installa con F-Droid</h2>
+  <div class="card">
+    <ol>
+      <li>Installa il client <a href="https://f-droid.org/">F-Droid</a> (o un altro compatibile, come Droid-ify o Neo Store).</li>
+      <li>Aggiungi questo repository: inquadra il codice con la fotocamera, oppure tocca il pulsante qui sotto dal telefono, oppure in F-Droid apri <em>Repository</em> (l'icona in alto) → <strong>+</strong> e incolla il link qui sotto.</li>
+      <li>Se l'app mostra l'impronta, controlla che sia identica a quella qui sotto; poi cerca <em>Resentin</em>.</li>
+    </ol>
+    <div class="qr">
+      <img src="qr.svg" alt="Codice QR per aggiungere il repository a F-Droid" width="200" height="200">
+      <div>
+        <a class="btn" href="@FDROID_URI@">Aggiungi a F-Droid</a>
+        <p><small>Link da incollare (contiene già l'impronta):</small></p>
+        <code>@REPO_URL@?fingerprint=@FINGERPRINT@</code>
+        <p><small>Impronta SHA-256 della chiave del repository:</small></p>
+        <code>@FINGERPRINT_SPACED@</code>
+      </div>
+    </div>
+  </div>
+  <p class="note">Questo è un repository <strong>non ufficiale</strong>, mantenuto da chi sviluppa Resentin: non fa parte di F-Droid. Gli APK sono gli stessi, con la stessa firma, delle <a href="@GH_URL@/releases">release su GitHub</a>, quindi si può passare dall'una all'altra fonte senza reinstallare.</p>
+  <p><a class="btn alt" href="@APK_URL@">Scarica l'APK da GitHub</a> <a class="btn alt" href="@GH_URL@">Codice sorgente</a></p>
+</section>
+
+<section class="lang" id="en" lang="en">
+  <p>Resentin is a native Android client, written in Kotlin and Jetpack Compose, for <strong>grappa-irc</strong>, the self-hosted IRC bouncer with a REST API and Phoenix Channels. Live chat with history, two views (bubbles or a classic IRC line), a channel directory, member and mode management, file and photo upload, notifications (push too, through UnifiedPush) and <strong>end-to-end encrypted chats</strong> compatible with cicchetto. You need a grappa-irc server; many offer a trial one with "visitor" login, no account needed.</p>
+
+  <h2>Install with F-Droid</h2>
+  <div class="card">
+    <ol>
+      <li>Install the <a href="https://f-droid.org/">F-Droid</a> client (or a compatible one, like Droid-ify or Neo Store).</li>
+      <li>Add this repository: scan the code with the camera, or tap the button below from your phone, or in F-Droid open <em>Repositories</em> (the icon at the top) → <strong>+</strong> and paste the link below.</li>
+      <li>If the app shows the fingerprint, check that it is identical to the one below; then search for <em>Resentin</em>.</li>
+    </ol>
+    <div class="qr">
+      <img src="qr.svg" alt="QR code to add the repository to F-Droid" width="200" height="200">
+      <div>
+        <a class="btn" href="@FDROID_URI@">Add to F-Droid</a>
+        <p><small>Link to paste (it already holds the fingerprint):</small></p>
+        <code>@REPO_URL@?fingerprint=@FINGERPRINT@</code>
+        <p><small>SHA-256 fingerprint of the repository key:</small></p>
+        <code>@FINGERPRINT_SPACED@</code>
+      </div>
+    </div>
+  </div>
+  <p class="note">This is an <strong>unofficial</strong> repository, run by the people who develop Resentin: it is not part of F-Droid. The APKs are the same, with the same signature, as the <a href="@GH_URL@/releases">GitHub releases</a>, so you can switch between the two sources without reinstalling.</p>
+  <p><a class="btn alt" href="@APK_URL@">Download the APK from GitHub</a> <a class="btn alt" href="@GH_URL@">Source code</a></p>
+</section>
+
+<h2>&nbsp;</h2>
+<div class="shots" aria-label="Screenshot">
+  <img src="img/home.png" alt="Home" loading="lazy">
+  <img src="img/chat-bubbles.png" alt="Chat" loading="lazy">
+  <img src="img/chat-irc-line.png" alt="IRC line view" loading="lazy">
+  <img src="img/directory.png" alt="Directory" loading="lazy">
+  <img src="img/members.png" alt="Members" loading="lazy">
+  <img src="img/settings.png" alt="Settings" loading="lazy">
+</div>
+
+<footer>Resentin è software libero, licenza MIT · MIT licensed free software · <a href="@GH_URL@">@GH_URL@</a></footer>
+</main>
+</body>
+</html>

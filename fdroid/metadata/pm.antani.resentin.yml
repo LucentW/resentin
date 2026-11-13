@@ -1,0 +1,12 @@
+# F-Droid catalogue entry for Resentin (a binary-only repo: the APKs are the GitHub releases).
+# fdroidserver reads the localised texts and the images from metadata/pm.antani.resentin/<locale>/.
+Name: Resentin
+Summary: Native Android client for the grappa-irc IRC bouncer
+Categories:
+  - Internet
+License: MIT
+AuthorName: Lucy
+WebSite: https://resentin.antani.pm
+SourceCode: https://github.com/LucentW/resentin
+IssueTracker: https://github.com/LucentW/resentin/issues
+Changelog: https://github.com/LucentW/resentin/releases

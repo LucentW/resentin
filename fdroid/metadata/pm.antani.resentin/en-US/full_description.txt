@@ -1,0 +1,21 @@
+Resentin is a native Android client (Kotlin, Jetpack Compose) for <a href="https://github.com/vjt/grappa-irc">grappa-irc</a>, the self-hosted IRC bouncer with a REST API and Phoenix Channels. You need a grappa-irc server; many public ones also accept anonymous "visitor" logins, so you can try it without an account.
+
+<b>Chat</b>
+• Live chat with history backfill and a read marker that stays in sync with the server
+• Two views: bubbles, or a classic IRC line (timestamp, nick, message), with coloured nicks, mIRC colours and clickable links
+• Channel directory, member list with whois, kick, ban and op/voice, channel modes and ban lists
+• Image and file upload from a button or from Android's share sheet
+• Aliases and reply templates, an archive of abandoned conversations, an admin panel for operators
+• Emoji completion by CLDR name: type a colon and two letters (:thum gives 👍), as in cicchetto
+
+<b>End-to-end encrypted chats</b>
+• Compatible with cicchetto (Olm via vodozemac): consent requests, key exchange, emoji (SAS) and manual verification, key-change handling
+• Your devices: list, revoke, pair a new one with a two-digit code; texts you send show on your other devices
+• The chat screen can be protected from screenshots; its notification says only "New encrypted message"
+• grappa never stores the messages: the history is the copy on your device
+
+<b>Notifications</b>
+• Mentions and private messages, with the connection open only while the app is on screen to save battery
+• Optional push without a permanent connection, through UnifiedPush
+
+Not yet: encrypted channels and encrypted files (cicchetto has neither).

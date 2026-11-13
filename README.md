@@ -190,6 +190,20 @@ dispositivo, Resentin non può usarla finché non la accoppi da lì
   dispositivo già registrato resta su grappa e continua a ricevere in coda
   messaggi che non verranno letti).
 
+## Repository F-Droid
+
+Le release sono pubblicate anche in un repository F-Droid non ufficiale, costruito dalla CI a ogni tag `v*`
+(`.github/workflows/pages.yml`) e servito da GitHub Pages su <https://resentin.antani.pm>, che ha anche la pagina con il
+QR code. Gli APK sono gli stessi delle release GitHub (stessa firma); il repository ne tiene le ultime 3.
+
+Impostazione una tantum (la CI resta spenta finché non esiste la variabile `FDROID_ENABLED`):
+
+1. `scripts/fdroid-make-key.sh` genera la chiave del repository (da tenere al sicuro e **non cambiare mai**: i client
+   la fissano) e stampa i comandi `gh secret set ...` / `gh variable set FDROID_ENABLED --body true`.
+2. Impostazioni → Pages → Source: *GitHub Actions*; dominio personalizzato `resentin.antani.pm` (CNAME verso
+   `lucentw.github.io`).
+3. Prova in locale: `scripts/build-fdroid-site.sh <cartella>` (stesse variabili d'ambiente dei secret).
+
 ## Dati di terze parti
 
 - **Emoji** (`app/src/main/assets/emoji/cldr.tsv`): nomi CLDR dei caratteri

@@ -1,0 +1,69 @@
+name: F-Droid repository and site
+
+# Builds the F-Droid repository (signed index + the last releases' APKs) and the landing page, and deploys them to
+# GitHub Pages (served at resentin.antani.pm). Runs after a release (called from build.yml) or by hand from the
+# Actions tab. It stays off until the repository variable FDROID_ENABLED is "true", which is set once the secrets
+# below exist (scripts/fdroid-make-key.sh prints the commands), so a release never fails for want of them.
+#
+# Secrets: FDROID_KEYSTORE_BASE64, FDROID_KEYSTORE_PASSWORD, FDROID_KEY_ALIAS, FDROID_KEY_PASSWORD.
+# Optional variable: FDROID_REPO_URL (default https://resentin.antani.pm/repo).
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the repository and the site
+    if: vars.FDROID_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install fdroidserver and the QR library
+        run: pip install fdroidserver==2.4.5 segno==1.6.6
+
+      - name: Decode the repository signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/fdroid-repo.jks"
+
+      - name: Build the repository and the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_PATH: ${{ runner.temp }}/fdroid-repo.jks
+          KEYSTORE_PASSWORD: ${{ secrets.FDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.FDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.FDROID_KEY_PASSWORD }}
+          REPO_URL: ${{ vars.FDROID_REPO_URL || 'https://resentin.antani.pm/repo' }}
+        run: ./scripts/build-fdroid-site.sh "$RUNNER_TEMP/site"
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,21 @@
+Resentin è un client Android nativo (Kotlin, Jetpack Compose) per <a href="https://github.com/vjt/grappa-irc">grappa-irc</a>, il bouncer IRC self-hosted con API REST e Phoenix Channels. Serve un server grappa-irc; molti server pubblici accettano anche login "visitor" anonimi, quindi puoi provarlo senza un account.
+
+<b>Chat</b>
+• Chat in tempo reale con storico e segnalibro di lettura sincronizzato col server
+• Due viste: a bolle, oppure monoriga IRC classica (ora, nick, messaggio), con nick colorati, colori mIRC e link cliccabili
+• Directory dei canali, elenco membri con whois, kick, ban e op/voice, modalità del canale e liste ban
+• Upload di immagini e file da un pulsante o dal menu Condividi di Android
+• Alias e modelli di risposta, archivio delle conversazioni abbandonate, pannello admin per gli operatori
+• Autocompletamento delle emoji con i nomi CLDR: scrivi due punti e due lettere (:thum dà 👍), come in cicchetto
+
+<b>Chat cifrate end-to-end</b>
+• Compatibili con cicchetto (Olm via vodozemac): richieste di consenso, scambio di chiavi, verifica con emoji (SAS) o manuale, gestione del cambio chiave
+• I tuoi dispositivi: elenco, revoca, accoppiamento di uno nuovo con un codice a due cifre; i testi che scrivi compaiono anche sugli altri
+• La schermata della chat può essere protetta dagli screenshot; la notifica dice solo "Nuovo messaggio cifrato"
+• grappa non conserva i messaggi: la cronologia è la copia sul tuo dispositivo
+
+<b>Notifiche</b>
+• Menzioni e messaggi privati, con la connessione aperta solo ad app in primo piano per risparmiare batteria
+• Push opzionale senza connessione permanente, tramite UnifiedPush
+
+Non ancora: canali cifrati e file cifrati (cicchetto non li ha).

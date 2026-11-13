@@ -1,0 +1,15 @@
+# fdroidserver config. The @…@ values are filled by scripts/build-fdroid-site.sh at build time, from the
+# environment (the CI secrets): this file holds none, and the filled copy lives in a temporary directory.
+repo_url: @REPO_URL@
+repo_name: Resentin
+repo_description: >-
+  The F-Droid repository of Resentin, a native Android client for the grappa-irc IRC bouncer.
+  The APKs are the signed releases of github.com/LucentW/resentin.
+repo_icon: icon.png
+repo_keyalias: @KEY_ALIAS@
+keystore: @KEYSTORE@
+keystorepass: @KEYSTORE_PASS@
+keypass: @KEY_PASS@
+keydname: CN=Resentin F-Droid repository, O=antani.pm
+make_current_version_link: false
+apksigner: @APKSIGNER@
