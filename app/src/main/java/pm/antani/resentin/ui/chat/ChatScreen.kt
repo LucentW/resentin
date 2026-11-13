@@ -935,7 +935,12 @@ fun ChatScreen(
     fun completeEmoji(entry: EmojiEntry) {
         val query = activeEmoji ?: return
         val before = draftFieldValue.text.substring(0, query.start)
-        val after = draftFieldValue.text.substring(query.end)
+        // Swallow the rest of the word when the cursor sits inside it (the keyboard can lag a character or two
+        // behind), so completing `:moai` never leaves a stray `ai` behind.
+        val text = draftFieldValue.text
+        var end = query.end
+        while (end < text.length && (text[end].isLetterOrDigit() || text[end] == '_')) end++
+        val after = text.substring(end)
         val newText = before + entry.emoji + after
         val newValue = TextFieldValue(newText, TextRange(before.length + entry.emoji.length))
         draftFieldValue = newValue
