@@ -868,6 +868,17 @@ fun ChatScreen(
     val mentionSuggestions = remember(activeMention, members, recentMentionNicks) {
         activeMention?.let { findMentionSuggestions(it.query, members, recentMentionNicks) }.orEmpty()
     }
+    // `:` + letters offers emoji by CLDR name (grappa-irc issue 2663). The table loads off the main thread, once.
+    val emojiContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val emojiCatalog by produceState(emptyList<EmojiEntry>(), emojiContext) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { EmojiCatalog.load(emojiContext) }
+    }
+    val activeEmoji = remember(draftFieldValue) {
+        if (draftFieldValue.selection.collapsed) emojiQueryAtCursor(draftFieldValue.text, draftFieldValue.selection.end) else null
+    }
+    val emojiSuggestions = remember(activeEmoji, emojiCatalog) {
+        activeEmoji?.let { searchEmoji(emojiCatalog, it.query) }.orEmpty()
+    }
     val slashSuggestions = remember(draftFieldValue.text) {
         suggestSlashCommands(draftFieldValue.text)
     }
@@ -921,13 +932,26 @@ fun ChatScreen(
         selectedSuggestionIndex = 0
         draftFocusRequester.requestFocus()
     }
+    fun completeEmoji(entry: EmojiEntry) {
+        val query = activeEmoji ?: return
+        val before = draftFieldValue.text.substring(0, query.start)
+        val after = draftFieldValue.text.substring(query.end)
+        val newText = before + entry.emoji + after
+        val newValue = TextFieldValue(newText, TextRange(before.length + entry.emoji.length))
+        draftFieldValue = newValue
+        viewModel.onDraftChange(newText)
+        selectedSuggestionIndex = 0
+        draftFocusRequester.requestFocus()
+    }
+
     val activeSuggestionCount = when {
         mentionSuggestions.isNotEmpty() -> mentionSuggestions.size
+        emojiSuggestions.isNotEmpty() -> emojiSuggestions.size
         slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.size
         slashSuggestions.isNotEmpty() -> slashSuggestions.size
         else -> 0
     }
-    LaunchedEffect(activeMention?.query, draftFieldValue.text, activeSuggestionCount) {
+    LaunchedEffect(activeMention?.query, activeEmoji?.query, draftFieldValue.text, activeSuggestionCount) {
         selectedSuggestionIndex = 0
     }
     fun moveSuggestionSelection(step: Int) {
@@ -936,6 +960,7 @@ fun ChatScreen(
     fun selectActiveSuggestion(): Boolean {
         when {
             mentionSuggestions.isNotEmpty() -> mentionSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeMention(it.nick) }
+            emojiSuggestions.isNotEmpty() -> emojiSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeEmoji(it) }
             slashArgumentSuggestions.isNotEmpty() -> slashArgumentSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashArgument(it) }
             slashSuggestions.isNotEmpty() -> slashSuggestions.getOrNull(selectedSuggestionIndex)?.let { completeSlashCommand(it) }
             else -> return false
@@ -2077,6 +2102,13 @@ fun ChatScreen(
                         suggestions = mentionSuggestions,
                         selectedIndex = selectedSuggestionIndex,
                         onSelect = { completeMention(it.nick) },
+                    )
+                }
+                if (emojiSuggestions.isNotEmpty() && mentionSuggestions.isEmpty()) {
+                    EmojiSuggestions(
+                        suggestions = emojiSuggestions,
+                        selectedIndex = selectedSuggestionIndex,
+                        onSelect = ::completeEmoji,
                     )
                 }
                 val draftEmpty = draftFieldValue.text.isEmpty()

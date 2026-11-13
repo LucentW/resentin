@@ -42,6 +42,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pm.antani.resentin.R
 import pm.antani.resentin.e2e.IdentityState
+import pm.antani.resentin.ui.chat.EmojiCatalog
+import pm.antani.resentin.ui.chat.EmojiEntry
+import pm.antani.resentin.ui.chat.EmojiSuggestions
+import pm.antani.resentin.ui.chat.emojiQueryAtCursor
+import pm.antani.resentin.ui.chat.searchEmoji
 
 /** One encrypted conversation with [vm]'s peer. Messages are our own decrypted copies. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,6 +160,17 @@ fun E2eChatScreen(vm: E2eChatViewModel, onBack: () -> Unit, onOpen: (Boolean) ->
                 }
             }
             if (consented && identityReady && state.alarm == null) {
+                // `:` + letters offers emoji by CLDR name (issue 2663). This field keeps a plain String, so the
+                // cursor is taken to be at its end, which is where a message is written.
+                val emojiContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                val catalog by androidx.compose.runtime.produceState(emptyList<EmojiEntry>(), emojiContext) {
+                    value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { EmojiCatalog.load(emojiContext) }
+                }
+                val emojiQuery = emojiQueryAtCursor(draft, draft.length)
+                val emojiHits = remember(draft, catalog) { emojiQuery?.let { searchEmoji(catalog, it.query) }.orEmpty() }
+                if (emojiQuery != null && emojiHits.isNotEmpty()) {
+                    EmojiSuggestions(emojiHits) { draft = draft.substring(0, emojiQuery.start) + it.emoji + draft.substring(emojiQuery.end) }
+                }
                 Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = draft,
